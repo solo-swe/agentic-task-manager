@@ -78,6 +78,41 @@ none confirmed yet:
   layers or decoded images kept (the *graphics* part of the footprint).
 - **WebKit's memory cache** of the IPC answers (each `invoke` answer is a response WebKit may cache).
 
+## 3b. What a reload does in the app (the code, CR-140)
+
+Following one change from the store to the page shows why each reload costs megabytes, and why reloads come every
+few seconds while an agent works:
+
+1. **What triggers a reload.** The app's subscriptions (`api/changes.ts`, `+layout.svelte`) watch the project's task
+   folder and tell the page on any change in it. The page then reloads **everything** (`dashboard.reload()`: the
+   project list, the project's tasks, its claims and worktrees). **Every atm command an agent runs renews its
+   lease**, which writes `.agentic-task-manager/claims.json` (`atm docs claims`): an agent at work causes a full
+   reload every few seconds, though nothing the page shows has changed but a lease's end.
+2. **What a reload carries.** In the browser an unchanged answer is a `304` with no body (the `ETag`s). The app has
+   none (`api/ipc.ts`: "No ETags: the app reads its own files"): every reload carries the whole answer again. For this
+   repository that is **1.16 MB** of task view (`project_tasks`, 263 tasks with what atm derives) and 52 KB of
+   project list, measured from `atm serve`'s same routes.
+3. **How many copies.** Each answer crosses the IPC as text (WebKit's copy of the custom-protocol response), is
+   parsed by `invoke`, turned back into text by `ipcFetch` (`new Response(JSON.stringify(answer))`) and parsed again
+   by the client (`response.json()`): about three copies of every megabyte, the text ones and the `Response`'s
+   buffer in WebKit's own memory (*WebKit malloc*), outside the JS heap. They are garbage once parsed, but WebKit
+   collects them late: its JS heap stays at a few MB, so nothing presses the collector, while the buffers pile up
+   beside it.
+
+At an agent's pace (a dozen atm commands a minute) that is a dozen reloads of 3–4 MB a minute: the 15 to 40 MB a
+minute of §2, and the sudden halving at 01:01 is WebKit collecting it at last. Whether all of it is ever given back
+(a leak) or only late (garbage) doesn't change the fix: **not making it**. Three bugs, in order of what they save:
+
+- **A lease renewal reloads the page** (P1): the page shows a claim's holder, not its lease's end, so a change of
+  `claims.json` that only moves a lease needs no reload; and a change of the claims needs the claims, not the tasks.
+  The subscription could say which file changed (`tasks.json`, `claims.json`, `reviews/`), and the page reload only
+  that.
+- **The app re-sends unchanged answers** (P1): the app's commands could take the stamp the page has (the same one
+  `atm serve`'s `ETag` hashes) and answer "unchanged", as a `304` does, so a reload that finds nothing new carries
+  nothing.
+- **`ipcFetch` turns each answer back into text** (P2): the parsed answer could be handed to the client as it is
+  (a `Response`-like object whose `json()` returns it), one copy fewer.
+
 ## 4. A second finding: claim watchers that outlive their command
 
 `atm claim hold <id> && <command>` leaves a watcher (`atm _claim-watch`) that renews the claim while the calling
@@ -89,6 +124,9 @@ with the command, not the shell (§5, follow-up 3).
 
 ## 5. Follow-up work proposed
 
+0. **The three bugs of §3b** (P1, P1, P2): reload only what changed and not for a lease, answer "unchanged" in the
+   app, one copy fewer in `ipcFetch`. Each with a test: an e2e in the app fixture counting the commands a lease
+   renewal makes the page call (none) and the bytes a reload with nothing new carries (none).
 1. **Measure the app's page per scenario, in WebKit** (P1): a harness that drives the real app (or Playwright's
    WebKit, sampling its WebContent process with `footprint`) through each reload the app makes (a task change, a
    claim, a working-copy change under a live review, a review comment) and reports the footprint per 100 reloads,

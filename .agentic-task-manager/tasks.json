@@ -20336,7 +20336,7 @@
       "description": "The item model of [the sidebar overhaul](docs/sidebar-overhaul-design.md) §4: each address belongs to one of the six items (Overview, Inbox, Tasks, Code Reviews, Documents, Analysis), and the addresses the new pages need exist.\n\n## Change\n- **The item of an address:** one function in `lib/address.ts`, beside `placeName`, from the view (`project` → Overview, `kanban`/`list`/`graph` → Tasks, `reviews` → Code Reviews, `progress`/`agents` → Analysis; All's `projects`, `board`, `list`, `reviews`, `progress`, `agents`). The sidebar's mark and the tab titles will use it.\n- **New views:** a project's `inbox` and `documents`, All's `list`, and the app's `/new`, in `address.ts`, its path pattern, and `PAGE_PATH` in atm serve (the server answers the page at those paths).\n- **`/projects/<id>` with no view is the Overview**, no longer the Board.\n- **Labels:** Kanban becomes **Board** and Graph **Dependencies** in `places.ts` and the tab buttons; the address segments stay `kanban` and `graph`, so old links keep working.\n- `docs/multi-project-api.md` §2.7: the new addresses.\n\n## Tests\nUnit tests for the item of every address, the new paths parsed and written, the default view, and old addresses unchanged; a serve test for the new page paths.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/address.ts",
@@ -20345,7 +20345,7 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T00:49:36Z",
+      "updated_at": "2026-11-24T01:26:45Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -20358,7 +20358,24 @@
       "review": "async",
       "number": 751,
       "started_at": "2026-11-24T00:49:36Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "bdcb31d51d99e162b530ada165ebca480d1ae2e9",
+      "code_reviews": [
+        {
+          "id": "01a20b29-9a1a-70a2-9997-88d5e9b34a5f",
+          "ref": "CR-141"
+        }
+      ],
+      "review_requested_at": "2026-11-24T01:26:45Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-24T01:26:45Z",
+          "kind": "review",
+          "text": "CR-141: Sidebar items: the item of an address, the new pages, a project opens on its Overview",
+          "by": "claude:ba530ebb"
+        }
+      ]
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e88adf1461c5",
