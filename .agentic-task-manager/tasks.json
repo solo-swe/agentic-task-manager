@@ -20828,7 +20828,7 @@
       "description": "[The sidebar overhaul](docs/sidebar-overhaul-design.md) §3: an app tab's title is `<scope> - <item>` with the item's icon: `ATM - Tasks`, `All - Code Reviews`. The scope is the project's key, else its name cut to 16 characters; All is `All`. A review or a document open in the tab names itself instead (`ATM - CR-134`, `ATM - sidebar-overhaul-design.md`), keeping the item's icon. `/new` is *New Tab*.\n\n## Tests\nUnit tests for the title of each kind of address (each item, a review, a document, a project without a key, a long name, `/new`).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e889c1f825f3"
       ],
@@ -20837,7 +20837,7 @@
         "dashboard/src/lib/places.ts"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T15:22:22Z",
+      "updated_at": "2026-11-24T15:42:11Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -20850,7 +20850,24 @@
       "review": "async",
       "number": 754,
       "started_at": "2026-11-24T15:22:22Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "64f728612375a3a1d7d9be6983d197912b5f0c6e",
+      "code_reviews": [
+        {
+          "id": "01a20e38-c64c-7203-b5b1-11af51b45fe0",
+          "ref": "CR-160"
+        }
+      ],
+      "review_requested_at": "2026-11-24T15:42:11Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-24T15:42:11Z",
+          "kind": "review",
+          "text": "CR-160: Tab titles: <scope> - <item>, with the item's icon",
+          "by": "claude:ba530ebb"
+        }
+      ]
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e88db033076e",
@@ -20897,7 +20914,7 @@
       "description": "[The sidebar overhaul](docs/sidebar-overhaul-design.md) §2.4: a project now opens on its Overview, so the Overview links into the Board, in place in the tab: the active sprint (its name and progress), each planned and recent closed sprint it lists, and the backlog open the Board on that one (`/projects/<id>/kanban?sprint=<name>`); a count by status (to do, in review, blocked) opens the List filtered by it. Everything else on the Overview stays as the Project tab has it.\n\nFind the Project tab's component first (the `project` view), and add the links where it names a sprint or counts tasks.\n\n## Tests\nComponent tests for each link's address; e2e: from the Overview to the Board on a sprint and Back.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e889c1f825f3"
       ],
@@ -20905,7 +20922,7 @@
         "dashboard/src/lib/overview/ProjectsOverview.svelte"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T15:42:17Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -20916,7 +20933,9 @@
       ],
       "sprint": "Sidebar overhaul",
       "review": "async",
-      "number": 756
+      "number": 756,
+      "started_at": "2026-11-24T15:42:17Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e88f1d3ccd68",
