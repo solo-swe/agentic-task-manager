@@ -195,55 +195,59 @@
       <HistoryArrows />
       <SidebarToggle />
     </div>
-    <!-- The scope (§2.1): All projects, then the workspace's projects; missing ones dimmed and not chosen -->
-    <DropdownMenu.Root bind:open={menuOpen}>
-      <DropdownMenu.Trigger>
-        {#snippet child({ props })}
-          <button
-            {...props}
-            class="app-sidebar-item app-sidebar-scope"
-            id="app-sidebar-scope"
-            data-scope={scope ?? ''}
-            aria-label="Scope: {scope === null ? 'All projects' : (scoped?.name ?? scope)}; choose another"
-            >{@render scopeLabel(scope === null ? null : scoped, false)}<span class="app-sidebar-chevron"
-              ><Icon name="chevron-down" size={14} /></span
-            ></button
-          >
-        {/snippet}
-      </DropdownMenu.Trigger>
-      <DropdownMenu.ContentStatic preventScroll={false} aria-label="Scopes">
-        {#snippet child({ props })}
-          <span {...props} class="menu app-sidebar-scopes" id="app-sidebar-scopes">
-            <DropdownMenu.Item onSelect={() => choose(null)}>
-              {#snippet child({ props })}
-                <button
-                  {...props}
-                  class="app-sidebar-item"
-                  class:current={scope === null}
-                  aria-current={scope === null ? 'true' : undefined}
-                  data-scope="">{@render scopeLabel(null, true)}</button
-                >
-              {/snippet}
-            </DropdownMenu.Item>
-            {#each dashboard.projects as project (project.id)}
-              <DropdownMenu.Item disabled={project.missing} onSelect={() => choose(project.id)}>
+    <!-- The scope (§2.1): All projects, then the workspace's projects; missing ones dimmed and not chosen. Its list
+         is placed under the button (`.menu` is placed under its positioned parent: without this one, the sidebar's
+         whole height, below the window) -->
+    <div class="menu-anchor app-sidebar-scope-anchor">
+      <DropdownMenu.Root bind:open={menuOpen}>
+        <DropdownMenu.Trigger>
+          {#snippet child({ props })}
+            <button
+              {...props}
+              class="app-sidebar-item app-sidebar-scope"
+              id="app-sidebar-scope"
+              data-scope={scope ?? ''}
+              aria-label="Scope: {scope === null ? 'All projects' : (scoped?.name ?? scope)}; choose another"
+              >{@render scopeLabel(scope === null ? null : scoped, false)}<span class="app-sidebar-chevron"
+                ><Icon name="chevron-down" size={14} /></span
+              ></button
+            >
+          {/snippet}
+        </DropdownMenu.Trigger>
+        <DropdownMenu.ContentStatic preventScroll={false} aria-label="Scopes">
+          {#snippet child({ props })}
+            <span {...props} class="menu app-sidebar-scopes" id="app-sidebar-scopes">
+              <DropdownMenu.Item onSelect={() => choose(null)}>
                 {#snippet child({ props })}
                   <button
                     {...props}
                     class="app-sidebar-item"
-                    class:current={scope === project.id}
-                    class:missing={project.missing}
-                    aria-current={scope === project.id ? 'true' : undefined}
-                    title={project.missing ? `${project.path}: not found` : project.path}
-                    data-scope={project.id}>{@render scopeLabel(project, true)}</button
+                    class:current={scope === null}
+                    aria-current={scope === null ? 'true' : undefined}
+                    data-scope="">{@render scopeLabel(null, true)}</button
                   >
                 {/snippet}
               </DropdownMenu.Item>
-            {/each}
-          </span>
-        {/snippet}
-      </DropdownMenu.ContentStatic>
-    </DropdownMenu.Root>
+              {#each dashboard.projects as project (project.id)}
+                <DropdownMenu.Item disabled={project.missing} onSelect={() => choose(project.id)}>
+                  {#snippet child({ props })}
+                    <button
+                      {...props}
+                      class="app-sidebar-item"
+                      class:current={scope === project.id}
+                      class:missing={project.missing}
+                      aria-current={scope === project.id ? 'true' : undefined}
+                      title={project.missing ? `${project.path}: not found` : project.path}
+                      data-scope={project.id}>{@render scopeLabel(project, true)}</button
+                    >
+                  {/snippet}
+                </DropdownMenu.Item>
+              {/each}
+            </span>
+          {/snippet}
+        </DropdownMenu.ContentStatic>
+      </DropdownMenu.Root>
+    </div>
     <!-- The scope's items (§2.2): each a link to its page, opened in a new tab -->
     <ul class="app-sidebar-list" aria-label="{scope === null ? 'All projects' : (scoped?.name ?? scope)}: pages">
       {#each itemsOf(scope) as item (item)}
@@ -356,8 +360,14 @@
     grid-column: -2;
     grid-row: 1;
   }
+  /* Above the list of items it opens over */
+  .app-sidebar-scope-anchor {
+    z-index: 2;
+  }
   .app-sidebar-scopes {
     display: flex;
+    left: 0;
+    right: 0;
     flex-direction: column;
     gap: var(--space-1);
     min-width: 220px;

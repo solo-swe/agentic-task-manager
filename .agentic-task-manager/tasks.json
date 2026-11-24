@@ -1934,7 +1934,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 774,
+    "next_number": 776,
     "review": "async"
   },
   "tasks": [
@@ -20496,13 +20496,13 @@
       "description": "From the Audit and tabs retrospective (ATM-726). Each permission prompt stalls an unattended loop until Hakan is back, and each denial costs a round trip. Look at `.claude/settings.json` (project) and propose rules and hooks that make the safe forms just work and the unsafe ones fail fast with a message saying what to do instead. A change to permission settings is Hakan's to make: propose it in the task's review, apply it on his yes.\n\n## What happened (examples to design against)\n- **Compound commands prompted:** `cmd1 && cmd2`, `cmd ; cmd`, `cmd | grep …`, `cmd > file 2>&1`, `VAR=x cmd`, `cd dir && cmd`, `$(…)`. Plain single commands didn't.\n- **A quoted pattern read as shell syntax:** `grep -n -E \"project_tasks|\\| \\`GET …/tasks\" docs/x.md` (backticks and `|` inside the quotes) was rejected; `grep -n project_tasks docs/x.md` wasn't.\n- **Interpreters and in-place edits:** a `python` call, `node -e \"…writeFileSync…\"`, `perl -0pi -e`, `sed -i`, `cat >> file <<EOF` were rejected; Read/Edit/Write were the way.\n- **Forms the allow list doesn't have:** the agent ran `pnpm --dir dashboard exec vitest …`, `pnpm --dir dashboard run build`, `pnpm --dir dashboard exec playwright test …` and `node --test tests/scripts/…` all session; the list allows `pnpm exec vitest *` and `node tests/scripts/run.mjs *` but not these.\n- **`gh` with filters:** `gh api … --jq '…'` prompted; plain `gh api …`, `gh pr checks`, `gh run list` didn't.\n- **Paths outside the project:** `ls ~/.claude`, `curl -o /dev/null …` prompted.\n- **The auto-mode classifier** (not the settings) denied `atm task review approve` (oversight) and one `gh secret delete` (destructive) even on Hakan's word: note these, as settings may not be the fix.\n\n## To propose\n- Allow rules for the forms above that are read-only or test-only, as exact as the existing ones (never `Bash(node *)` or `Bash(pnpm run *)`).\n- A `PreToolUse` hook on `Bash` that refuses a compound command or an interpreter one-liner with a message naming the plain form (one command per call; Read/Edit/Write for files), so the agent corrects itself instead of waiting on a prompt. Pipe-test it before writing it (the update-config skill's steps).\n- What to keep as it is (the deny list of cat/head/tail/sed/awk/cd).\n\n## Tests\nThe hook pipe-tested with a compound and a plain command; each new allow rule tried once.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "todo",
       "dependencies": [],
       "files": [
         ".claude/settings.json"
       ],
       "created_at": "2026-11-23T22:20:58Z",
-      "updated_at": "2026-11-24T15:22:14Z",
+      "updated_at": "2026-11-24T17:37:40Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "review": "async",
@@ -20511,25 +20511,41 @@
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
-          "from": "2026-11-23T22:39:56Z"
+          "from": "2026-11-23T22:39:56Z",
+          "to": "2026-11-24T17:37:16Z"
         }
       ],
-      "sprint": "Sidebar overhaul",
-      "started_at": "2026-11-24T15:19:55Z",
-      "started_by": "claude:ba530ebb",
       "code_reviews": [
         {
           "id": "01a20e26-83e8-72ff-aad1-94e124fff281",
           "ref": "CR-159"
         }
       ],
-      "review_requested_at": "2026-11-24T15:22:14Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-24T15:22:14Z",
           "kind": "review",
           "text": "CR-159: Proposal: Claude Code settings that keep agents from tripping permission prompts",
+          "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T17:37:26Z",
+          "kind": "rejection",
+          "text": "Moved to the backlog at Hakan's request; the proposal stays in CR-159 for later.",
+          "by": "claude:ba530ebb"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T15:22:14Z",
+          "to": "2026-11-24T17:37:26Z",
+          "outcome": "rejected"
+        }
+      ],
+      "attempts": [
+        {
+          "from": "2026-11-24T15:19:55Z",
+          "to": "2026-11-24T15:22:14Z",
           "by": "claude:ba530ebb"
         }
       ]
@@ -21012,7 +21028,7 @@
       "description": "[The sidebar overhaul](docs/sidebar-overhaul-design.md) §3: the + button, File ▸ New Tab and ⌘T open a new tab on `/new`, a chooser of scope and item (the app only).\n\n## Change\n- **Two columns:** the scopes (All, then the projects, as the scope selector lists them, with badges) and the chosen scope's items with their badges. The sidebar's scope is chosen when it opens.\n- **Choosing an item opens it in this tab**, in place of the chooser (the chooser is the tab's first entry: Back returns to it).\n- **Keys:** ↑↓ in a column, ←→ between them, typing filters the projects, Enter opens. No item shortcuts.\n- Reuse the scope selector's project list from the sidebar task.\n\n## Tests\nComponent tests for the columns, the keys and opening in place; e2e: + opens it, choosing opens the page, Back returns to the chooser.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e88bc947df5c"
       ],
@@ -21021,9 +21037,9 @@
         "dashboard/src/lib/tab-actions.ts"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T17:34:41Z",
+      "updated_at": "2026-11-24T17:35:06Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:ba530ebb",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -21043,7 +21059,6 @@
         }
       ],
       "review_requested_at": "2026-11-24T16:47:45Z",
-      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-24T16:47:45Z",
@@ -21058,7 +21073,15 @@
           "by": "Hakan Serce"
         }
       ],
-      "reviewed_at": "2026-11-24T17:34:41Z"
+      "reviews": [
+        {
+          "from": "2026-11-24T16:47:45Z",
+          "to": "2026-11-24T17:34:41Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T17:35:06Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e88e728b0f5d",
@@ -21453,7 +21476,7 @@
       "description": "[The inbox design](docs/inbox-design.md) §6: the Inbox item's page, in the app and the webapp.\n\n## Change\n- The **quick-add box** at the top, focused on open, Enter adds (⇧Enter a new line), focus kept for the next; its draft kept on its tab.\n- The **filter** Open (default) · Discarded · Injected · All and *archived*, in the address (`?state=&archived=`).\n- **Each item:** first line as title (the rest on a click), when and who; Edit and Discard (a dialog asking the reason) when open; reason and Restore when discarded; its tasks as links when injected.\n- The sidebar's Inbox **badge** from the summary's open count.\n\n## Tests\nComponent tests (adding, the filter, each state's actions, the reason dialog); e2e with the fixture playing the routes.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e89307ded508",
         "01a20ae0-5493-734f-9c10-e88bc947df5c"
@@ -21463,7 +21486,7 @@
         "dashboard/src/lib/api/inbox.ts"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T17:06:59Z",
+      "updated_at": "2026-11-24T17:36:22Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21485,15 +21508,29 @@
         }
       ],
       "review_requested_at": "2026-11-24T17:06:59Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-24T17:06:59Z",
           "kind": "review",
           "text": "CR-166: Inbox: the page",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T17:36:07Z",
+          "kind": "note",
+          "text": "Approved: in CR-166 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T17:06:59Z",
+          "to": "2026-11-24T17:36:07Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T17:36:22Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e895a1716a0b",
@@ -21753,7 +21790,7 @@
       "description": "From [the memory analysis §3b](docs/memory-growth-analysis.md#3b-what-a-reload-does-in-the-app-the-code-cr-140), CR-140. In the browser an unchanged answer is a `304` with no body (`ETag`s); the app has none (`api/ipc.ts`: \"No ETags\"), so each reload carries the whole answer again: 1.16 MB of task view for this repo, plus the project list.\n\n## Change\nThe app's read commands (project list, a project's tasks, claims, …) take the stamp the page last got (the same one `atm serve`'s `ETag` hashes) and answer \"unchanged\" with no body when it still matches; `ipc.ts` maps that to what the client already handles for a `304`.\n\n## Tests\nThe commands' unit tests (a matching stamp, a stale one, none); an e2e in the app fixture checking a reload with nothing new carries no body.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "01a20b6d-f9af-72ac-9448-da28a38919f5"
       ],
@@ -21762,7 +21799,7 @@
         "app/src-tauri/src/commands/state.rs"
       ],
       "created_at": "2026-11-24T02:41:26Z",
-      "updated_at": "2026-11-24T17:34:45Z",
+      "updated_at": "2026-11-24T17:37:02Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21782,7 +21819,37 @@
       ],
       "started_at": "2026-11-24T17:21:28Z",
       "started_by": "claude:ba530ebb",
-      "commit": "112353dacaad7a56d0000f1f106c5e35c62c6c7c"
+      "commit": "83fd90b508b7a6a9086f5f1eaa8c54a1656a745e",
+      "code_reviews": [
+        {
+          "id": "01a20ea0-61d0-7188-ad2d-860cdb6d7544",
+          "ref": "CR-167"
+        }
+      ],
+      "review_requested_at": "2026-11-24T17:35:21Z",
+      "notes": [
+        {
+          "at": "2026-11-24T17:35:21Z",
+          "kind": "review",
+          "text": "CR-167: App: answer unchanged instead of re-sending an unchanged answer",
+          "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T17:36:39Z",
+          "kind": "note",
+          "text": "Approved: in CR-167 (round 1)",
+          "by": "Hakan Serce"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T17:35:21Z",
+          "to": "2026-11-24T17:36:39Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T17:37:02Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a20b6d-f9af-72ac-9448-da2a83797476",
@@ -22061,6 +22128,73 @@
         "docs",
         "dashboard"
       ]
+    },
+    {
+      "id": "01a20ea0-9cc0-77e3-8aa6-ec22e4e6b22b",
+      "name": "App sidebar: the scope chooser opens out of sight",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "app",
+        "sidebar"
+      ],
+      "description": "From Hakan: a click on the sidebar's scope chevron shows nothing.\n\n## Cause\nThe list is a `.menu`, which `app.css` places at `top: calc(100% + 6px)` of its positioned parent. In the sidebar that parent is the sidebar itself (fixed, the window's full height), so the list opens below the window's bottom. A click in the tests still reached it: Playwright scrolled the sidebar.\n\n## Change\nThe chooser in a `.menu-anchor` of its own, so its list opens just under its button, the sidebar's width, over the items.\n\n## Tests\n`app.spec.ts`'s sidebar test: the list is just under the button, inside the window, on top at its point, with the sidebar not scrolled.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/shell/Sidebar.svelte",
+        "dashboard/tests/e2e/app.spec.ts"
+      ],
+      "created_at": "2026-11-24T17:35:36Z",
+      "updated_at": "2026-11-24T17:35:44Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T17:35:36Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 774,
+      "started_at": "2026-11-24T17:35:44Z",
+      "started_by": "claude:ba530ebb"
+    },
+    {
+      "id": "01a20ea3-39a1-7679-9b4b-441ae7c5c873",
+      "name": "Reviews: the list reads each review once, not the whole folder per review",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews",
+        "performance"
+      ],
+      "description": "From Hakan: tabs load slowly; the Code Reviews list takes 5 to 10 seconds to show.\n\n## Cause\n`list_reviews` (atm-lib `review_pages/list.rs`) reads each listed review with `whole`, which opens its working copy's store (a `git rev-parse` each) and asks it for the review. `FileStore::get_review` finds it by reading every review in the folder (`read_all`), so a list of n reviews reads n² of them: 166 here, about 27,000 reads. `atm review list --search` (the same reads) takes 1.7 s on this repo; the page asks per project, and All projects asks for each.\n\n## Change\nEach working copy's reviews read once, whole (`FileStore::reviews`), and looked up by ID; one not found there falls back to the main store, as now.\n\n## Tests\natm-lib's list tests as they are (the answer doesn't change), plus one with reviews in two working copies. Measure the listing before and after.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/review_pages/list.rs"
+      ],
+      "created_at": "2026-11-24T17:38:27Z",
+      "updated_at": "2026-11-24T17:38:41Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T17:38:27Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 775,
+      "started_at": "2026-11-24T17:38:41Z",
+      "started_by": "claude:ba530ebb"
     }
   ]
 }

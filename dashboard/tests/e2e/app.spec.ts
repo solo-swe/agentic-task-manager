@@ -914,6 +914,22 @@ test.describe('the dashboard in the atm app', () => {
     const menu = page.locator('#app-sidebar-scopes');
     await expect(menu.locator('[data-scope]')).toHaveCount(3);
     await expect(menu.locator('.app-sidebar-bar')).toHaveCount(2);
+    // It opens just under its button, in the window, over the items: not under the sidebar's whole height, out of
+    // sight (where a click still scrolled to it)
+    const placed = await page.evaluate(() => {
+      const button = document.querySelector('#app-sidebar-scope')!.getBoundingClientRect();
+      const list = document.querySelector('#app-sidebar-scopes')!.getBoundingClientRect();
+      const top = document.elementFromPoint(list.left + list.width / 2, list.top + 8);
+      return {
+        gap: list.top - button.bottom,
+        inWindow: list.bottom <= window.innerHeight,
+        sidebarScrolled: document.querySelector('#app-sidebar')!.scrollTop,
+        onTop: !!top?.closest('#app-sidebar-scopes'),
+      };
+    });
+    expect(placed.gap).toBeGreaterThanOrEqual(0);
+    expect(placed.gap).toBeLessThan(16);
+    expect(placed).toMatchObject({ inWindow: true, sidebarScrolled: 0, onTop: true });
     const colours = await page.evaluate(() => ({
       sidebar: getComputedStyle(document.querySelector('#app-sidebar')!).backgroundColor,
       tracks: [...document.querySelectorAll('#app-sidebar-scopes .app-sidebar-bar')].map(
