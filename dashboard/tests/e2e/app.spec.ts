@@ -1022,12 +1022,23 @@ test.describe('the dashboard in the atm app', () => {
     await page.setViewportSize({ width: 900, height: 900 });
     await expect(trail).toBeHidden();
     await expect(page.locator('#subtitle')).toBeVisible();
-    // The overview has none in its tab
+    // All projects: its activity is its tab's too (ATM-736), on every page of the scope, never the window's
+    await page.setViewportSize({ width: 1400, height: 900 });
     await page.locator('#app-sidebar-scope').click();
     await page.locator('#app-sidebar-scopes [data-scope=""]').click();
-    await page.locator('#app-sidebar [data-item="overview"]').click();
-    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
-    await expect(page.locator('#in-tab-trail')).toHaveCount(0);
+    for (const item of ['overview', 'tasks', 'analysis', 'reviews']) {
+      await page.locator(`#app-sidebar [data-item="${item}"]`).click();
+      await expect(page.locator('#dashboard-title'), item).toHaveText('Projects Overview');
+      await expect(trail.locator('#activity-card'), item).toBeVisible();
+      await expect(trail.locator('#progress-card'), item).toHaveCount(0);
+      await expect(page.locator('#app-titlebar #activity-card'), item).toHaveCount(0);
+    }
+    const allPills = (await trail.boundingBox())!;
+    const allSubtitle = (await page.locator('#subtitle').boundingBox())!;
+    expect(Math.abs(allPills.y + allPills.height / 2 - (allSubtitle.y + allSubtitle.height / 2))).toBeLessThan(6);
+    // It opens what it opens
+    await trail.locator('#activity-card').click();
+    await expect(page.locator('#activity-panel')).toBeVisible();
   });
 
   // Hakan: in the app, the regular themes' board scrolled as a whole, with a scrollbar, where each column should

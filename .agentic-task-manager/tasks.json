@@ -19915,14 +19915,14 @@
       "description": "Move the All-projects activity pill inside the tab, as the sidebar overhaul design (`docs/sidebar-overhaul-design.md`) places it.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a207f0-a2e1-7602-b260-d97d26c2073b",
         "01a20ae0-5493-734f-9c10-e88adf1461c5"
       ],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T00:06:50Z",
+      "updated_at": "2026-11-24T14:31:20Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -19933,7 +19933,9 @@
       ],
       "sprint": "Sidebar overhaul",
       "review": "async",
-      "number": 736
+      "number": 736,
+      "started_at": "2026-11-24T14:31:20Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d98638440e40",
@@ -21338,14 +21340,14 @@
       "description": "From [the memory analysis §3b](docs/memory-growth-analysis.md#3b-what-a-reload-does-in-the-app-the-code-cr-140), CR-140. `ipcFetch` (`api/ipc.ts`) turns each parsed `invoke` answer back into text (`new Response(JSON.stringify(answer))`), which the client parses again: about three copies of every answer, two of them in WebKit's own memory.\n\n## Change\nHand the client a `Response`-like object whose `json()` returns the parsed answer as it is (with the status and headers the client reads), so no answer is serialised again.\n\n## Tests\n`ipc.test.ts`: the answer comes through as the same object, statuses and errors as before; the client's tests still pass against it.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/api/ipc.ts",
         "dashboard/tests/unit/ipc.test.ts"
       ],
       "created_at": "2026-11-24T02:41:26Z",
-      "updated_at": "2026-11-24T14:14:50Z",
+      "updated_at": "2026-11-24T14:31:07Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21376,10 +21378,25 @@
           "at": "2026-11-24T14:14:44Z",
           "kind": "failure",
           "text": "lease expired (claude:ba530ebb)"
+        },
+        {
+          "at": "2026-11-24T14:31:07Z",
+          "kind": "review",
+          "text": "CR-153: App: ipcFetch hands the parsed answer through",
+          "by": "claude:ba530ebb"
         }
       ],
       "started_at": "2026-11-24T14:14:50Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "7d1950f944d1175c2dcdc8c86fa2c38666b29cae",
+      "code_reviews": [
+        {
+          "id": "01a20df7-b5cf-73a6-acae-1780af4bb791",
+          "ref": "CR-153"
+        }
+      ],
+      "review_requested_at": "2026-11-24T14:31:07Z",
+      "review_state": "waiting"
     },
     {
       "id": "01a20bac-5c81-7593-a6ce-57fe10d96ef7",

@@ -68,18 +68,20 @@
     </div>
   {/if}
 {/snippet}
+{#snippet overviewPills()}
+  <!-- Every project's activity together (T-328) -->
+  {#if dashboard.route.page === 'overview'}<OverviewActivity />{/if}
+{/snippet}
 {#snippet overviewCharts()}
   {#if dashboard.route.page === 'overview'}
-    <!-- Every project's activity together (T-328) -->
-    <div class="topbar-charts">
-      <OverviewActivity />
-    </div>
+    <div class="topbar-charts">{@render overviewPills()}</div>
   {/if}
 {/snippet}
 
-<!-- The atm app's own title bar (T-513): the window's, its tabs; at its right end the workspace picker, the overview's
-     activity and the ⋯; inside the tab, the subtitle line, a project's search and Filters before it (Hakan) and its
-     Progress and Activity at its right end: they are the tab's project's (T-530) -->
+<!-- The atm app's own title bar (T-513): the window's, its tabs; at its right end the workspace picker and the ⋯;
+     inside the tab, the subtitle line, a project's search and Filters before it (Hakan), and at its right end the
+     tab's pills: a project's Progress and Activity (T-530), All projects' activity (ATM-736). They are the tab's
+     scope's, not the window's -->
 {#snippet tabSearch()}
   {#if dashboard.loaded}{@render projectSearch()}{/if}
 {/snippet}
@@ -88,7 +90,6 @@
 {/snippet}
 {#snippet appEnd()}
   <WorkspaceSelector />
-  {#if !onProject}{@render overviewCharts()}{/if}
   <SettingsMenu />
 {/snippet}
 {#if inApp}<AppTitleBar {title} end={appEnd} />{/if}
@@ -127,7 +128,13 @@
     {/snippet}
   </TitleBar>
 {:else}
-  <TitleBar {title} selector={dashboard.projects.length > 0} inTab={inApp} charts={overviewCharts}>
+  <TitleBar
+    {title}
+    selector={dashboard.projects.length > 0}
+    inTab={inApp}
+    charts={overviewCharts}
+    trail={inApp && route.page === 'overview' ? overviewPills : undefined}
+  >
     {#snippet subtitle()}
       {#if !dashboard.projectsLoaded}
         Loading projects…
