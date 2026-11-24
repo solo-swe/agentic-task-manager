@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, filterButton, matchCount, openDashboard, openFilters, openView, test } from './helpers';
+import { expect, filterButton, focusGraph, matchCount, openDashboard, openFilters, openView, test } from './helpers';
 
 // A project's page by item (ATM-752, docs/sidebar-overhaul-design.md §5): its items as tabs, Tasks' and Analysis' views
 // as sub-tabs under them
@@ -185,7 +185,7 @@ test.describe('the page by item', () => {
   test('the graph keeps its zoom across a tab round trip', async ({ page, tasksServer }) => {
     // Without auto-fit (T-341), the graph opens at 60%
     await openDashboard(page, tasksServer, 'large-90', { tab: 'graph', graphAutoFit: false });
-    await page.locator('#graph-container').focus();
+    await focusGraph(page);
     await page.keyboard.press('+');
     await expect(zoomLabel(page)).toHaveText('75%');
     const viewBox = await page.locator('#dep-graph').getAttribute('viewBox');

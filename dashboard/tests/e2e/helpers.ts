@@ -1351,6 +1351,14 @@ export async function follow(page: Page, address: string) {
   }, address);
 }
 
+/** Focus the dependency graph once it takes keys (ATM-742): it does from the moment it is laid out in its panel,
+ * which is when it sets its SVG's viewBox (DepGraph's `active`). A key pressed before that is dropped, and under a
+ * loaded run the page can still be laying it out when a test presses one */
+export async function focusGraph(page: Page) {
+  await expect(page.locator('#dep-graph')).toHaveAttribute('viewBox', /\S/);
+  await page.locator('#graph-container').focus();
+}
+
 /** The Activity pill's bars and line as drawn (ATM-739): each bar's place, size and colour, and the line's path */
 export async function sparkline(page: Page): Promise<string[]> {
   const svg = page.locator('#activity-card svg.sparkline');

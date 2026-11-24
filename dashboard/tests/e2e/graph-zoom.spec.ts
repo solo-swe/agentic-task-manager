@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { layoutGraph } from '../../src/lib/graph/layout';
 import type { Task } from '../../src/lib/types';
-import { expect, filterButton, loadFixture, openDashboard, openFilters, test } from './helpers';
+import { expect, filterButton, focusGraph, loadFixture, openDashboard, openFilters, test } from './helpers';
 
 // The Kanban is the default tab (T-251): these open on the graph. Most test the view without auto-fit (T-341), which
 // is on by default: AUTO_FIT opens the graph as a new user sees it.
@@ -154,7 +154,7 @@ test.describe('pan and zoom', () => {
   });
 
   test('keyboard shortcuts when the graph has focus', async ({ page }) => {
-    await page.locator('#graph-container').focus();
+    await focusGraph(page);
     await page.keyboard.press('+');
     await expect(zoomLabel(page)).toHaveText('75%');
     await page.keyboard.press('-');
@@ -191,7 +191,7 @@ test.describe('view persistence', () => {
   test('a reload keeps a moved view', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, 'large-90', GRAPH);
     await expect(zoomLabel(page)).toHaveText('60%');
-    await page.locator('#graph-container').focus();
+    await focusGraph(page);
     await page.keyboard.press('+');
     const moved = await view(page);
     await page.locator('#reload-btn').click();
@@ -201,7 +201,7 @@ test.describe('view persistence', () => {
 
   test('filtering keeps a zoom level the user chose', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, 'large-90', GRAPH);
-    await page.locator('#graph-container').focus();
+    await focusGraph(page);
     await page.keyboard.press('+');
     await expect(zoomLabel(page)).toHaveText('75%');
     await openFilters(page);
@@ -226,7 +226,7 @@ test.describe('view persistence', () => {
 
   test('pans, at the same zoom, when no task would be visible', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, 'large-90', GRAPH);
-    await page.locator('#graph-container').focus();
+    await focusGraph(page);
     for (let i = 0; i < 4; i++) await page.keyboard.press('+');
     const zoom = await zoomLabel(page).textContent();
     // Look at the far right end of the 90-task graph, then show only phase 0 (the far left end)
@@ -327,7 +327,7 @@ test.describe('auto-fit and fitting the matches (T-341)', () => {
 
   test('panning or zooming turns it off; the zoom then stays', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, 'large-90', AUTO_FIT);
-    await page.locator('#graph-container').focus();
+    await focusGraph(page);
     await page.keyboard.press('+');
     await expect(autoFit(page)).toHaveAttribute('aria-pressed', 'false');
     const zoom = await zoomLabel(page).textContent();

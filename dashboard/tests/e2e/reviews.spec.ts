@@ -3615,12 +3615,34 @@ test.describe('performance', { tag: '@timed' }, () => {
         await frame();
       }
     });
-    await page.waitForTimeout(1000);
+    // Settled (ATM-742): the work a scroll leaves (cards made or let go when the page is idle) done, as the page says it,
+    // not after a fixed second, which a loaded run (CI's retry) doesn't always give it: the page's nodes the same over
+    // two idle periods in a row
+    await page.evaluate(async () => {
+      const idle = () => new Promise((r) => requestIdleCallback(() => requestAnimationFrame(r), { timeout: 2000 }));
+      let last = -1;
+      for (let i = 0; i < 50; i++) {
+        await idle();
+        await idle();
+        const now = document.querySelectorAll('*').length;
+        if (now === last) return;
+        last = now;
+      }
+    });
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Performance.enable');
-    await cdp.send('HeapProfiler.collectGarbage');
-    const { metrics } = await cdp.send('Performance.getMetrics');
-    const alive = metrics.find((m) => m.name === 'Nodes')!.value;
+    // Collected until nothing more goes (one collection can leave what the last one let go): the nodes still alive
+    const nodes = async () => {
+      await cdp.send('HeapProfiler.collectGarbage');
+      const { metrics } = await cdp.send('Performance.getMetrics');
+      return metrics.find((m) => m.name === 'Nodes')!.value;
+    };
+    let alive = await nodes();
+    for (let i = 0; i < 5; i++) {
+      const next = await nodes();
+      if (next >= alive) break;
+      alive = next;
+    }
     console.log('long review, DOM nodes alive after down and back:', alive, 'on the page:', scrolled.nodes);
     // Measured (docs/diff-viewer-profile.md): 93,240 before the fixes (a render after its text was gone kept its
     // card; content-visibility kept every card's old layout), 21,840 after them; the page itself about 5,400
