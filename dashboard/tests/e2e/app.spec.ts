@@ -112,28 +112,11 @@ test.describe('the dashboard in the atm app', () => {
       await expect(page.locator('#app-tab-new')).toBeVisible();
       await expect(page.locator('#app-titlebar [role="tab"]')).toHaveCount(1);
       await expect(page.locator('#app-titlebar .view-tab')).toHaveCount(0);
-      // The tab's label has the project picker; the bar's right end search and Filters, the charts and the ⋯; inside
-      // the tab only the subtitle line; no reload button or version chip
-      await expect(page.locator('.title-bar-tab.selected #project-selector')).toBeVisible();
-      await expect(page.locator('.title-bar-tab.selected #other-projects-need')).toHaveCount(0);
-      // The chooser in the tab opens its menu (its click isn't the tab's)
-      await page.locator('.title-bar-tab.selected #project-selector').click();
-      await expect(page.locator('#project-menu')).toBeVisible();
-      // Drawn where it can be seen and used, not clipped by the tabs' scrolling strip (ATM-684): what is at its
-      // middle is the menu itself, once it is placed beside its button, and its filter takes a real click
-      await expect
-        .poll(() =>
-          page.evaluate(() => {
-            const menu = document.querySelector('#project-menu')!;
-            const box = menu.getBoundingClientRect();
-            const at = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
-            return box.height > 40 && !!at && menu.contains(at);
-          }),
-        )
-        .toBe(true);
-      await page.locator('#project-filter').click();
-      await expect(page.locator('#project-filter')).toBeFocused();
-      await page.keyboard.press('Escape');
+      // No project chooser in the tab (ATM-753): the sidebar's scope does its job; inside the tab only the subtitle
+      // line; no reload button or version chip
+      await expect(page.locator('#app-titlebar #project-selector')).toHaveCount(0);
+      await expect(page.locator('#project-selector')).toHaveCount(0);
+      await expect(page.locator('#app-sidebar #app-sidebar-scope')).toBeVisible();
       // Search and Filters inside the tab, on the subtitle's line, before it; not in the title bar
       await expect(page.locator('.topbar.in-tab .in-tab-row #filters')).toBeVisible();
       await expect(page.locator('#app-titlebar #filters')).toHaveCount(0);
@@ -541,9 +524,8 @@ test.describe('the dashboard in the atm app', () => {
     await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
     // Opened on its own, its back button goes up to its reviews list
     await expect(page.locator('.review-back')).toHaveText('Reviews');
-    // The tab is the review's: its reference and title, no project chooser
+    // The tab is the review's: its reference and title
     await expect(page.locator('#dashboard-title')).toHaveText('CR-2: Trim the names');
-    await expect(tabs.nth(1).locator('.app-tab-chooser')).toHaveCount(0);
     // The window's own bar and sidebar toggle are there, as on every tab
     await expect(page.locator('#app-titlebar')).toBeVisible();
     // ATM-691 (Hakan): and the ⋯ at its right end, which opens Settings, the document's text size with them
@@ -568,19 +550,20 @@ test.describe('the dashboard in the atm app', () => {
     await expect(page.locator('#app-tab-t2-label')).toContainText('CR-2: Trim the names');
     expect(tasksServer.httpRequests).toEqual([]);
 
-    // ATM-581 (Hakan): from the review's tab, a project in the sidebar: the tab becomes that project's page, labelled
-    // by it; no new tab
+    // From the review's tab, another project's page from the sidebar: a new tab of its own, labelled by it (ATM-753:
+    // the sidebar never changes the tab shown; ATM-581's tab became the project's)
     await tabs.nth(1).click();
     await expect(page.locator('#review-page')).toBeVisible();
-    await page.locator('#app-sidebar [data-id="second"]').click();
-    await expect(tabs).toHaveCount(2);
-    await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+    await page.locator('#app-sidebar-scope').click();
+    await page.locator('#app-sidebar-scopes [data-scope="second"]').click();
+    await page.locator('#app-sidebar [data-item="overview"]').click();
+    await expect(tabs).toHaveCount(3);
+    await expect(tabs.nth(2)).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
-    await expect(page.locator('#review-page')).toHaveCount(0);
-    await expect.poll(() => addressOf(page)).toMatch(/^\/projects\/second(\/[a-z]+)?(\?|$)/);
-    await expect(page.locator('#app-tab-t2-label')).toContainText('Minimal Project');
-    // The first tab is as it was
+    await expect.poll(() => addressOf(page)).toMatch(/^\/projects\/second\/project(\?|$)/);
+    // The other tabs are as they were
     await expect(page.locator('#app-tab-t1-label')).toContainText('Standard Project');
+    await expect(page.locator('#app-tab-t2-label')).toContainText('CR-2: Trim the names');
   });
 
   test('tabs are addresses (T-514): + opens the overview, a click goes back, × closes, the menu steps', async ({
@@ -884,7 +867,7 @@ test.describe('the dashboard in the atm app', () => {
     await expect.poll(at).toBe(`${base}/kanban`);
   });
 
-  test('the sidebar (T-515): projects open here or, ⌘-clicked, in a new tab; a task too; its button and menu hide it', async ({
+  test('the sidebar (ATM-753): a scope and its items; an item opens a new tab, ⌘-clicked in the background; a task too; its button and menu hide it', async ({
     page,
     tasksServer,
   }) => {
@@ -894,38 +877,70 @@ test.describe('the dashboard in the atm app', () => {
     await page.goto('/');
     const sidebar = page.locator('#app-sidebar');
     const tabs = page.locator('#app-titlebar [role="tab"]');
-    await expect(sidebar.locator('.app-sidebar-item')).toHaveCount(3);
     await expect.poll(() => tasksServer.menuState?.sidebar).toBe(true);
-    // Every project's bar is visible, its empty track too: not the sidebar's own colour (T-533)
-    await expect(sidebar.locator('.app-sidebar-bar')).toHaveCount(2);
+    // Two projects: the landing page is All projects', and so is the sidebar's scope, with its four items
+    const scope = page.locator('#app-sidebar-scope');
+    await expect(scope).toHaveAttribute('data-scope', '');
+    await expect(sidebar.locator('.app-sidebar-link')).toHaveText(['Overview', 'Tasks', 'Code Reviews', 'Analysis']);
+    await expect(sidebar.locator('[data-item="overview"]')).toHaveAttribute('aria-current', 'page');
+    // The page's item row is the sidebar's job in the app
+    await expect(page.locator('.item-tabs')).toHaveCount(0);
+
+    // The scope's menu: All, then the projects, each with its progress bar, its empty track too: not the sidebar's
+    // own colour (T-533)
+    await scope.click();
+    const menu = page.locator('#app-sidebar-scopes');
+    await expect(menu.locator('[data-scope]')).toHaveCount(3);
+    await expect(menu.locator('.app-sidebar-bar')).toHaveCount(2);
     const colours = await page.evaluate(() => ({
       sidebar: getComputedStyle(document.querySelector('#app-sidebar')!).backgroundColor,
-      tracks: [...document.querySelectorAll('.app-sidebar-bar')].map((b) => getComputedStyle(b).backgroundColor),
+      tracks: [...document.querySelectorAll('#app-sidebar-scopes .app-sidebar-bar')].map(
+        (b) => getComputedStyle(b).backgroundColor,
+      ),
     }));
     for (const track of colours.tracks) expect(track).not.toBe(colours.sidebar);
-
-    // A click opens the project here
-    await sidebar.locator(`[data-id="${tasksServer.projectId}"]`).click();
-    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+    // Choosing a scope changes the sidebar only, never the tab
+    await menu.locator(`[data-scope="${tasksServer.projectId}"]`).click();
+    await expect(scope).toHaveAttribute('data-scope', tasksServer.projectId);
+    await expect(sidebar.locator('.app-sidebar-link')).toHaveCount(6);
     await expect(tabs).toHaveCount(1);
-    // ⌘-click (Ctrl-click) opens one in a new tab
-    await sidebar.locator('[data-id="second"]').click({ modifiers: ['ControlOrMeta'] });
+    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
+
+    // An item opens its page in a new tab, shown
+    await sidebar.locator('[data-item="tasks"]').click();
     await expect(tabs).toHaveCount(2);
-    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
+    await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+    await expect(page.locator('#kanban')).toBeVisible();
+    await expect(sidebar.locator('[data-item="tasks"]')).toHaveAttribute('aria-current', 'page');
+    // Even the page the tab shows: a new tab again
+    await sidebar.locator('[data-item="tasks"]').click();
+    await expect(tabs).toHaveCount(3);
+    // ⌘-click (Ctrl-click): in the background, right of this one
+    await sidebar.locator('[data-item="analysis"]').click({ modifiers: ['ControlOrMeta'] });
+    await expect(tabs).toHaveCount(4);
+    await expect(tabs.nth(2)).toHaveAttribute('aria-selected', 'true');
+    // The scope follows the active tab: the first tab is All projects'
+    await tabs.nth(0).click();
+    await expect(scope).toHaveAttribute('data-scope', '');
+    await tabs.nth(1).click();
+    await expect(scope).toHaveAttribute('data-scope', tasksServer.projectId);
+    await tabs.nth(3).click();
+    await expect(page.locator('#progress')).toBeVisible();
+    for (const i of [3, 2]) await page.locator('.title-bar-tab').nth(i).locator('.title-bar-tab-close').click();
+    await expect(tabs).toHaveCount(2);
 
     // ⌘-click on a task's card opens its details in a new tab
-    await tabs.nth(0).click();
+    await tabs.nth(1).click();
     await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
-    // A project opens on its Overview (ATM-751): to its board
-    await openView(page, 'kanban');
     const card = page.locator('#kanban .kanban-card').first();
     const id = await card.getAttribute('data-id');
     await card.click({ modifiers: ['ControlOrMeta'] });
     await expect(tabs).toHaveCount(3);
     // In the background, right of this tab, which stays as it was (ATM-698)
-    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true');
+    await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('#detail-overlay')).not.toHaveClass(/open/);
-    await tabs.nth(1).click();
+    await tabs.nth(2).click();
     await expect.poll(() => addressOf(page)).toContain(`task=${id}`);
     await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
     await page.keyboard.press('Escape');
@@ -1006,7 +1021,9 @@ test.describe('the dashboard in the atm app', () => {
     await expect(trail).toBeHidden();
     await expect(page.locator('#subtitle')).toBeVisible();
     // The overview has none in its tab
-    await page.locator('#app-sidebar .app-sidebar-item').first().click();
+    await page.locator('#app-sidebar-scope').click();
+    await page.locator('#app-sidebar-scopes [data-scope=""]').click();
+    await page.locator('#app-sidebar [data-item="overview"]').click();
     await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
     await expect(page.locator('#in-tab-trail')).toHaveCount(0);
   });

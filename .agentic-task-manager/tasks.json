@@ -1934,7 +1934,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 770,
+    "next_number": 771,
     "review": "async"
   },
   "tasks": [
@@ -19383,7 +19383,7 @@
       "description": "Today the app's sidebar only sets the current tab's project, which the tab selector chevron already does. Design what replaces it, in `docs/sidebar-overhaul-design.md`, together with the user.\n\n## The sidebar (app)\nA **scope selector** (All, or one project) and six items for the selected scope, each with a proper icon:\n\n1. **Overview**: the project's current Project tab, or the All Project Cards view for All.\n2. **Inbox** (new): raw user input, later analyzed and either turned into tasks or discarded. A simpler task list of its own, with archiving, and three states only: *created*, *discarded* (with a reason), *injected* (with links to the tasks made from it). Lets the user jot input from the app or webapp quickly without distracting working agents.\n3. **Tasks**: a page with the current Board, List and Dependencies tabs (no Dependencies for All).\n4. **Code Reviews**: the current Reviews tab's content.\n5. **Documents** (new): a list of all documents in the repo, opened in the viewer to read.\n6. **Analysis**: the current Progress and Agents tabs.\n\n## Tabs and navigation\n- Clicking an item always opens a **new tab**, never replaces the current one.\n- The tab selector chevron goes away in the app (it stays in the webapp).\n- A tab's title reads `[<short project name>|All] - [Overview|Inbox|Tasks|…]`, with the item's icon.\n- A link inside a tab (a review, say) opens **in the same tab**, and Back returns to where the user was, never a random place. Build on [the tabs design](docs/tabs-and-navigation-design.md).\n\n## The webapp\nNo sidebar: still a single page with tabs, one per item (Inbox and Documents are just more tabs).\n\n## Also in the design\n- The All-projects activity pill moves inside the tab.\n- The All-projects search and the Reviews search move up in the tab, placed like the project search.\n\n## Then\n- Write **Inbox** as its own design document (`docs/inbox-design.md`): data model, states, archiving, API, how agents analyze and inject items.\n- Write **Documents** as its own design document (`docs/documents-design.md`): which files are listed, how they are found, the viewer.\n- Decompose all three designs into implementation tasks in this sprint with `/atm-create-tasks`, so it becomes the full sprint.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "docs/sidebar-overhaul-design.md",
@@ -19391,7 +19391,7 @@
         "docs/documents-design.md"
       ],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T00:07:10Z",
+      "updated_at": "2026-11-24T03:48:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -19480,6 +19480,12 @@
           "kind": "review",
           "text": "The designs are approved (CR-135, CR-136, CR-137). Left to check: the breakdown into ATM-751–766 (sidebar S1–S8, Inbox I1–I5, Documents D1–D3), ATM-736–738 now waiting on ATM-752, and the release task ATM-750 waiting on all of them.",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T03:48:11Z",
+          "kind": "note",
+          "text": "Approved",
+          "by": "claude:ba530ebb"
         }
       ],
       "reviews": [
@@ -19502,10 +19508,16 @@
           "from": "2026-11-23T23:45:50Z",
           "to": "2026-11-23T23:50:48Z",
           "outcome": "approved"
+        },
+        {
+          "from": "2026-11-24T00:07:10Z",
+          "to": "2026-11-24T03:48:11Z",
+          "outcome": "approved"
         }
       ],
       "review_requested_at": "2026-11-24T00:07:10Z",
-      "review_state": "waiting"
+      "completed_at": "2026-11-24T03:48:16Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d97e12924d39",
@@ -20574,7 +20586,7 @@
       "description": "[The sidebar overhaul](docs/sidebar-overhaul-design.md) §2.3 and §5: the seven view tabs become the items.\n\n## Change\n- **The webapp's tabs** are the items, in the sidebar's order: six for a project, four for All (Overview, Tasks, Code Reviews, Analysis). A tab click is in place.\n- **Sub-tabs** under the page header: Tasks has Board · List · Dependencies (Board · List for All), Analysis has Progress · Agents. Each is a step in the tab's history, as the view tabs are now.\n- **All's List:** the List view over every project's tasks (today All has only the Omniboard).\n- **In the app** the item row isn't shown (the sidebar does its job, ATM sidebar task), but the sub-tabs are.\n- Inbox and Documents show a placeholder page until their own tasks build them.\n\n## Tests\nComponent tests for the tabs per scope and the sub-tabs; e2e: the webapp's tabs and sub-tabs, Back across sub-tabs, All's List. Update the screenshots' expectations where the tab row changed (the release task regenerates them).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e889c1f825f3"
       ],
@@ -20583,7 +20595,7 @@
         "dashboard/src/lib/shell/Header.svelte"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T03:03:35Z",
+      "updated_at": "2026-11-24T03:36:48Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -20596,7 +20608,38 @@
       "review": "async",
       "number": 752,
       "started_at": "2026-11-24T03:03:35Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "fa373ecba8a2c0417c0eaf8d2f2ddc0292bf9936",
+      "code_reviews": [
+        {
+          "id": "01a20b9e-630e-7636-8eb8-c1b832d0ea07",
+          "ref": "CR-147"
+        }
+      ],
+      "review_requested_at": "2026-11-24T03:34:19Z",
+      "notes": [
+        {
+          "at": "2026-11-24T03:34:19Z",
+          "kind": "review",
+          "text": "CR-147: The page by item: items as tabs, sub-tabs, All's List",
+          "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T03:36:39Z",
+          "kind": "note",
+          "text": "Approved: in CR-147 (round 1)",
+          "by": "Hakan Serce"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T03:34:19Z",
+          "to": "2026-11-24T03:36:39Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T03:36:48Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e88bc947df5c",
@@ -20610,7 +20653,7 @@
       "description": "[The sidebar overhaul](docs/sidebar-overhaul-design.md) §2: the app's sidebar becomes a scope selector and the items.\n\n## Change\n- **The scope selector** at the top (§2.1): *All projects*, then the workspace's projects with logo, name, progress bar and needs-you badge (missing ones dimmed), a Bits UI menu. It follows the active tab; a choice by hand holds until the next tab switch; kept in the preferences.\n- **The items** (§2.2), with Lucide icons (`layout-dashboard`, `inbox`, `square-kanban`, `file-diff`, `file-text`, `trending-up`; add the missing ones to `Icon.svelte`): six for a project, four for All. Each is a real link; a click **always opens a new tab** right of the active one and goes to it; ⌘/Ctrl or middle click in the background; right-click is ATM-699's link menu. The current item is marked.\n- **Badges:** Inbox's open count (0 until the inbox exists), Code Reviews' waiting-on-you count.\n- **The app's title bar** loses the project chooser (`ProjectSelector`) and the view tabs. The webapp keeps the chooser.\n- The workspace switcher stays as it is.\n\n## Tests\nComponent tests for the selector (following the tab, the hand choice, missing projects) and the items (new tab, background, the mark, badges); e2e in the app fixture: an item opens a new tab, the chooser gone from the title bar.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e889c1f825f3",
         "01a20ae0-5493-734f-9c10-e88adf1461c5"
@@ -20622,7 +20665,7 @@
         "dashboard/src/lib/ui/Icon.svelte"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T03:46:36Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -20633,7 +20676,9 @@
       ],
       "sprint": "Sidebar overhaul",
       "review": "async",
-      "number": 753
+      "number": 753,
+      "started_at": "2026-11-24T03:46:36Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e88c3ee7f2b3",
@@ -21231,6 +21276,44 @@
       "components": [
         "dashboard"
       ]
+    },
+    {
+      "id": "01a20bac-5c81-7593-a6ce-57fe10d96ef7",
+      "name": "A task's review needs a CR: refuse a review request without one, and warn about a task stranded in review",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews"
+      ],
+      "description": "Found on ATM-728 (Hakan: \"if it is a bug, let's fix this in atm state machine as well\"). All of its code reviews (CR-135, CR-136, CR-137) were approved; then the agent asked for one more review with `atm task state ATM-728 in_review --note '…'` (review → review), which opens no CR. The dashboard decides a task only through a CR (it has no route or button for `atm task review`), so the task sat in review with nothing for Hakan to approve; only `atm task review approve` on the CLI could let it out.\n\n## Change (atm-lib, the state machine: `state.rs`, `lifecycle.rs`)\n- **An agent's move to review needs a CR open on the task.** Since 0.40.0 every review is a CR (`atm docs reviews`): `atm task state <id> in_review` by an agent session is refused when no open CR (waiting or changes requested) names the task, the refusal naming what to do: `atm review create --task <id> …`, or `atm review round CR-N` for a CR it has. Opening a CR keeps putting its tasks in review as now.\n- **The user's own moves and decisions are unchanged**: `atm task review approve|request-changes|reject`, and a person's `in_review` (they may decide it themselves).\n- **`atm doctor` warns about a task stranded in review**: in review with no open CR naming it, saying how to get it out (open a CR, or `atm task review …`).\n- `docs/agent/states.md` and `docs/agent/reviews.md` say so.\n\n## Tests\natm-lib unit tests for each case: no CR, a CR open (waiting, changes requested), only approved or closed CRs, a CR naming another task, a person's move; doctor's warning (stranded, not stranded). A CLI suite scenario (`tests/scripts/scenarios/`) for the refusal and its message.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/state.rs",
+        "crates/atm-lib/src/lifecycle.rs",
+        "crates/atm-lib/src/state/tests.rs",
+        "crates/atm-lib/src/reviews/doctor.rs",
+        "docs/agent/states.md",
+        "docs/agent/reviews.md"
+      ],
+      "created_at": "2026-11-24T03:49:34Z",
+      "updated_at": "2026-11-24T03:49:34Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T03:49:34Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "related": [
+        "01a207f0-a2e1-7602-b260-d97d26c2073b"
+      ],
+      "number": 770
     }
   ]
 }

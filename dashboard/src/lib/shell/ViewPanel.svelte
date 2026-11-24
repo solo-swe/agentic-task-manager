@@ -3,6 +3,7 @@
   // as sub-tabs under them where it has more than one (Tasks: Board · List · Dependencies; Analysis: Progress · Agents)
   import { ITEMS, type Item } from '../address';
   import { itemOfView, PROJECT_ITEM_VIEWS, VIEW_ICONS, VIEW_LABELS, type ViewId } from '../tabs';
+  import { inApp } from '../api/http';
   import { reviewsWaiting } from '../projects';
   import { dashboard } from '../state.svelte';
   import AgentsTab from '../agents/AgentsTab.svelte';
@@ -35,12 +36,17 @@
   // (state.svelte.ts onNavigate). An item opens on its first view
   const selectItem = (next: Item) => next !== item && dashboard.selectTab(PROJECT_ITEM_VIEWS[next][0]);
   const selectView = (next: ViewId) => dashboard.selectTab(next);
+  // In the app the sidebar's items do the item row's job (ATM-753); with the sidebar hidden, the row is back, until the
+  // new tab's chooser reaches every page (ATM-755)
+  const showsItems = $derived(!inApp || !dashboard.sidebarOpen);
 </script>
 
 <div class="graph-section" id="graph-section">
-  <div class="view-header">
-    <ItemTabs items={ITEMS} current={item} onselect={selectItem} {badges} label="Project" />
-  </div>
+  {#if showsItems}
+    <div class="view-header">
+      <ItemTabs items={ITEMS} current={item} onselect={selectItem} {badges} label="Project" />
+    </div>
+  {/if}
   {#if subViews.length > 1}
     <SubTabs
       views={subViews}

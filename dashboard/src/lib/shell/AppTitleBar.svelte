@@ -6,7 +6,6 @@
   // with its subtitle, search and Filters, Progress and Activity, and the ⋯ settings. Dragging the bar moves the
   // window, a double click maximizes it. The browser keeps its own title bar.
   import { onMount, type Snippet } from 'svelte';
-  import ProjectSelector from './ProjectSelector.svelte';
   import { reviewOf } from '../address';
   import { reviewWindow } from '../reviews/window.svelte';
   import Icon from '../ui/Icon.svelte';
@@ -94,11 +93,9 @@
       {:else}
         {#if listed}<ProjectLogo project={listed} size={16} />{:else}<Logo size={16} />{/if}
         {#if tab.id === appTabs.active}
-          <!-- The tab shown: its name is the page's heading, and the project chooser -->
+          <!-- The tab shown: its name is the page's heading. No project chooser: the sidebar's scope does its job, and a
+               tab doesn't change project in place (ATM-753, docs/sidebar-overhaul-design.md §2.3) -->
           <h1 id="dashboard-title">{name}</h1>
-          {#if dashboard.projects.length > 0}<span class="app-tab-chooser"
-              ><ProjectSelector badge={false} floating /></span
-            >{/if}
         {:else}
           <span class="app-tab-name">{name}</span>
         {/if}
@@ -173,18 +170,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  /* The project chooser in the tab: a quiet chevron, no border or background (the browser's keeps its own) */
-  .app-tab-chooser :global(.project-switch) {
-    background: none;
-    border: none;
-    height: 22px;
-    width: 22px;
-  }
-  .app-tab-chooser :global(.project-switch:hover),
-  .app-tab-chooser :global(.project-switch[aria-expanded='true']) {
-    background: var(--surface);
-    border-radius: var(--radius-sm);
   }
   .window-buttons {
     align-self: stretch;

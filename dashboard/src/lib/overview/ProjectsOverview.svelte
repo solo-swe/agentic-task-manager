@@ -6,6 +6,7 @@
   import { BOARD_SCOPES, withoutActiveSprint } from '../allboard';
   import { ACTIVE_DAYS, isActive, orderProjects } from '../projects';
   import type { Item } from '../address';
+  import { inApp } from '../api/http';
   import type { OverviewTab } from '../routes';
   import { dashboard } from '../state.svelte';
   import { ALL_ITEM_VIEWS, itemOfOverviewTab } from '../tabs';
@@ -55,7 +56,10 @@
 
 <!-- On the board, the page doesn't scroll: the board takes the window's height and its columns scroll (T-265) -->
 <section class="projects-overview" class:on-board={tab === 'board'} id="projects-overview">
-  <ItemTabs {items} current={item} onselect={selectItem} label="All projects" />
+  {#if !inApp || !dashboard.sidebarOpen}
+    <!-- In the app the sidebar's items do its job (ATM-753); with the sidebar hidden it is back, until ATM-755 -->
+    <ItemTabs {items} current={item} onselect={selectItem} label="All projects" />
+  {/if}
   {#if subViews.length > 1}
     <SubTabs
       views={subViews}

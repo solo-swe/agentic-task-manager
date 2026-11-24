@@ -1376,8 +1376,20 @@ const WITH_SUB_TABS = new Set(['tasks', 'analysis']);
 
 export async function openView(page: Page, view: string, { overview = false } = {}) {
   const item = ITEM_OF_VIEW[view];
-  await page.locator(`#item-${item}`).click();
-  if (WITH_SUB_TABS.has(item)) await page.locator(overview ? `#overview-tab-${view}` : `#tab-${view}`).click();
+  const subTab = page.locator(overview ? `#overview-tab-${view}` : `#tab-${view}`);
+  // Already on the item: its sub-tab
+  if (WITH_SUB_TABS.has(item) && (await subTab.count())) return subTab.click();
+  if (await page.locator(`#item-${item}`).count()) {
+    await page.locator(`#item-${item}`).click();
+  } else {
+    // In the app, whose items are the sidebar's (each a new tab, ATM-753): the view in this tab, as a link to it would
+    const { pathname } = new URL(page.url());
+    const project = /^((?:\/w\/[^/]+)?\/projects\/[^/]+)/.exec(pathname)?.[1];
+    if (!project) throw new Error(`openView: no item row and no project in ${pathname}`);
+    await follow(page, `${project}/${view}`);
+    return;
+  }
+  if (WITH_SUB_TABS.has(item)) await subTab.click();
 }
 
 /** Open the filter panel (Phase, Type and Status buttons) under the search line, if it isn't open yet. */
