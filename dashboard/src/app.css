@@ -3626,6 +3626,22 @@ svg.dep-graph text {
   stroke-width: 3.5;
   filter: drop-shadow(0 0 9px var(--node-color));
 }
+/* Zoomed out too far for its text, a node shows two wiggly lines in its place (ATM-735): its key's line in its type's
+   colour, its name's muted; thick enough to see at the zoom the text gives way at (under 50%) */
+.graph-placeholder path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.graph-placeholder-title {
+  stroke: var(--node-color);
+  stroke-width: 4;
+}
+.graph-placeholder-name {
+  stroke: var(--text-muted);
+  stroke-width: 3;
+  opacity: 0.7;
+}
 .graph-controls button:hover {
   background: color-mix(in srgb, var(--text) 10%, transparent);
 }

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { dependencyChain, graphFocus, layoutGraph, NODE_H, NODE_W } from './layout';
+  import { PLACEHOLDER } from './placeholder';
   import {
     anyNodeVisible,
     autoFitView,
@@ -304,6 +305,12 @@
             markerWidth="6"
             markerHeight="4.5"
             orient="auto"><path d="M0,0 L10,3 L0,6 Z" fill="var(--accent)" /></marker
+          ><!-- A node's text, zoomed out too far to read it: two wiggly lines in its place (ATM-735), drawn once -->
+          <symbol id="graph-placeholder" class="graph-placeholder" overflow="visible"
+            ><path d={PLACEHOLDER.title} class="graph-placeholder-title" /><path
+              d={PLACEHOLDER.name}
+              class="graph-placeholder-name"
+            /></symbol
           ></defs
         >
         {#each layout.edges as edge (edge.from + '>' + edge.to)}
@@ -355,6 +362,7 @@
               >
             {:else}
               <title>{taskLabel(t)} {t.name}</title>
+              <use href="#graph-placeholder" x={node.x} y={node.y} />
             {/if}
           </g>
         {/each}

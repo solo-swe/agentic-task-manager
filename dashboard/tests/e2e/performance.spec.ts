@@ -193,6 +193,8 @@ test.describe('performance with 500 tasks', { tag: '@timed' }, () => {
     await expect(page.locator('.graph-zoom-level')).toHaveText('10%');
     await expect(nodes.locator('text')).toHaveCount(0);
     await expect(nodes.first().locator('title')).not.toBeEmpty();
+    // In their text's place, its placeholder lines (ATM-735), one shared drawing
+    await expect(nodes.locator('use')).toHaveCount(500);
     await page
       .locator('.graph-controls button')
       .and(page.getByTitle(/^Actual size/))
@@ -200,6 +202,7 @@ test.describe('performance with 500 tasks', { tag: '@timed' }, () => {
     await expect(page.locator('.graph-zoom-level')).toHaveText('100%');
     await expect(page.locator('#panel-graph .graph-node[data-labelled]')).toHaveCount(500);
     await expect(nodes.first().locator('text')).toHaveCount(2);
+    await expect(nodes.locator('use')).toHaveCount(0);
   });
 
   test('a reload that changes the data, on every tab', async ({ page, tasksServer }) => {

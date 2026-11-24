@@ -19887,13 +19887,13 @@
       "description": "When the dependency graph is zoomed out too far for text, its nodes show as empty boxes: smart, but confusing. Draw a few wiggly placeholder lines in place of the text, so a node still reads as a card with content.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-23T10:25:40Z",
+      "updated_at": "2026-11-24T16:22:09Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:ba530ebb",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -19902,7 +19902,9 @@
       ],
       "sprint": "Sidebar overhaul",
       "review": "async",
-      "number": 735
+      "number": 735,
+      "started_at": "2026-11-24T16:22:09Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d985bd59fa46",
@@ -20108,7 +20110,7 @@
       "description": "The bar chart in the Activity pill, on a project's tab and on All projects, changes when the user clicks the pill, and changes again after switching to another tab and back. It must show the same chart every time.\n\n## Decision (Hakan)\nThe pill's all-time chart **leaves the archive out**: it charts the completions in `tasks.json` only, before and after the panel is opened, and never triggers an archive load. The panel's deep dive may still load and include the archive for its periods (D-5.2).\n\n## Likely cause\n`ActivityWidget.svelte` charts the pill from `dashboard.history` (line 43), and opening the panel calls `dashboard.wantArchive()` (line 91): once the archive arrives, `history` holds archived completions too, so the pill's bars change on the first click. Switching tabs likely reloads the project without the archive, which changes them back. Confirm this, and find the cause on All projects separately: `OverviewActivity.svelte` builds its own source from `dashboard.projectSources`, which leaves archives out, so something else changes there (check what re-derives on click and on returning to the tab, e.g. `dashboard.loadedAt` moving the buckets, or the sources being reloaded).\n\n## Change\n- The pill's series from the non-archived tasks only (`dashboard.tasks` for a project, the merged sources on All projects); the deep dive keeps using `history` where its period needs the archive.\n- The pill's tooltip and aria label say it is the task file's completions, without the archive.\n- Whatever changes the All projects pill on click or tab return, fixed so the same data gives the same bars.\n- Record the causes found in the task's notes.\n\n## Tests\n- Unit tests for the series the pill charts: with and without a loaded archive, the same result.\n- An e2e test in the Activity specs, on a project and on All projects: read the pill's bars, open and close the panel, switch to another tab and back, and the bars are unchanged.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/progress/ActivityWidget.svelte",
@@ -20116,7 +20118,7 @@
         "dashboard/src/lib/state.svelte.ts"
       ],
       "created_at": "2026-11-23T10:31:13Z",
-      "updated_at": "2026-11-24T15:08:38Z",
+      "updated_at": "2026-11-24T16:24:35Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -20142,6 +20144,12 @@
           "kind": "review",
           "text": "CR-157: Activity pill: the same chart every time",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T16:24:19Z",
+          "kind": "note",
+          "text": "Approved: in CR-157 (round 1)",
+          "by": "Hakan Serce"
         }
       ],
       "commit": "9cc4fa394f796d8f074c8174f2699d8558888bfb",
@@ -20152,7 +20160,15 @@
         }
       ],
       "review_requested_at": "2026-11-24T15:08:38Z",
-      "review_state": "waiting"
+      "reviews": [
+        {
+          "from": "2026-11-24T15:08:38Z",
+          "to": "2026-11-24T16:24:19Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T16:24:35Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a20808-570f-738e-a5c5-e9142ff2e1c9",
@@ -20299,14 +20315,14 @@
       "description": "From the Audit and tabs retrospective (ATM-726). Three e2e tests failed intermittently this sprint; each passed when run alone or on a re-run, so they waste runs and hide real failures.\n\n## The tests\n- **`graph-zoom.spec.ts`** (panning or zooming turns auto-fit off): under a loaded full run, the `+` key press reached the 90-task graph before it took keys, so auto-fit stayed on. 5 of 5 passed alone. Wait for the graph to be ready for keys (a state the graph exposes, not a timeout) before pressing.\n- **`reviews.spec.ts` › performance › a long review (94 files) … measured** (`@timed`): in CI on PR #58 the first attempt hit the 30 s test timeout inside the scroll's `page.evaluate`, and the retry counted 38,057 DOM nodes alive against the 30,000 bound (22,311 locally, twice; it passed in the other run). Find why a retry after a timeout keeps more nodes alive (the first attempt's page not gone? a trace with `--trace on`), and fix the cause. Never raise the bound (AGENTS.md).\n- **Specs with fixed dates:** three reviews-list specs used fixed 17 November dates and broke on 22 November, past the list's 5-day cutoff (ATM-723). Sweep `dashboard/tests/e2e/` for dates written as literals that a rule compares with now, and make each relative to the run or fix the page's clock (`page.clock.setFixedTime`, which also sets atm's time since ATM-722).\n\n## Tests\nEach spec passes 10 times in a row under the full suite's load (`--repeat-each 10`), and the timed test in CI's conditions.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/tests/e2e/graph-zoom.spec.ts",
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-23T22:20:58Z",
-      "updated_at": "2026-11-24T15:19:35Z",
+      "updated_at": "2026-11-24T16:24:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "review": "async",
@@ -20331,15 +20347,29 @@
         }
       ],
       "review_requested_at": "2026-11-24T15:19:35Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-24T15:19:35Z",
           "kind": "review",
           "text": "CR-158: Flaky e2e tests: graph keys, the long review's nodes, fixed dates",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T16:24:32Z",
+          "kind": "note",
+          "text": "Approved: in CR-158 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T15:19:35Z",
+          "to": "2026-11-24T16:24:32Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T16:24:43Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a20a7f-82f6-7703-ac29-a944947d1493",
@@ -21353,14 +21383,14 @@
       "description": "[The documents design](docs/documents-design.md) §2–§3: `list_documents` in atm-docs, through atm-lib.\n\n## Change\n- **Which files:** `*.md` and `*.markdown` that git tracks or has untracked and not ignored (atm-vcs: `ls-files` and `ls-files --others --exclude-standard`, literal pathspecs), refused as `document_path` refuses (`.git/`, `.agentic-task-manager/`, environment and key files). None without git.\n- **Submodules included:** each checked-out submodule's documents by the same rules from its own repository, nested ones too, their paths from the project's root; one not checked out listed as such.\n- **Each entry:** `path`, `title` (the first ATX or Setext heading in the first 8 KB, else the name without `.md`), `bytes`, `modified_at`, `tracked`.\n- **At most 500**, the first by path, with how many more; `q` (titles and paths, at most 200 characters) matched before the cut.\n- A stamp for the `ETag` (the index, `HEAD`, the listed files' sizes and mtimes).\n\n## Tests\nUnit tests for each rule: refused paths, ignored and untracked files, submodules (checked out, not, nested), titles of each kind, the cap and `q` past it, no git.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-docs/src/lib.rs",
         "crates/atm-vcs/src/lib.rs"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T16:13:37Z",
+      "updated_at": "2026-11-24T16:22:00Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21373,7 +21403,24 @@
       "review": "async",
       "number": 764,
       "started_at": "2026-11-24T16:13:37Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "b2413ea98495893ac5b9bdb7cdc4d1e505e55a5c",
+      "code_reviews": [
+        {
+          "id": "01a20e5d-39fc-76ee-ab85-50de21844d02",
+          "ref": "CR-163"
+        }
+      ],
+      "review_requested_at": "2026-11-24T16:22:00Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-24T16:22:00Z",
+          "kind": "review",
+          "text": "CR-163: Documents: the listing in atm-docs",
+          "by": "claude:ba530ebb"
+        }
+      ]
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e897f4d0ca72",

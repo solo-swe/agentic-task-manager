@@ -153,6 +153,35 @@ test.describe('pan and zoom', () => {
     await expect(minimap(page)).toBeHidden();
   });
 
+  // ATM-735: zoomed out too far for its text, a node shows two wiggly lines in its place, not an empty box
+  test(
+    'zoomed out past reading, each node shows placeholder lines instead of its text',
+    { tag: '@webkit' },
+    async ({ page }) => {
+      const first = page.locator('#dep-graph .graph-node').first();
+      await expect(zoomLabel(page)).toHaveText('60%');
+      await expect(first.locator('text')).toHaveCount(2);
+      await expect(first.locator('use')).toHaveCount(0);
+      await focusGraph(page);
+      await page.keyboard.press('-');
+      await expect(zoomLabel(page)).toHaveText('48%');
+      await expect(first.locator('text')).toHaveCount(0);
+      const lines = first.locator('use');
+      await expect(lines).toHaveCount(1);
+      // Drawn inside its box, as wide as most of it
+      const box = (await first.locator('rect').boundingBox())!;
+      const drawn = (await lines.boundingBox())!;
+      expect(drawn.width).toBeGreaterThan(box.width * 0.5);
+      expect(drawn.x).toBeGreaterThan(box.x);
+      expect(drawn.x + drawn.width).toBeLessThan(box.x + box.width);
+      expect(drawn.y + drawn.height).toBeLessThan(box.y + box.height);
+      // Zoomed back in: its text again
+      await page.keyboard.press('+');
+      await expect(first.locator('text')).toHaveCount(2);
+      await expect(first.locator('use')).toHaveCount(0);
+    },
+  );
+
   test('keyboard shortcuts when the graph has focus', async ({ page }) => {
     await focusGraph(page);
     await page.keyboard.press('+');
