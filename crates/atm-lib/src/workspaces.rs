@@ -412,6 +412,25 @@ impl Member {
         read_document(self.project()?.vcs().as_ref(), path)
     }
 
+    /// Its documents, for the Documents page (ATM-764, docs/documents-design.md §2–§3): its Markdown files where git
+    /// has them, its submodules' too, those `query` names (titles and paths), at most 500.
+    ///
+    /// # Errors
+    /// A project that can't be opened; a query longer than 200 characters.
+    pub fn documents(&self, query: &str) -> Result<Value> {
+        crate::documents::list_documents(self.project()?.vcs().as_ref(), query)
+    }
+
+    /// What its documents' listing is made from, for its `ETag` (none without git): the same while it is.
+    ///
+    /// # Errors
+    /// A project that can't be opened.
+    pub fn documents_stamp(&self) -> Result<Option<String>> {
+        Ok(crate::documents::documents_stamp(
+            self.project()?.vcs().as_ref(),
+        ))
+    }
+
     /// The document at `path` as the commit or tree `revision` has it (a review's round's side).
     ///
     /// # Errors
@@ -1049,6 +1068,36 @@ mod tests {
         std::fs::write(&tasks, r#"{"meta": {"id": "one"}, "tasks": []}"#).unwrap();
         assert!(quiet(&received), "nothing once dropped");
         std::fs::remove_dir_all(&home).unwrap();
+    }
+
+    /// ATM-764: a member's documents are its working copy's, through atm-docs, and its stamp moves with them
+    #[test]
+    fn a_members_documents_are_its_working_copys_markdown_with_a_stamp() {
+        let home = state("documents");
+        let project = home.join("project");
+        let folder = project.join(atm_common::TASK_DIR);
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(
+            folder.join("tasks.json"),
+            r#"{"meta": {"id": "one"}, "tasks": []}"#,
+        )
+        .unwrap();
+        std::fs::write(project.join("README.md"), "# The project\n").unwrap();
+        assert!(atm_db::git::git(&["init", "-q"], &project).is_some());
+        let workspaces = Workspaces::at(&home);
+        let workspace = workspaces.default_workspace();
+        workspace
+            .add_project(Some(&project.to_string_lossy()), &home)
+            .unwrap();
+        let member = workspace.member("one").unwrap();
+        let listing = member.documents("").unwrap();
+        assert_eq!(listing["documents"][0]["path"], json!("README.md"));
+        assert_eq!(listing["documents"][0]["title"], json!("The project"));
+        assert_eq!(listing["documents"][0]["tracked"], json!(false));
+        assert!(member.documents(&"x".repeat(201)).is_err());
+        let stamp = member.documents_stamp().unwrap().unwrap();
+        std::fs::write(project.join("NEW.md"), "# New\n").unwrap();
+        assert_ne!(member.documents_stamp().unwrap().unwrap(), stamp);
     }
 
     /// ATM-767: through the real watcher, a lease renewed (the claims store rewritten, only the lease moved) tells a

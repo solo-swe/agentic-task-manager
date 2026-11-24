@@ -19915,14 +19915,14 @@
       "description": "Move the All-projects activity pill inside the tab, as the sidebar overhaul design (`docs/sidebar-overhaul-design.md`) places it.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a207f0-a2e1-7602-b260-d97d26c2073b",
         "01a20ae0-5493-734f-9c10-e88adf1461c5"
       ],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T14:36:10Z",
+      "updated_at": "2026-11-24T16:21:28Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -19944,15 +19944,29 @@
         }
       ],
       "review_requested_at": "2026-11-24T14:36:10Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-24T14:36:10Z",
           "kind": "review",
           "text": "CR-154: All-projects activity pill inside the tab",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T16:20:15Z",
+          "kind": "note",
+          "text": "Approved: in CR-154 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T14:36:10Z",
+          "to": "2026-11-24T16:20:15Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T16:21:28Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d98638440e40",
@@ -19965,14 +19979,14 @@
       "description": "Move the All-projects search up in the tab, where the project-specific search is, as the sidebar overhaul design (`docs/sidebar-overhaul-design.md`) places it.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a207f0-a2e1-7602-b260-d97d26c2073b",
         "01a20ae0-5493-734f-9c10-e88adf1461c5"
       ],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T14:43:11Z",
+      "updated_at": "2026-11-24T16:21:29Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -19994,15 +20008,29 @@
         }
       ],
       "review_requested_at": "2026-11-24T14:43:11Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-24T14:43:11Z",
           "kind": "review",
           "text": "CR-155: All-projects search moves up in the tab",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T16:20:29Z",
+          "kind": "note",
+          "text": "Approved: in CR-155 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T14:43:11Z",
+          "to": "2026-11-24T16:20:29Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T16:21:29Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d9875c4593f8",
@@ -20016,14 +20044,14 @@
       "description": "In the Code Reviews tab of the sidebar overhaul (`docs/sidebar-overhaul-design.md`), move the reviews search up in the tab, placed like the other searches.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a207f0-a2e1-7602-b260-d97d26c2073b",
         "01a20ae0-5493-734f-9c10-e88adf1461c5"
       ],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T14:53:38Z",
+      "updated_at": "2026-11-24T16:21:29Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -20045,15 +20073,29 @@
         }
       ],
       "review_requested_at": "2026-11-24T14:53:38Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-24T14:53:38Z",
           "kind": "review",
           "text": "CR-156: Reviews search moves up in the tab",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T16:21:04Z",
+          "kind": "note",
+          "text": "Approved: in CR-156 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T14:53:38Z",
+          "to": "2026-11-24T16:21:04Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T16:21:29Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a207f5-b8d8-77e2-b9e8-b65158981919",
@@ -20966,7 +21008,7 @@
       "description": "[The sidebar overhaul](docs/sidebar-overhaul-design.md) §2.5: All's Code Reviews (`/reviews`) gets a project filter at the top of the list: All projects, or one or more projects, in the list's address like its other filters (`?projects=atm,compmd`), next to its search.\n\n## Tests\nUnit tests for the address (read, written, unknown projects ignored); component tests for the filter; e2e: filtering by a project, kept across a reload.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e889c1f825f3"
       ],
@@ -20975,7 +21017,7 @@
         "dashboard/src/lib/address.ts"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T16:03:00Z",
+      "updated_at": "2026-11-24T16:13:23Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -20988,7 +21030,24 @@
       "review": "async",
       "number": 757,
       "started_at": "2026-11-24T16:03:00Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "234440db0e7cdffb90793d596bf67956d9eafc84",
+      "code_reviews": [
+        {
+          "id": "01a20e55-563b-7251-87b2-d07dcf105542",
+          "ref": "CR-162"
+        }
+      ],
+      "review_requested_at": "2026-11-24T16:13:23Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-24T16:13:23Z",
+          "kind": "review",
+          "text": "CR-162: All reviews: a project filter",
+          "by": "claude:ba530ebb"
+        }
+      ]
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e890ef3d8071",
@@ -21294,14 +21353,14 @@
       "description": "[The documents design](docs/documents-design.md) §2–§3: `list_documents` in atm-docs, through atm-lib.\n\n## Change\n- **Which files:** `*.md` and `*.markdown` that git tracks or has untracked and not ignored (atm-vcs: `ls-files` and `ls-files --others --exclude-standard`, literal pathspecs), refused as `document_path` refuses (`.git/`, `.agentic-task-manager/`, environment and key files). None without git.\n- **Submodules included:** each checked-out submodule's documents by the same rules from its own repository, nested ones too, their paths from the project's root; one not checked out listed as such.\n- **Each entry:** `path`, `title` (the first ATX or Setext heading in the first 8 KB, else the name without `.md`), `bytes`, `modified_at`, `tracked`.\n- **At most 500**, the first by path, with how many more; `q` (titles and paths, at most 200 characters) matched before the cut.\n- A stamp for the `ETag` (the index, `HEAD`, the listed files' sizes and mtimes).\n\n## Tests\nUnit tests for each rule: refused paths, ignored and untracked files, submodules (checked out, not, nested), titles of each kind, the cap and `q` past it, no git.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-docs/src/lib.rs",
         "crates/atm-vcs/src/lib.rs"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T16:13:37Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21312,7 +21371,9 @@
       ],
       "sprint": "Sidebar overhaul",
       "review": "async",
-      "number": 764
+      "number": 764,
+      "started_at": "2026-11-24T16:13:37Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e897f4d0ca72",

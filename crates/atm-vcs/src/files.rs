@@ -46,6 +46,17 @@ impl GitVcs {
             .ok_or_else(|| Error::NotFound(format!("{relative}: no such file")))
     }
 
+    /// The first `limit` bytes of a file of the working copy (fewer when it is shorter), as [`GitVcs::read_file`] reads
+    /// it: a listing's titles read no more of a large file (ATM-764). None when it isn't one atm reads.
+    #[must_use]
+    pub fn read_file_start(&self, relative: &str, limit: usize) -> Option<Vec<u8>> {
+        use std::io::Read as _;
+        let file = std::fs::File::open(self.file(relative)?).ok()?;
+        let mut start = Vec::with_capacity(limit.min(64 * 1024));
+        file.take(limit as u64).read_to_end(&mut start).ok()?;
+        Some(start)
+    }
+
     /// A regular file as `commit` (a SHA, as [`GitVcs::resolve`] gives it) has it: its size and its blob; none when the
     /// commit has no regular file there (no entry, a symlink, a submodule, a folder).
     #[must_use]
@@ -279,4 +290,77 @@ impl GitVcs {
             .and_then(|r| atm_common::repository::repository_url(&r));
         Some(serde_json::json!({"path": folder, "commit": sub.head(), "repository": repository}))
     }
+
+    /// The working copy's files, as git has them (ATM-764, docs/documents-design.md §2): those it tracks (`ls-files`)
+    /// and those untracked it doesn't ignore (`ls-files --others --exclude-standard`, by this repository's own rules),
+    /// each by its path from this root; and the submodules it records (mode 160000), each saying whether it is checked
+    /// out here (its folder has a checkout of its own). Nothing inside a submodule: list it from its own repository
+    /// ([`GitVcs::submodule_at`]). None outside a repository or when git can't say.
+    #[must_use]
+    pub fn listed_files(&self) -> Option<Listing> {
+        if !self.in_repository() {
+            return None;
+        }
+        // NUL-separated, so no name is quoted or split; literal pathspecs, though none is given (I7)
+        let tracked = run(&[LITERAL, "ls-files", "-z", "--stage"], &self.root)
+            .filter(|o| o.status.success())?;
+        let untracked = run(
+            &[LITERAL, "ls-files", "-z", "--others", "--exclude-standard"],
+            &self.root,
+        )
+        .filter(|o| o.status.success())?;
+        let mut listing = Listing::default();
+        for entry in String::from_utf8_lossy(&tracked.stdout).split('\0') {
+            // `<mode> <object> <stage>\t<path>`; a conflicted file is listed once per stage
+            let Some((meta, path)) = entry.split_once('\t') else {
+                continue;
+            };
+            if meta.starts_with("160000 ") {
+                let checked_out =
+                    std::fs::symlink_metadata(self.root.join(path).join(".git")).is_ok();
+                listing.submodules.push(ListedSubmodule {
+                    path: path.to_string(),
+                    checked_out,
+                });
+            } else if listing.files.last().is_none_or(|f| f.path != path) {
+                listing.files.push(ListedFile {
+                    path: path.to_string(),
+                    tracked: true,
+                });
+            }
+        }
+        for path in String::from_utf8_lossy(&untracked.stdout).split('\0') {
+            // A folder (`dir/`) is a repository of its own that this one doesn't record: not its files
+            if path.is_empty() || path.ends_with('/') {
+                continue;
+            }
+            listing.files.push(ListedFile {
+                path: path.to_string(),
+                tracked: false,
+            });
+        }
+        Some(listing)
+    }
+}
+
+/// The working copy's files and submodules ([`GitVcs::listed_files`]).
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Listing {
+    pub files: Vec<ListedFile>,
+    pub submodules: Vec<ListedSubmodule>,
+}
+
+/// A file git tracks, or has untracked and doesn't ignore: its path from the repository's root.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListedFile {
+    pub path: String,
+    pub tracked: bool,
+}
+
+/// A submodule the repository records: its folder, and whether it is checked out (`git submodule status` says `-`
+/// for one that isn't).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListedSubmodule {
+    pub path: String,
+    pub checked_out: bool,
 }

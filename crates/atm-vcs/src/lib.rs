@@ -16,6 +16,7 @@ mod commit;
 pub mod diff;
 pub use diff::{ChangedFile, Diff};
 mod files;
+pub use files::{ListedFile, ListedSubmodule, Listing};
 mod git;
 use git::{ask, run, run_fed, step};
 mod history;

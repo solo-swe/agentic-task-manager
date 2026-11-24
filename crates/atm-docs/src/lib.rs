@@ -13,6 +13,9 @@ use atm_common::{Error, Result};
 use atm_vcs::GitVcs;
 use serde_json::{Value, json};
 
+mod listing;
+pub use listing::{LIST_MAX, document_title, documents_stamp, list_documents};
+
 const DOC_MAX_PATH: usize = 512;
 /// A document, code or text.
 const DOC_MAX_BYTES: u64 = 1_000_000;

@@ -241,3 +241,79 @@ fn a_file_in_a_submodule_is_answered_by_the_submodules_own_repository() {
     write(&nested, "b.txt", "b");
     assert_eq!(vcs.submodule_of("nested/b.txt"), None);
 }
+
+/// ATM-764: the working copy's files as git has them, for the Documents page
+#[test]
+fn the_listed_files_are_the_tracked_and_the_untracked_not_ignored_and_the_submodules_recorded() {
+    let dir = scratch();
+    let sub = init(&dir.0.join("sub-origin"));
+    write(&sub, "a.md", "a");
+    commit_all(&sub, "sub");
+    let vcs = init(&dir.0.join("repo"));
+    write(&vcs, ".gitignore", "*.log\n");
+    write(&vcs, "docs/a b.md", "spaced");
+    write(&vcs, "ünï.md", "unicode");
+    commit_all(&vcs, "first");
+    git(
+        &vcs.root,
+        &[
+            "-c",
+            "protocol.file.allow=always",
+            "submodule",
+            "--quiet",
+            "add",
+            "../sub-origin",
+            "lib",
+        ],
+    );
+    commit_all(&vcs, "the submodule");
+    write(&vcs, "new.md", "n");
+    write(&vcs, "out.log", "ignored");
+    // A repository of its own that this one doesn't record: neither its files nor it
+    let nested = init(&dir.0.join("repo/nested"));
+    write(&nested, "b.md", "b");
+    let listing = vcs.listed_files().unwrap();
+    let files: Vec<(&str, bool)> = listing
+        .files
+        .iter()
+        .map(|f| (f.path.as_str(), f.tracked))
+        .collect();
+    assert_eq!(
+        files,
+        [
+            (".gitignore", true),
+            (".gitmodules", true),
+            ("docs/a b.md", true),
+            ("ünï.md", true),
+            ("new.md", false)
+        ]
+    );
+    assert_eq!(
+        listing.submodules,
+        [crate::ListedSubmodule {
+            path: "lib".into(),
+            checked_out: true
+        }]
+    );
+    // From the submodule's own repository: its files
+    let inner = vcs.submodule_at("lib").unwrap().listed_files().unwrap();
+    assert_eq!(
+        inner.files,
+        [crate::ListedFile {
+            path: "a.md".into(),
+            tracked: true
+        }]
+    );
+    // Not checked out
+    git(&vcs.root, &["submodule", "deinit", "-q", "-f", "lib"]);
+    assert!(!vcs.listed_files().unwrap().submodules[0].checked_out);
+    // The start of a file, no more
+    assert_eq!(vcs.read_file_start("docs/a b.md", 3).unwrap(), b"spa");
+    assert_eq!(vcs.read_file_start("docs/a b.md", 100).unwrap(), b"spaced");
+    assert_eq!(vcs.read_file_start("missing.md", 3), None);
+    // Outside a repository: nothing
+    assert_eq!(
+        crate::GitVcs::new(&dir.0.join("sub-origin/..")).listed_files(),
+        None
+    );
+}
