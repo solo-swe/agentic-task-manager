@@ -1,0 +1,90 @@
+# atm's memory growth: what grows, and what doesn't (ATM-734)
+
+**Status:** analysis, for review with Hakan. Hakan saw "atm" grow from about 70 MB to 4.5 GB after a few hours. This
+records what was measured on 2026-11-24 (macOS, the app 0.43.0 from the release, this repository's own project
+open in it, agents at work), what is ruled out, and the follow-up work proposed (§5).
+
+## 1. Which process
+
+`footprint` (macOS's physical footprint, what Activity Monitor's Memory column shows) on every atm process, about
+two hours after the app started:
+
+| Process | What it is | Footprint | Peak |
+|---|---|---|---|
+| `com.apple.WebKit.WebContent` (the app's) | the app's page: the dashboard's JS, DOM, layout, images | **427 MB** | 769 MB |
+| `atm-app` | the app: Tauri, atm-lib in process, the subscriptions | 105 MB | 160 MB |
+| `atm _serve` (Homebrew, 15 days old) | the dashboard server for the browser | 14 MB | 27 MB |
+| `atm _serve` (the app's own) | the app's server | 4 MB | 4 MB |
+| `atm _claim-watch` × 13 | `atm claim hold`'s watchers (§4) | 6 MB each | |
+
+**The page process is the one that grows.** Its footprint is almost all *WebKit malloc* (288 MB: the DOM, styles,
+layout, rendered text) and graphics memory (103 MB), not the JS heap (3 MB in the JS VM's cage). The servers stay
+small; the app's own process grows slowly (§2).
+
+## 2. When it grows
+
+The page process and the app, sampled once a minute (`footprint`), while an agent worked in this repository:
+
+| UTC | Page | App | What happened |
+|---|---|---|---|
+| 00:32 | 427 MB | 105 MB | (the first measurement) |
+| 00:38 | 483 MB | 119 MB | e2e runs writing `dashboard/test-results/`, commits, `atm claim hold` writing `claims.json` |
+| 00:39 | 498 MB | 120 MB | the same |
+| 00:40 | 513 MB | 121 MB | the same |
+| 00:41 | 526 MB | 123 MB | the agent stopped changing files |
+| 00:42–00:45 | 526 MB | 123 → 106 MB | nothing changed (the app gave memory back) |
+| 00:46 | 540 MB | 110 MB | the agent writing this document, holding its claim, an e2e run |
+
+**It grows while files change, about 15 MB a minute, and not at all while nothing changes.** In the app the page
+doesn't poll: it reloads when the app says something changed (`api/changes.ts`: the workspace, the project, and a
+live review's working copy). So each reload the app asks for leaves memory behind in WebKit. At an agent's pace
+(several changes a minute for hours) that is gigabytes: 15 MB a minute is 4.5 GB in five hours.
+
+## 3. What is ruled out (Chromium)
+
+`dashboard/tests/e2e/memory.spec.ts` (new) measures the page in Chromium through its DevTools protocol: a garbage
+collection forced, then the JS heap, the DOM nodes alive (detached ones too) and the event listeners. Each scenario
+measures after 10 rounds and again after 50 more:
+
+| Scenario | After 10 | After 60 (or more) |
+|---|---|---|
+| each task tab (Kanban, List, Graph, Progress, Agents, Project), 60 refreshes with new data | 7.0–7.6 MB, 3,121–4,362 nodes | +0.3 MB, the same nodes and listeners |
+| a review's Diffs (three files, a chain on each), read again with a change each time | 7.9 MB, 2,572 nodes, 147 listeners | 9.1 MB, 2,616 nodes, 171 listeners after **160**: it levels off |
+| the document viewer, two documents opened and closed 50 times | 10.2 MB, 4,449 nodes | +0.3 MB, the same nodes |
+
+**The dashboard's own state doesn't leak in Chromium**: no DOM node, listener or JS object is kept per refresh.
+What grows in the app is WebKit's own memory (*WebKit malloc* and graphics), which Chromium's figures don't show and
+WebKit has no protocol to measure from a test. So the cause is in what WebKit keeps per reload: a candidate list,
+none confirmed yet:
+
+- **CompMD's rendered pages**: each render of a document or a Markdown diff makes its page (and, for diagrams, a
+  sandboxed frame) again; WebKit may keep the frames' documents, or their layers (graphics memory grew too).
+- **Layers and images**: the Kanban's and the review page's cards drawn again on each reload, their compositing
+  layers or decoded images kept (the *graphics* part of the footprint).
+- **WebKit's memory cache** of the IPC answers (each `invoke` answer is a response WebKit may cache).
+
+## 4. A second finding: claim watchers that outlive their command
+
+`atm claim hold <id> && <command>` leaves a watcher (`atm _claim-watch`) that renews the claim while the calling
+shell lives, at most two hours. An agent's harness keeps one shell for the whole session (Claude Code's does), so
+the watcher outlives the command it was for: 13 were alive here after an hour of work, 6 MB each, each renewing the
+claim of a task long finished (the renewal of a claim that is gone is refused, so no harm to the tasks). Over a
+long loop this is tens of processes and a few hundred MB. Not the 4.5 GB, but its own fix: the watcher should end
+with the command, not the shell (§5, follow-up 3).
+
+## 5. Follow-up work proposed
+
+1. **Measure the app's page per scenario, in WebKit** (P1): a harness that drives the real app (or Playwright's
+   WebKit, sampling its WebContent process with `footprint`) through each reload the app makes (a task change, a
+   claim, a working-copy change under a live review, a review comment) and reports the footprint per 100 reloads,
+   view by view. That names the view and the kind of reload that leaks.
+2. **Fix what it names** (P1), with the harness as its test: a bound on the footprint per 100 reloads.
+3. **Claim watchers end with their command** (P2): `atm claim hold` ties the watcher to the command's process (or
+   a shell that exits with it) rather than the calling shell, or the watcher ends when the task's claim does.
+4. **Fewer reloads in the app** (P2): the page reloads on every change the app reports; changes that don't touch
+   what the page shows (`dashboard/test-results/`, a claim's lease renewed) could be left out, or reloads coalesced
+   (one per second at most), which also bounds whatever leaks per reload.
+
+**Question for Hakan:** the 4.5 GB you saw, was it the *Agentic Task Manager* process or its *Web Content*
+(Activity Monitor lists the page process separately, as "Agentic Task Manager Web Content" or under WebKit), and
+which views were open?

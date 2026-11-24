@@ -19690,13 +19690,13 @@
       "description": "atm was once seen growing from about 70 MB of RAM to 4.5 GB after a few hours of use. Find out why:\n\n1. Reproduce it: run `atm service` with the dashboard and the app open, agents working and reviews watched, and measure its memory over time.\n2. Find what grows (caches, watchers, event subscribers, open connections, retained task file versions, …).\n3. Fix it if the cause is clear, with a test that would have caught it, or record the findings and create the follow-up tasks.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-23T10:25:40Z",
+      "updated_at": "2026-11-24T00:33:27Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:ba530ebb",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -19705,7 +19705,9 @@
       ],
       "sprint": "Sidebar overhaul",
       "review": "async",
-      "number": 734
+      "number": 734,
+      "started_at": "2026-11-24T00:33:27Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d9843d6019f3",
