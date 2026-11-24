@@ -1032,7 +1032,13 @@ test.describe('the dashboard in the atm app', () => {
       await expect(trail.locator('#activity-card'), item).toBeVisible();
       await expect(trail.locator('#progress-card'), item).toHaveCount(0);
       await expect(page.locator('#app-titlebar #activity-card'), item).toHaveCount(0);
+      // Its search (ATM-737): on Tasks, at the left of the tab's line, before the subtitle, as a project's is
+      const search = page.locator('.topbar.in-tab .in-tab-row > .board-search');
+      await expect(search, item).toHaveCount(item === 'tasks' ? 1 : 0);
+      if (item === 'tasks')
+        expect((await search.boundingBox())!.x).toBeLessThan((await page.locator('#subtitle').boundingBox())!.x);
     }
+    await expect(page.locator('.projects-toolbar #board-search')).toHaveCount(0);
     const allPills = (await trail.boundingBox())!;
     const allSubtitle = (await page.locator('#subtitle').boundingBox())!;
     expect(Math.abs(allPills.y + allPills.height / 2 - (allSubtitle.y + allSubtitle.height / 2))).toBeLessThan(6);

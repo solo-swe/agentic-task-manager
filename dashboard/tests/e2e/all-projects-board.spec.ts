@@ -243,6 +243,25 @@ test.describe('All projects board', () => {
     await expect(column(page, 'todo').locator('.kanban-count')).toHaveText('13');
   });
 
+  test('the search sits in the title bar, where a project’s does, on the Board and the List only (ATM-737)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openBoard(page, tasksServer);
+    await expect(page.locator('.topbar .topbar-charts #board-search')).toHaveCount(1);
+    await expect(page.locator('.projects-toolbar #board-search')).toHaveCount(0);
+    // Before the activity, as a project's search is before its pills
+    const search = (await page.locator('.board-search').boundingBox())!;
+    const activity = (await page.locator('.topbar #activity-card').boundingBox())!;
+    expect(search.x).toBeLessThan(activity.x);
+    await openView(page, 'list', { overview: true });
+    await expect(page.locator('.topbar #board-search')).toHaveCount(1);
+    for (const tab of ['projects', 'progress', 'agents', 'reviews'] as const) {
+      await openView(page, tab, { overview: true });
+      await expect(page.locator('#board-search'), tab).toHaveCount(0);
+    }
+  });
+
   test('the page never scrolls on the board: columns reach the status bar and scroll inside (T-265)', async ({
     page,
     tasksServer,

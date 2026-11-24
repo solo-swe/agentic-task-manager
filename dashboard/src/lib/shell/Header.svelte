@@ -6,6 +6,7 @@
   import Filters from '../tasks/Filters.svelte';
   import NeedsYouMenu from './NeedsYouMenu.svelte';
   import ActivityWidget from '../progress/ActivityWidget.svelte';
+  import BoardSearch from '../overview/BoardSearch.svelte';
   import OverviewActivity from '../overview/OverviewActivity.svelte';
   import ProgressWidget from '../progress/ProgressWidget.svelte';
   import TitleBar from './TitleBar.svelte';
@@ -48,6 +49,10 @@
   // As atm says each task needs you (ATM-717: `derived.needs_you`)
   const needYou = $derived(needsYouItems(dashboard.tasks, reviewsNeedingYou));
   const present = $derived(dashboard.projects.filter((p) => !p.missing));
+  // All projects' Board or List: the pages its search searches (ATM-737)
+  const onAllTasks = $derived(
+    route.page === 'overview' && (dashboard.overviewTab === 'board' || dashboard.overviewTab === 'list'),
+  );
 </script>
 
 <!-- A project's search and Filters, and its Progress and Activity pills: the browser's title bar has them together, the
@@ -68,13 +73,18 @@
     </div>
   {/if}
 {/snippet}
+<!-- All projects' search, on the pages that search every project's tasks (the Board and the List), where a project's
+     search is (ATM-737), and its activity -->
+{#snippet overviewSearch()}
+  {#if onAllTasks}<BoardSearch />{/if}
+{/snippet}
 {#snippet overviewPills()}
   <!-- Every project's activity together (T-328) -->
   {#if dashboard.route.page === 'overview'}<OverviewActivity />{/if}
 {/snippet}
 {#snippet overviewCharts()}
   {#if dashboard.route.page === 'overview'}
-    <div class="topbar-charts">{@render overviewPills()}</div>
+    <div class="topbar-charts">{@render overviewSearch()}{@render overviewPills()}</div>
   {/if}
 {/snippet}
 
@@ -133,6 +143,7 @@
     selector={dashboard.projects.length > 0}
     inTab={inApp}
     charts={overviewCharts}
+    lead={inApp && onAllTasks ? overviewSearch : undefined}
     trail={inApp && route.page === 'overview' ? overviewPills : undefined}
   >
     {#snippet subtitle()}

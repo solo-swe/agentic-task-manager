@@ -12,7 +12,7 @@
   import { ALL_ITEM_VIEWS, itemOfOverviewTab } from '../tabs';
   import AllProjectsBoard from './AllProjectsBoard.svelte';
   import AllProjectsList from './AllProjectsList.svelte';
-  import Icon, { type IconName } from '../ui/Icon.svelte';
+  import type { IconName } from '../ui/Icon.svelte';
   import ItemTabs from '../shell/ItemTabs.svelte';
   import SubTabs from '../shell/SubTabs.svelte';
   import InfoTip from '../ui/InfoTip.svelte';
@@ -72,23 +72,7 @@
   {/if}
   <div class="projects-toolbar">
     {#if onTasks}
-      <!-- Over every project's tasks (T-261): ID, name, description, type, labels, notes and the project's name -->
-      <label class="task-search board-search">
-        <Icon name="search" size={14} />
-        <input
-          type="search"
-          id="board-search"
-          placeholder="Search all projects’ tasks"
-          aria-label="Search all projects' tasks by ID, name, description, type, label, note or project"
-          value={dashboard.boardQuery}
-          oninput={(e) => dashboard.setBoardQuery(e.currentTarget.value)}
-        />
-        {#if dashboard.boardQuery}
-          <button class="search-clear" aria-label="Clear search" onclick={() => dashboard.setBoardQuery('')}
-            ><Icon name="x" size={12} /></button
-          >
-        {/if}
-      </label>
+      <!-- The search over every project's tasks is up in the title bar, where a project's is (ATM-737: Header) -->
       <InfoTip label="all projects' tasks">
         <p>
           What's happening now across your projects: the tasks <strong>to do</strong> (ready ones first),

@@ -19915,14 +19915,14 @@
       "description": "Move the All-projects activity pill inside the tab, as the sidebar overhaul design (`docs/sidebar-overhaul-design.md`) places it.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a207f0-a2e1-7602-b260-d97d26c2073b",
         "01a20ae0-5493-734f-9c10-e88adf1461c5"
       ],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T14:31:20Z",
+      "updated_at": "2026-11-24T14:36:10Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -19935,7 +19935,24 @@
       "review": "async",
       "number": 736,
       "started_at": "2026-11-24T14:31:20Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "7fb923fe636a9cc2a72d1d2cae9d040e49165dc6",
+      "code_reviews": [
+        {
+          "id": "01a20dfc-543e-713c-8d83-7587101a9149",
+          "ref": "CR-154"
+        }
+      ],
+      "review_requested_at": "2026-11-24T14:36:10Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-24T14:36:10Z",
+          "kind": "review",
+          "text": "CR-154: All-projects activity pill inside the tab",
+          "by": "claude:ba530ebb"
+        }
+      ]
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d98638440e40",
@@ -19948,14 +19965,14 @@
       "description": "Move the All-projects search up in the tab, where the project-specific search is, as the sidebar overhaul design (`docs/sidebar-overhaul-design.md`) places it.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a207f0-a2e1-7602-b260-d97d26c2073b",
         "01a20ae0-5493-734f-9c10-e88adf1461c5"
       ],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T00:06:51Z",
+      "updated_at": "2026-11-24T14:36:17Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -19966,7 +19983,9 @@
       ],
       "sprint": "Sidebar overhaul",
       "review": "async",
-      "number": 737
+      "number": 737,
+      "started_at": "2026-11-24T14:36:17Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d9875c4593f8",
