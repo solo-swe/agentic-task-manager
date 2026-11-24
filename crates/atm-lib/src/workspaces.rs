@@ -479,7 +479,9 @@ impl Member {
     /// # Errors
     /// As [`Project::open`]; a store that can't be watched.
     pub fn subscribe(&self, on_change: OnChange) -> Result<Subscription> {
-        self.project()?.store().subscribe(on_change)
+        // Only what the page shows changing (ATM-767): a lease renewed alone tells nothing
+        let shown = crate::shown::on_shown_change(folder(&self.entry), on_change);
+        self.project()?.store().subscribe(shown)
     }
 
     /// Be told when its working copy changes as a live review shows it (ATM-607), until the subscription is dropped.
@@ -642,7 +644,9 @@ impl Workspace {
         let mut parts = Vec::new();
         for entry in self.entries() {
             if let Ok(project) = Self::project(&entry) {
-                parts.push(project.store().subscribe(Arc::clone(&on_change))?);
+                // Only what the page shows changing (ATM-767): a lease renewed alone tells nothing
+                let shown = crate::shown::on_shown_change(folder(&entry), Arc::clone(&on_change));
+                parts.push(project.store().subscribe(shown)?);
                 // Its reviews too, when it has some (ATM-606: what waits on the user is in its summary); a project
                 // without a reviews folder isn't given one
                 let has_reviews = project
@@ -1044,6 +1048,56 @@ mod tests {
         std::thread::sleep(Duration::from_millis(100));
         std::fs::write(&tasks, r#"{"meta": {"id": "one"}, "tasks": []}"#).unwrap();
         assert!(quiet(&received), "nothing once dropped");
+        std::fs::remove_dir_all(&home).unwrap();
+    }
+
+    /// ATM-767: through the real watcher, a lease renewed (the claims store rewritten, only the lease moved) tells a
+    /// project's subscription nothing; another holder tells it
+    #[test]
+    fn a_project_subscription_is_told_of_what_the_page_shows_not_a_lease_renewed() {
+        use std::sync::mpsc::channel;
+        use std::time::Duration;
+        let home = state("subscribe-lease");
+        let project = home.join("project");
+        let folder = project.join(atm_common::TASK_DIR);
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(
+            folder.join("tasks.json"),
+            r#"{"meta": {"id": "one"}, "tasks": [{"id": "T-1", "status": "in_progress"}]}"#,
+        )
+        .unwrap();
+        let claims = |agent: &str, until: &str| {
+            std::fs::write(
+                folder.join("claims-store.json"),
+                json!({"claims": {"T-1": {"task": "T-1", "agent": agent,
+                    "lease_expires_at": until, "renewed_at": until}}})
+                .to_string(),
+            )
+            .unwrap();
+        };
+        claims("claude:a", "2026-11-24T10:00:00Z");
+        let workspaces = Workspaces::at(&home);
+        let workspace = workspaces.default_workspace();
+        workspace
+            .add_project(Some(&project.to_string_lossy()), &home)
+            .unwrap();
+        let member = workspace.member("one").unwrap();
+        let (sent, received) = channel();
+        let on_change: OnChange = Arc::new(move || {
+            let _ = sent.send(());
+        });
+        let subscription = member.subscribe(on_change).unwrap();
+        std::thread::sleep(Duration::from_millis(200));
+        claims("claude:a", "2026-11-24T10:05:00Z");
+        assert!(
+            received.recv_timeout(Duration::from_secs(2)).is_err(),
+            "a renewal tells nothing"
+        );
+        claims("claude:b", "2026-11-24T10:05:00Z");
+        received
+            .recv_timeout(Duration::from_secs(10))
+            .expect("told of the new holder");
+        drop(subscription);
         std::fs::remove_dir_all(&home).unwrap();
     }
 }

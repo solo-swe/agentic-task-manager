@@ -31,6 +31,7 @@ pub mod review_pages;
 pub mod review_requests;
 pub mod reviews;
 pub mod settings;
+pub mod shown;
 pub mod sprints;
 pub mod state;
 pub mod stats;

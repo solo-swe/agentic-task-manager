@@ -21239,7 +21239,7 @@
       "description": "From [the memory analysis §3b](docs/memory-growth-analysis.md#3b-what-a-reload-does-in-the-app-the-code-cr-140), CR-140. Every atm command an agent runs renews its lease and writes `.agentic-task-manager/claims.json`; the app's subscriptions (`api/changes.ts`, the app's watchers) tell the page about any change in the task folder, and the page reloads everything (`dashboard.reload()`: the project list, the tasks, claims, worktrees). While an agent works that is a full reload every few seconds, a few MB each in WebKit's memory.\n\n## Change\n- The change notice says what changed (`tasks.json`, `claims.json`, `reviews/`, …), and the page reloads only that part.\n- A change of `claims.json` that only moves a lease's end (the page shows a claim's holder, not its lease) reloads nothing.\n- The same for the browser's polling where it applies (`atm serve`), so both front ends behave alike.\n\n## Tests\nUnit tests for the notice's kinds and what each reloads; an e2e in the app fixture counting the commands the page calls after a lease renewal (none) and after a claim change (the claims only).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/api/changes.ts",
@@ -21248,7 +21248,7 @@
         "app/src-tauri/src/lib.rs"
       ],
       "created_at": "2026-11-24T02:41:26Z",
-      "updated_at": "2026-11-24T02:43:28Z",
+      "updated_at": "2026-11-24T07:15:50Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21265,7 +21265,9 @@
       "number": 767,
       "components": [
         "dashboard"
-      ]
+      ],
+      "started_at": "2026-11-24T07:15:50Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a20b6d-f9af-72ac-9448-da292a487519",
@@ -21356,7 +21358,7 @@
       "description": "Found on ATM-728 (Hakan: \"if it is a bug, let's fix this in atm state machine as well\"). All of its code reviews (CR-135, CR-136, CR-137) were approved; then the agent asked for one more review with `atm task state ATM-728 in_review --note '…'` (review → review), which opens no CR. The dashboard decides a task only through a CR (it has no route or button for `atm task review`), so the task sat in review with nothing for Hakan to approve; only `atm task review approve` on the CLI could let it out.\n\n## Change (atm-lib, the state machine: `state.rs`, `lifecycle.rs`)\n- **An agent's move to review needs a CR open on the task.** Since 0.40.0 every review is a CR (`atm docs reviews`): `atm task state <id> in_review` by an agent session is refused when no open CR (waiting or changes requested) names the task, the refusal naming what to do: `atm review create --task <id> …`, or `atm review round CR-N` for a CR it has. Opening a CR keeps putting its tasks in review as now.\n- **The user's own moves and decisions are unchanged**: `atm task review approve|request-changes|reject`, and a person's `in_review` (they may decide it themselves).\n- **`atm doctor` warns about a task stranded in review**: in review with no open CR naming it, saying how to get it out (open a CR, or `atm task review …`).\n- `docs/agent/states.md` and `docs/agent/reviews.md` say so.\n\n## Tests\natm-lib unit tests for each case: no CR, a CR open (waiting, changes requested), only approved or closed CRs, a CR naming another task, a person's move; doctor's warning (stranded, not stranded). A CLI suite scenario (`tests/scripts/scenarios/`) for the refusal and its message.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/state.rs",
@@ -21367,7 +21369,7 @@
         "docs/agent/reviews.md"
       ],
       "created_at": "2026-11-24T03:49:34Z",
-      "updated_at": "2026-11-24T07:02:51Z",
+      "updated_at": "2026-11-24T07:15:44Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21383,7 +21385,24 @@
       ],
       "number": 770,
       "started_at": "2026-11-24T07:02:51Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "bc91f4f5250c67767faba5ada8dc2cd3874536a6",
+      "code_reviews": [
+        {
+          "id": "01a20c69-1bdc-748e-994d-eba3067da504",
+          "ref": "CR-151"
+        }
+      ],
+      "review_requested_at": "2026-11-24T07:15:44Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-24T07:15:44Z",
+          "kind": "review",
+          "text": "CR-151: An agent's review is a code review: refuse in_review without one, warn of a stranded task",
+          "by": "claude:ba530ebb"
+        }
+      ]
     }
   ]
 }
