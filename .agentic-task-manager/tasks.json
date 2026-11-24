@@ -19885,7 +19885,7 @@
       "description": "Long `/atm-loop-tasks` sessions carry every finished task's context into the next one, which is a large share of usage-limit consumption. Instead of one long session, atm could run the loop from outside and start a **fresh, headless agent session per task**: a full main agent (same model, same `AGENTS.md`, memory and skills), not a subagent, briefed by the task itself.\n\n```\natm loop run --agent '<harness command template, e.g. claude -p \"/atm-do-task {task}\">' [selection] [--max N]\n```\n\n## Step 1: Evaluate (stop here for a decision)\n- Do a few tasks the fresh way by hand (`/clear`, then `/atm-do-task <id>` with no other context) and compare with tasks done inside a long loop: did the fresh session miss anything (decisions said only in chat, conventions), and what did each cost (tool calls, tokens, from the session transcripts)?\n- Write the findings, what a fresh session lacked and what a task must carry so it doesn't, in `docs/fresh-session-loop.md`, commit it, and block this task `--on user` asking whether to implement. Subagents went badly before in this project, so the user decides from evidence, not from this description.\n\n## Step 2: Implement (only after the user says go)\n- `atm loop run` in `atm-cli` (logic in `atm-lib`, per the layer rule): claims the next task (`atm loop next --claim`), starts the configured command with the task's key filled in, waits for it, reads back the outcome (done, in review, blocked, back to to do) and goes on; `--max`, the selection flags and exit codes as `atm loop next`'s.\n- The command template comes **only from the user's config or the command line, never from task text** (rule 7); the task key is passed as an argument, never interpolated into a shell string.\n- The review watch moves to the runner: comments that arrive are handed to a session started to answer them (or to the next task's session).\n- `--pause` and `--with-user` keep working as prompts in the runner's terminal; the end-of-loop `/atm-push` runs in its own session.\n- Headless runs get only the skill's pre-approved commands (`skills/claude-code.json` for Claude Code), nothing broader.\n\n## Must not break the other harness integrations\n- **`/atm-loop-tasks` stays as it is** for harnesses without a headless mode and for users who loop in one session; the runner is an addition, not a replacement.\n- The skills stay portable (`name` and `description` frontmatter only, detail from `atm docs`): nothing Claude Code-specific goes into `skills/atm-*/SKILL.md`; harness-specific command templates are config examples in `docs/agent/` (Claude Code, Codex, Gemini CLI, opencode, ...), documented as examples, none hard-coded as a default.\n- `atm agents install` / `status` / `uninstall` for every harness (claude, agents, antigravity, and the tools that read them: codex, copilot, cursor, opencode, gemini) are unchanged: their tests in `tests/scripts/` pass as they are.\n- The public skills export (`.github/workflows/skills.yml`, `solo-swe/skills`) still exports the same skills.\n\n## Security\nAn atm command that starts processes is a new entry point: update `docs/security-architecture.md` in the same PR, and run the agent sandbox (or its written review, §3.3) since it changes what agents act on.\n\n## Tests\n- `atm-lib` unit tests for the runner's loop with a fake agent process (each outcome, a crash, a timeout, a lease expiring, nothing ready).\n- A CLI scenario in `tests/scripts/` running a stub agent command that finishes, blocks and fails tasks.\n- The existing `atm agents` and loop tests unchanged and passing.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "skipped",
       "dependencies": [],
       "files": [
         "docs/fresh-session-loop.md",
@@ -19896,7 +19896,7 @@
         "tests/scripts/loop-run.test.mjs"
       ],
       "created_at": "2026-11-23T10:51:34Z",
-      "updated_at": "2026-11-24T00:48:10Z",
+      "updated_at": "2026-11-24T01:00:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "components": [
@@ -19913,7 +19913,24 @@
       ],
       "sprint": "Sidebar overhaul",
       "started_at": "2026-11-24T00:48:10Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "b1f47e25ead8b8aa7879acf5bb3d7188d1187238",
+      "blocks": [
+        {
+          "from": "2026-11-24T00:49:31Z",
+          "to": "2026-11-24T01:00:39Z",
+          "on": "user"
+        }
+      ],
+      "skipped_at": "2026-11-24T01:00:39Z",
+      "notes": [
+        {
+          "at": "2026-11-24T01:00:39Z",
+          "kind": "note",
+          "text": "Skipped: Hakan, after the evaluation (docs/fresh-session-loop.md): none of the ways to a fresh session per task keeps the interaction with Claude he wants; skipped.",
+          "by": "claude:ba530ebb"
+        }
+      ]
     },
     {
       "id": "01a20922-b137-7532-a01a-b872ae882998",
@@ -20319,7 +20336,7 @@
       "description": "The item model of [the sidebar overhaul](docs/sidebar-overhaul-design.md) §4: each address belongs to one of the six items (Overview, Inbox, Tasks, Code Reviews, Documents, Analysis), and the addresses the new pages need exist.\n\n## Change\n- **The item of an address:** one function in `lib/address.ts`, beside `placeName`, from the view (`project` → Overview, `kanban`/`list`/`graph` → Tasks, `reviews` → Code Reviews, `progress`/`agents` → Analysis; All's `projects`, `board`, `list`, `reviews`, `progress`, `agents`). The sidebar's mark and the tab titles will use it.\n- **New views:** a project's `inbox` and `documents`, All's `list`, and the app's `/new`, in `address.ts`, its path pattern, and `PAGE_PATH` in atm serve (the server answers the page at those paths).\n- **`/projects/<id>` with no view is the Overview**, no longer the Board.\n- **Labels:** Kanban becomes **Board** and Graph **Dependencies** in `places.ts` and the tab buttons; the address segments stay `kanban` and `graph`, so old links keep working.\n- `docs/multi-project-api.md` §2.7: the new addresses.\n\n## Tests\nUnit tests for the item of every address, the new paths parsed and written, the default view, and old addresses unchanged; a serve test for the new page paths.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/address.ts",
@@ -20328,7 +20345,7 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T00:49:36Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -20339,7 +20356,9 @@
       ],
       "sprint": "Sidebar overhaul",
       "review": "async",
-      "number": 751
+      "number": 751,
+      "started_at": "2026-11-24T00:49:36Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e88adf1461c5",

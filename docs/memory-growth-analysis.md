@@ -35,7 +35,22 @@ The page process and the app, sampled once a minute (`footprint`), while an agen
 | 00:42–00:45 | 526 MB | 123 → 106 MB | nothing changed (the app gave memory back) |
 | 00:46 | 540 MB | 110 MB | the agent writing this document, holding its claim, an e2e run |
 
-**It grows while files change, about 15 MB a minute, and not at all while nothing changes.** In the app the page
+The sampler ran on for the next half hour, while the agent ran e2e suites and committed (each run writes
+`dashboard/test-results/`, each commit `tasks.json`):
+
+| UTC | Page | App |
+|---|---|---|
+| 00:47 | 557 MB | 119 MB |
+| 00:51 | 786 MB | 135 MB |
+| 00:56 | 906 MB | 115 MB |
+| 01:00 | **975 MB** | 136 MB |
+| 01:01 | 434 MB | 139 MB (WebKit gave half of it back at once: a memory-pressure purge, or the page loaded again) |
+| 01:07 | 601 MB | 143 MB |
+| 01:13 | **946 MB** | 131 MB |
+| 01:15 | 734 MB | 85 MB |
+
+**It grows while files change, 15 to 40 MB a minute, and not at all while nothing changes**; the app's own process
+stays between 85 and 163 MB all along. In the app the page
 doesn't poll: it reloads when the app says something changed (`api/changes.ts`: the workspace, the project, and a
 live review's working copy). So each reload the app asks for leaves memory behind in WebKit. At an agent's pace
 (several changes a minute for hours) that is gigabytes: 15 MB a minute is 4.5 GB in five hours.
@@ -85,6 +100,8 @@ with the command, not the shell (§5, follow-up 3).
    what the page shows (`dashboard/test-results/`, a claim's lease renewed) could be left out, or reloads coalesced
    (one per second at most), which also bounds whatever leaks per reload.
 
-**Question for Hakan:** the 4.5 GB you saw, was it the *Agentic Task Manager* process or its *Web Content*
-(Activity Monitor lists the page process separately, as "Agentic Task Manager Web Content" or under WebKit), and
-which views were open?
+**Which process Hakan saw** (CR-140): *Agentic Task Manager* in Activity Monitor. The page's process is listed
+apart from it (as the app's *Web Content*, or `com.apple.WebKit.WebContent`), so the next time it is worth checking
+both rows: in the hour sampled here the app's own process never passed 163 MB, while its page's reached 975 MB twice.
+If the app's own row is the one at gigabytes, the harness of follow-up 1 samples it too, and the cause is on the Rust
+side (the subscriptions' watchers, atm-lib's caches) instead.
