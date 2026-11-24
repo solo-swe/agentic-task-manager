@@ -1,13 +1,13 @@
 // The route parameters with a fixed set of values (T-429): a project's tab (/projects/<id>/[tab=view]) and the All
-// projects page's tabs but the project cards, which are /projects ([tab=overview]: /board, /progress, /agents,
-// /reviews).
+// projects page's paths but the project cards, which are /projects ([tab=overview]: /board, /progress, /agents,
+// /reviews, /list).
 // SvelteKit takes each as a Standard Schema of the parameter's text. SvelteKit's build loads this module on its own,
-// so it imports nothing: the lists are lib/tabs.ts VIEWS and lib/address.ts OVERVIEW_TABS, which
+// so it imports nothing: the lists are lib/tabs.ts VIEWS and lib/address.ts OVERVIEW_PATHS, which
 // tests/unit/address.test.ts checks them against.
 import type { ParamMatcher } from '@sveltejs/kit/params';
 
 export const PROJECT_TABS = ['kanban', 'list', 'graph', 'progress', 'agents', 'project', 'reviews'];
-export const OVERVIEW_PATHS = ['board', 'progress', 'agents', 'reviews'];
+export const OVERVIEW_PATHS = ['board', 'progress', 'agents', 'reviews', 'list'];
 /** A review page's sub-tabs after its path (ATM-697: /projects/<id>/reviews/<CR>/[section=section]); the Overview is
  * the review's own path (lib/address.ts REVIEW_SECTIONS) */
 export const REVIEW_SECTION_PATHS = ['diffs', 'comments'];

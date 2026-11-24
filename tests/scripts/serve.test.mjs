@@ -1545,9 +1545,15 @@ describe('serve', () => {
       '/projects/any-id/',
       '/board',
       '/progress',
+      // The sidebar overhaul's (ATM-751): All's List, the app's new tab, a project's Inbox and Documents
+      '/list',
+      '/new',
+      '/projects/abcd1234/inbox',
+      '/projects/abcd1234/documents',
       // In a workspace (ADR-003 §5, T-457)
       '/w/work',
       '/w/work/board',
+      '/w/work/new',
       '/w/work/projects/abcd1234/list',
     ];
     for (const p of [...pages, '/agents?task=T-1', '/projects/abcd1234/kanban?doc=docs/x.md:L3&about']) {

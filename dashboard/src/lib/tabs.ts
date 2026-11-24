@@ -6,12 +6,16 @@ import { addressParams, formatAddress } from './address';
 // sits between the groups, after GROUP_END
 export const VIEWS = ['kanban', 'list', 'graph', 'progress', 'agents', 'project', 'reviews'] as const;
 export type ViewId = (typeof VIEWS)[number];
-export const DEFAULT_VIEW: ViewId = 'kanban';
+/** A project without a tab in its address opens on its Overview (the `project` tab; docs/sidebar-overhaul-design.md §7,
+ * ATM-751), which links into its Board */
+export const DEFAULT_VIEW: ViewId = 'project';
 export const GROUP_END: ViewId = 'graph';
 
+/** The tabs' names: the Kanban is the Board and the graph Dependencies, as the sidebar's Tasks item names them
+ * (ATM-751); their addresses keep `kanban` and `graph`, so old links still work */
 export const VIEW_LABELS: Record<ViewId, string> = {
-  graph: 'Dependency Graph',
-  kanban: 'Kanban Board',
+  graph: 'Dependencies',
+  kanban: 'Board',
   list: 'Task List',
   agents: 'Agents',
   progress: 'Progress',

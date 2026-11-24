@@ -19694,7 +19694,7 @@
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T00:48:05Z",
+      "updated_at": "2026-11-24T01:16:20Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -19708,7 +19708,7 @@
       "number": 734,
       "started_at": "2026-11-24T00:33:27Z",
       "started_by": "claude:ba530ebb",
-      "commit": "878fb1daff11dadc2ad33fc7e62bb0762c8a3d84",
+      "commit": "9cc4140c916255c5b0e021554640606a0d69130b",
       "code_reviews": [
         {
           "id": "01a20b06-334a-74c9-b822-cf1fa366f6a1",

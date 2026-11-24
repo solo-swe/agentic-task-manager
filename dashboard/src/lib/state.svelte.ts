@@ -1162,14 +1162,12 @@ export class DashboardState {
     this.applyView(defaultView(), true);
   }
 
-  /** After the first load: bring back this project's view. A tab in the address wins over the saved tab. */
+  /** After the first load: bring back this project's view: its filters, sorts and each tab's settings. The tab is the
+   * address's: one without a tab is the project's Overview (ATM-751), not the tab seen last */
   private restoreView() {
     // The server's project id is meta.id (or stands in for it), so views saved before 0.15.0 are found again
     this.viewKey = projectKey(this.projectId ? { id: this.projectId } : this.meta);
-    this.applyView(
-      sanitizeView(readView(this.viewKey), this.tasks, this.vocab, this.sprints),
-      !namesView(currentAddress()),
-    );
+    this.applyView(sanitizeView(readView(this.viewKey), this.tasks, this.vocab, this.sprints), false);
     // A ?sprint= in the link wins over the saved Sprint filter (T-323)
     const linked = sprintParamOf(currentAddress(), this.sprints);
     if (linked) this.setSprintScope(linked);

@@ -25,8 +25,8 @@ test.describe('archive', () => {
     await expect(page.locator('#archived-count')).toHaveText('3 archived');
     await expect(page.locator('#subtitle')).toContainText('12 tasks across 3 sprints · 3 archived — loaded');
     await expect(page.locator('.task-card')).toHaveCount(12);
-    await page.getByRole('tab', { name: 'Kanban Board' }).click();
-    await page.getByRole('tab', { name: 'Dependency Graph' }).click();
+    await page.getByRole('tab', { name: 'Board', exact: true }).click();
+    await page.getByRole('tab', { name: 'Dependencies' }).click();
     expect(tasksServer.archiveRequests).toBe(0);
   });
 
@@ -79,7 +79,7 @@ test.describe('archive', () => {
     await expect(page.locator('#detail-archived')).toBeVisible();
     await page.keyboard.press('Escape');
     await page.locator('#task-search').fill('');
-    await page.getByRole('tab', { name: 'Dependency Graph' }).click();
+    await page.getByRole('tab', { name: 'Dependencies' }).click();
     await expect(page.locator('#dep-graph [data-id="T-090"]')).toHaveCount(1);
   });
 

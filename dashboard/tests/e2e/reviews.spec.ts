@@ -366,7 +366,7 @@ test.describe('the reviews tab', () => {
       await withReviewedTask(page, tasksServer, 'kanban');
       await page.locator('.kanban-card[data-id="T-004"] .card-review .review-link').click();
       await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
-      await expect(back(page)).toHaveText('Kanban');
+      await expect(back(page)).toHaveText('Board');
       await back(page).click();
       await expect(page.locator('#kanban')).toBeVisible();
       expect(new URL(page.url()).pathname).toBe(`/projects/${tasksServer.projectId}/kanban`);
@@ -402,7 +402,7 @@ test.describe('the reviews tab', () => {
       await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
       await page.keyboard.press('Escape');
       await expect(page.locator('#detail-overlay')).not.toHaveClass(/open/);
-      await expect(back(page)).toHaveText('Kanban');
+      await expect(back(page)).toHaveText('Board');
       await back(page).click();
       await expect(page.locator('#kanban')).toBeVisible();
     });

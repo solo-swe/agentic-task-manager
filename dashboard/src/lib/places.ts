@@ -1,26 +1,37 @@
-// A place's name, from its address (ATM-686): what a back button says it goes back to ("← Kanban", "← ATM-12",
+// A place's name, from its address (ATM-686): what a back button says it goes back to ("← Board", "← ATM-12",
 // "← All reviews"). What is open over a page names it first (a task's details, a document), then a review, then the
 // page itself.
-import { addressParams } from './address';
+import { addressParams, type Item } from './address';
 
-/** A project's tabs, as their buttons name them */
+/** A project's tabs, as their buttons name them (the Kanban is the Board and the graph Dependencies, ATM-751) */
 const PROJECT_TABS: Record<string, string> = {
-  kanban: 'Kanban',
+  kanban: 'Board',
   list: 'List',
-  graph: 'Graph',
+  graph: 'Dependencies',
   progress: 'Progress',
   agents: 'Agents',
   project: 'Project',
   reviews: 'Reviews',
 };
 
-/** The overview's tabs (address.ts OVERVIEW_TABS), as their buttons name them */
+/** The overview's pages (address.ts OVERVIEW_PATHS), as their buttons name them */
 const OVERVIEW_TABS: Record<string, string> = {
   projects: 'Projects',
   board: 'Omniboard',
+  list: 'List',
   progress: 'Progress',
   agents: 'Agents',
   reviews: 'All reviews',
+};
+
+/** The sidebar's items, as the sidebar and the tabs' titles name them (docs/sidebar-overhaul-design.md §1) */
+export const ITEM_NAMES: Record<Item, string> = {
+  overview: 'Overview',
+  inbox: 'Inbox',
+  tasks: 'Tasks',
+  reviews: 'Code Reviews',
+  documents: 'Documents',
+  analysis: 'Analysis',
 };
 
 /** What `address` shows, in a word or two */
@@ -33,6 +44,7 @@ export function placeName(address: string): string {
   if (review) return review;
   const view = params.get('view') ?? '';
   if (params.has('overview')) return OVERVIEW_TABS[view] ?? 'Projects';
-  if (params.has('project')) return PROJECT_TABS[view] ?? 'Kanban';
+  // A project without a tab (or one it doesn't know) opens on its Overview, the Project tab (ATM-751)
+  if (params.has('project')) return PROJECT_TABS[view] ?? PROJECT_TABS.project;
   return 'Projects';
 }

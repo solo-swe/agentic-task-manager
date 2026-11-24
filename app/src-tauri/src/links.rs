@@ -13,8 +13,11 @@ use tauri::ipc::Channel;
 pub const SCHEME: &str = "atm";
 /// A link longer than this is refused: no page's address comes near it.
 const MAX_LINK: usize = 4096;
-/// The first part of a page's path: the dashboard's pages (`docs/multi-project-api.md` §2.7).
-const PAGES: [&str; 6] = ["projects", "board", "progress", "agents", "reviews", "w"];
+/// The first part of a page's path: the dashboard's pages (`docs/multi-project-api.md` §2.7; All's `list` and the
+/// new tab, `new`, ATM-751).
+const PAGES: [&str; 8] = [
+    "projects", "board", "list", "progress", "agents", "reviews", "new", "w",
+];
 
 /// The dashboard address an `atm://` link opens (`/projects/abc/list?task=T-1`), or none for anything else: another
 /// scheme, a path that isn't one of the dashboard's pages, `.` or `..` segments, a fragment, characters an address

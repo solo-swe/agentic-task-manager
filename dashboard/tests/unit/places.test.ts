@@ -5,16 +5,19 @@ import { placeName } from '../../src/lib/places';
 
 describe('placeName', () => {
   it.each([
-    ['/projects/abc', 'Kanban'],
-    ['/projects/abc/kanban', 'Kanban'],
+    // A project without a tab is on its Overview, the Project tab (ATM-751); the Kanban is the Board, the graph
+    // Dependencies
+    ['/projects/abc', 'Project'],
+    ['/projects/abc/kanban', 'Board'],
     ['/projects/abc/list', 'List'],
-    ['/projects/abc/graph', 'Graph'],
+    ['/projects/abc/graph', 'Dependencies'],
     ['/projects/abc/progress', 'Progress'],
     ['/projects/abc/agents', 'Agents'],
     ['/projects/abc/project', 'Project'],
     ['/projects/abc/reviews', 'Reviews'],
     ['/projects', 'Projects'],
     ['/board', 'Omniboard'],
+    ['/list', 'List'],
     ['/reviews', 'All reviews'],
     ['/progress', 'Progress'],
     ['/agents', 'Agents'],

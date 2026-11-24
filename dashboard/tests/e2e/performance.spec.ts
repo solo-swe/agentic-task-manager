@@ -129,7 +129,8 @@ test.describe('performance with 500 tasks and a large archive', { tag: '@timed' 
     const data = loadFixture('large-500');
     data.meta = { ...data.meta, archived: ARCHIVE_SIZE };
     tasksServer.archive(largeArchive());
-    await openDashboard(page, tasksServer, data);
+    // On the board: a project's Overview (its default since ATM-751) reads the history
+    await openDashboard(page, tasksServer, data, { tab: 'kanban' });
     await expect(page.locator('#kanban .kanban-card').first()).toBeAttached();
   });
 
@@ -156,7 +157,7 @@ test.describe('performance with 500 tasks and a large archive', { tag: '@timed' 
 test.describe('performance with 500 tasks', { tag: '@timed' }, () => {
   test.beforeEach(async ({ page, tasksServer }) => {
     await page.clock.setFixedTime(new Date('2026-04-20T12:00:00Z'));
-    await openDashboard(page, tasksServer, 'large-500');
+    await openDashboard(page, tasksServer, 'large-500', { tab: 'kanban' });
     await expect(page.locator('#kanban .kanban-card').first()).toBeAttached();
   });
 

@@ -17,16 +17,17 @@ async function expectSelected(page: Page, id: string) {
 }
 
 test.describe('view tabs', () => {
-  test('a tablist: the task views, a divider, the project views; the Kanban selected by default (T-251)', async ({
+  test('a tablist: the task views, a divider, the project views; the Project tab, its Overview, by default (ATM-751)', async ({
     page,
     tasksServer,
   }) => {
     await openDashboard(page, tasksServer, 'standard');
     await expect(page.getByRole('tablist')).toBeVisible();
+    // The Kanban is the Board, the graph Dependencies (ATM-751)
     await expect(page.getByRole('tab')).toHaveText([
-      'Kanban Board',
+      'Board',
       'Task List',
-      'Dependency Graph',
+      'Dependencies',
       'Progress',
       'Agents',
       'Project',
@@ -34,9 +35,22 @@ test.describe('view tabs', () => {
     ]);
     // The divider sits between the graph and Progress
     await expect(page.locator('#tab-graph + .view-tab-divider + #tab-progress')).toHaveCount(1);
-    await expectSelected(page, 'kanban');
+    await expectSelected(page, 'project');
     await expect(panel(page, 'kanban')).toHaveAttribute('role', 'tabpanel');
     await expect(panel(page, 'kanban')).toHaveAttribute('aria-labelledby', 'tab-kanban');
+  });
+
+  test('a project’s address without a tab is its Overview, whatever tab was seen last (ATM-751)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openDashboard(page, tasksServer, 'standard', { tab: 'graph' });
+    await expectSelected(page, 'graph');
+    await page.goto(`/projects/${tasksServer.projectId}`);
+    await expectSelected(page, 'project');
+    // A tab in the address is still that tab
+    await page.goto(`/projects/${tasksServer.projectId}/list`);
+    await expectSelected(page, 'list');
   });
 
   test('#view=graph still opens the graph', async ({ page, tasksServer }) => {
@@ -58,7 +72,7 @@ test.describe('view tabs', () => {
   });
 
   test('arrow keys move between tabs and wrap', async ({ page, tasksServer }) => {
-    await openDashboard(page, tasksServer, 'standard');
+    await openDashboard(page, tasksServer, 'standard', { tab: 'kanban' });
     await tab(page, 'kanban').focus();
     await page.keyboard.press('ArrowRight');
     await expectSelected(page, 'list');

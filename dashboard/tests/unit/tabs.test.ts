@@ -10,12 +10,12 @@ describe('viewOf', () => {
     expect(namesView('/projects/p1')).toBe(false);
   });
 
-  it('falls back to the Kanban (T-251)', () => {
-    expect(DEFAULT_VIEW).toBe('kanban');
-    expect(viewOf('')).toBe('kanban');
-    expect(viewOf('/')).toBe('kanban');
-    expect(viewOf('/projects/p1')).toBe('kanban');
-    expect(viewOf('/projects/p1/nope')).toBe('kanban');
+  it('falls back to the Overview, the Project tab (ATM-751: no longer the Kanban, T-251)', () => {
+    expect(DEFAULT_VIEW).toBe('project');
+    expect(viewOf('')).toBe('project');
+    expect(viewOf('/')).toBe('project');
+    expect(viewOf('/projects/p1')).toBe('project');
+    expect(viewOf('/projects/p1/nope')).toBe('project');
     expect(viewOf('/projects/p1/graph')).toBe('graph');
   });
 });

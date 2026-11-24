@@ -306,8 +306,9 @@ text the page reads, never a file it looks up.
 | Path | The page shows |
 |---|---|
 | `/` | the landing page: the overview with two or more projects, the project with one (whose address it then takes) |
-| `/projects` | the overview's project cards; `/board`, `/progress`, `/agents` and `/reviews` (every project's reviews, with a project picker; ATM-575) its other tabs |
-| `/projects/<id>` | a project, on its saved tab; `/projects/<id>/<tab>` on a tab (`kanban`, `list`, `graph`, `progress`, `agents`, `project`, `reviews`). The Reviews list's filter and search in the query (ATM-697): `?q=&status=waiting,live&author=&reviewer=&tasks=&branch=` |
+| `/projects` | the overview's project cards; `/board`, `/progress`, `/agents` and `/reviews` (every project's reviews, with a project picker; ATM-575) its other tabs; `/list` every project's tasks as a list (the sidebar's Tasks item, ATM-751; its page is ATM-752's) |
+| `/projects/<id>` | a project on its Overview (the `project` tab; until ATM-751 its saved tab); `/projects/<id>/<tab>` on a tab (`kanban`, `list`, `graph`, `progress`, `agents`, `project`, `reviews`, and the sidebar's `inbox` and `documents`, ATM-751). The Reviews list's filter and search in the query (ATM-697): `?q=&status=waiting,live&author=&reviewer=&tasks=&branch=` |
+| `/new` | the app's new tab: a chooser of scope and item (docs/sidebar-overhaul-design.md §3, ATM-755) |
 | `/projects/<id>/reviews/<CR>` | a review's page (ATM-574; its reference letters, digits, `-` and `.`, at most 64) on its Overview, `…/<CR>/diffs` and `…/<CR>/comments` its other sub-tabs (ATM-697), with `?round=&against=&file=` the view and the file gone to and `?comment=c12` a comment in view (never a `#` anchor: the app's `atm://` links carry none), titled by the project's key, the reference and the title. A click opens it in place; ⌘ or Ctrl, or a middle click, in a new tab (ATM-698). In the browser it is a page of its own, without the dashboard's title bar and view tabs; in the app it is in a tab, under the window's title bar and its tabs (ATM-574) |
 | `/w/<w>`, `/w/<w>/…` | any of the above in workspace `<w>` (§2.8, T-457): `/w/<w>` its landing page. Without `/w/<w>`, `default`'s; `/` itself opens the workspace opened last |
 

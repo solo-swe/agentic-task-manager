@@ -9,7 +9,7 @@ test.describe('the dashboard in the atm app', () => {
   }) => {
     await tasksServer.asApp();
     tasksServer.use('standard');
-    await page.goto('/');
+    await page.goto(`/projects/${tasksServer.projectId}/kanban`);
     await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
     await expect(page.locator('#kanban .kanban-card').first()).toBeVisible();
     expect(tasksServer.httpRequests).toEqual([]);
@@ -38,7 +38,7 @@ test.describe('the dashboard in the atm app', () => {
   }) => {
     await tasksServer.asApp();
     tasksServer.use('standard');
-    await page.goto('/');
+    await page.goto(`/projects/${tasksServer.projectId}/kanban`);
     await expect(page.locator('#kanban .kanban-card').first()).toBeVisible();
     await expect.poll(() => tasksServer.menuState?.view).toBe('kanban');
 
@@ -844,13 +844,13 @@ test.describe('the dashboard in the atm app', () => {
     // A right-click on › lists what is ahead, nearest first; choosing one jumps there
     await forwardArrow.click({ button: 'right' });
     const ahead = page.locator('#app-forward-menu .app-history-menu-item');
-    await expect(ahead).toHaveText(['Graph — Standard Project']);
+    await expect(ahead).toHaveText(['Dependencies — Standard Project']);
     await ahead.first().click();
     await expect.poll(at).toBe(`${base}/graph`);
     // On ‹, what is behind, nearest first
     await backArrow.click({ button: 'right' });
     const behind = page.locator('#app-back-menu .app-history-menu-item');
-    await expect(behind).toHaveText(['Kanban — Standard Project', 'List — Standard Project']);
+    await expect(behind).toHaveText(['Board — Standard Project', 'List — Standard Project']);
     await behind.nth(1).click();
     await expect.poll(at).toBe(`${base}/list`);
     await expect(backArrow).toBeDisabled();
@@ -916,6 +916,8 @@ test.describe('the dashboard in the atm app', () => {
     // ⌘-click on a task's card opens its details in a new tab
     await tabs.nth(0).click();
     await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+    // A project opens on its Overview (ATM-751): to its board
+    await page.locator('#tab-kanban').click();
     const card = page.locator('#kanban .kanban-card').first();
     const id = await card.getAttribute('data-id');
     await card.click({ modifiers: ['ControlOrMeta'] });

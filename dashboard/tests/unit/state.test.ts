@@ -601,13 +601,13 @@ describe('DashboardState saved view', () => {
     return s;
   }
 
-  it('brings back every selection on the next visit', async () => {
+  it('brings back every selection on the next visit; the tab is the address’s, the Overview without one (ATM-751)', async () => {
     const first = await changeEverything();
     history.replaceState(null, '', '/');
     const next = new DashboardState();
     await next.load();
-    expect(next.currentView()).toEqual(first.currentView());
-    expect(next.tab).toBe('agents');
+    expect({ ...next.currentView(), tab: 'agents' }).toEqual(first.currentView());
+    expect(next.tab).toBe('project');
     expect([...next.filters.type]).toEqual(['feature']);
   });
 
@@ -625,12 +625,12 @@ describe('DashboardState saved view', () => {
     s.resetView();
     expect(s.query).toBe('');
     expect(s.filters.type.size).toBe(0);
-    expect(s.tab).toBe('kanban');
+    expect(s.tab).toBe('project');
     expect([s.kanbanShowAllDone, s.agentsWindow, s.graphView, s.graphFiltered]).toEqual([false, null, null, 'hide']);
     history.replaceState(null, '', '/');
     const next = new DashboardState();
     await next.load();
-    expect(next.tab).toBe('kanban');
+    expect(next.tab).toBe('project');
   });
 });
 
