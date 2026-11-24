@@ -544,12 +544,13 @@ test.describe('the dashboard in the atm app', () => {
     await expect(page.locator('#review-list')).toBeVisible();
     await expect(tabs).toHaveCount(1);
 
-    // A plain click opens it in place, as every link (ATM-686), and its back button comes back to the list
+    // A plain click opens it in place, as every link (ATM-686); the title bar's Back comes back to the list, the page
+    // has no back button of its own in the app
     await page.locator('.review-row[data-review="CR-2"] .review-link').click();
     await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
     await expect(tabs).toHaveCount(1);
-    await expect(page.locator('.review-back')).toHaveText('Reviews');
-    await page.locator('.review-back').click();
+    await expect(page.locator('.review-back')).toHaveCount(0);
+    await page.locator('#app-back').click();
     await expect(page.locator('#review-list')).toBeVisible();
 
     // ⌘-click: a tab of its own, in the background, this tab still the list (ATM-698, as browsers do)
@@ -560,8 +561,8 @@ test.describe('the dashboard in the atm app', () => {
     await tabs.nth(1).click();
     await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
-    // Opened on its own, its back button goes up to its reviews list
-    await expect(page.locator('.review-back')).toHaveText('Reviews');
+    // Opened on its own: no back button in the page either (the sidebar's Code Reviews is the way to the list)
+    await expect(page.locator('.review-back')).toHaveCount(0);
     // The tab is the review's (ATM-754): its project and reference, its title on hover, the item's icon
     await expect(page.locator('#dashboard-title')).toHaveText('Standard Project - CR-2');
     await expect(page.locator('#dashboard-title')).toHaveAttribute('title', 'CR-2: Trim the names');

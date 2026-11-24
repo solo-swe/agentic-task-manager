@@ -777,7 +777,17 @@
         <span class="review-divider" aria-hidden="true"></span>
       {/if}
       <h1 class="review-title">
-        {#if project}<span class="review-project">{project}</span>{/if}
+        <!-- Its tasks first, each a link, as `[ATM-1] CR-15 Title`: a task's key names the project, so the project's
+             isn't said again; a review of no task names its project -->
+        {#if review.tasks.length}<span class="review-title-tasks"
+            >[{#each review.tasks as task, i (task)}{#if i > 0},&nbsp;{/if}{#if taskHref}<a
+                  class="review-title-task"
+                  href={taskHref(task)}
+                  data-task={task}
+                  onclick={(e) => openTask(e, task)}
+                  onauxclick={(e) => e.button === 1 && openTask(e, task)}>{task}</a
+                >{:else}{task}{/if}{/each}]</span
+          >{:else if project}<span class="review-project">{project}</span>{/if}
         <span class="review-ref">{review.reference}</span>
         <span class="review-name">{review.title}</span>
       </h1>
@@ -1421,6 +1431,14 @@
     font-weight: 600;
     letter-spacing: -0.01em;
   }
+  .review-title-task {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .review-title-task:hover {
+    text-decoration: underline;
+  }
+  .review-title-tasks,
   .review-project,
   .review-ref {
     font-family: 'SF Mono', Menlo, Consolas, monospace;

@@ -599,7 +599,9 @@ test.describe('a review’s page', () => {
     await expect(page.locator('#review-window #review-page')).toBeVisible();
     await expect(page).toHaveTitle(/^\S.* CR-2: Review 2$/);
     await expect(page.locator('#item-reviews')).toHaveCount(0);
-    await expect(page.locator('.review-project')).not.toBeEmpty();
+    // Its task leads the heading, `[T-1] CR-2 …`, a link: the task's key says the project, so the project's isn't said
+    await expect(page.locator('.review-title .review-title-task').first()).toHaveAttribute('href', /task=/);
+    await expect(page.locator('.review-title .review-project')).toHaveCount(0);
     // Back to the list, in the dashboard again
     await page.getByRole('link', { name: 'Reviews', exact: true }).click();
     await expect(page.locator('#review-list')).toBeVisible();

@@ -22418,7 +22418,7 @@
       "description": "From Hakan: when atm opens, there is some weird per-tab opening and latency. It should open instantly and load nothing for the tabs that aren't visible.\n\n## Look into\nAs the app starts, the page first shows the window's own address (the app's root), and only once `restored_tabs` answers does it go to the tab that was active (`+layout.svelte`'s `onMount`, `appTabs.start`). Record in the app fixture every command the page asks from start until the active tab shows, with several restored tabs (projects, a review, All projects), and find what is loaded for a tab not shown, and what is shown before the active tab.\n\n## Change\n- The active restored tab is the first page shown: nothing of the root (or another tab) is loaded or drawn before it.\n- A tab not shown loads nothing until it is switched to (its title comes from what the page has: the project list).\n\n## Tests\nAn app e2e test: with restored tabs, the commands asked until the active tab shows are only the project list and the active tab's own; no other tab's page was shown in between.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/routes/+layout.svelte",
@@ -22435,7 +22435,7 @@
         "Cargo.toml"
       ],
       "created_at": "2026-11-24T18:24:38Z",
-      "updated_at": "2026-11-24T22:57:11Z",
+      "updated_at": "2026-11-24T22:57:29Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:33cba067",
       "sprint_history": [
@@ -22447,7 +22447,7 @@
       "sprint": "Sidebar overhaul",
       "review": "async",
       "number": 776,
-      "commit": "384ba962d25df2c439e8178a8c1167f23e85f070",
+      "commit": "8fe9ef1f09da6d700467050f5787b05c2c47026c",
       "notes": [
         {
           "at": "2026-11-24T18:44:09Z",
@@ -22502,6 +22502,12 @@
           "kind": "note",
           "text": "Profiled the real start (`ATM_PROFILE`, removed after): the page drew at ~0.5 s before it knew anything (tabs by ID, the empty Project tab), waiting on `list_projects` (1.5 s debug, 0.47 s release: every project’s stamp and summary, one by one), with the project’s reads only after it. Fix: draw only once the route is known, from the list kept at the last start; the project’s data first; atm-lib lists projects side by side; debug builds optimize dependencies.",
           "by": "claude:33cba067"
+        },
+        {
+          "at": "2026-11-24T22:57:29Z",
+          "kind": "review",
+          "text": "CR-176: App start: nothing drawn before the page is known; the project's data first; projects listed side by side",
+          "by": "claude:33cba067"
         }
       ],
       "blocks": [
@@ -22534,6 +22540,10 @@
         {
           "id": "01a20f40-d805-7731-acfc-4165503b7a0a",
           "ref": "CR-174"
+        },
+        {
+          "id": "01a20fc7-4d72-73c9-8103-c3fd8a889ae8",
+          "ref": "CR-176"
         }
       ],
       "reviews": [
@@ -22542,7 +22552,9 @@
           "to": "2026-11-24T22:21:09Z",
           "outcome": "approved"
         }
-      ]
+      ],
+      "review_requested_at": "2026-11-24T22:57:29Z",
+      "review_state": "waiting"
     },
     {
       "id": "01a20f0a-2258-70ca-bca7-b29b7753d0eb",
@@ -22641,7 +22653,7 @@
       "description": "From Hakan: in the app the review page's own back link repeats the title bar's Back; and the heading should name the review's task, as `[ATM-1] CR-15 My fancy CR`, without the project key again before the reference.\n\n## Change\n- `ReviewPage.svelte`: the heading starts with the review's tasks in brackets, each a link that opens it as the facts' task link does (⌘-click in a tab of its own); several tasks in one bracket, comma-separated. The project key only for a review of no task.\n- `ReviewsTab.svelte`: the back link only in the browser; the app's title bar has the tab's Back and Forward.\n\n## Tests\n`ReviewPage.component.test.ts` (a task, several, none; the link's click), `app.spec.ts` (no back link in the app; the title bar's Back returns to the list), `reviews.spec.ts` (the browser's review page).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewPage.svelte",
@@ -22651,7 +22663,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-24T22:54:30Z",
-      "updated_at": "2026-11-24T22:54:30Z",
+      "updated_at": "2026-11-24T22:57:51Z",
       "created_by": "claude:33cba067",
       "updated_by": "claude:33cba067",
       "sprint_history": [
@@ -22662,7 +22674,9 @@
       ],
       "sprint": "Sidebar overhaul",
       "review": "async",
-      "number": 779
+      "number": 779,
+      "started_at": "2026-11-24T22:57:51Z",
+      "started_by": "claude:33cba067"
     }
   ]
 }
