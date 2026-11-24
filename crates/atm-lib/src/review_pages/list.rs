@@ -1,8 +1,11 @@
 //! The reviews list: which reviews a page's query keeps, the latest activity first (ATM-574).
 
+use std::collections::HashMap;
+use std::path::PathBuf;
+
 use super::{
     Deserialize, Error, FileStore, Found, Project, Result, Review, ReviewFilter, ReviewHeader,
-    ReviewRef, ReviewStore, Status, TASK_DIR, Value, json, me, needs, reviews, waiting_for,
+    ReviewStore, Status, TASK_DIR, Value, json, me, needs, reviews, waiting_for,
 };
 
 /// Which reviews a page lists (`…/reviews?q=&status=&author=&reviewer=&task=&branch=`): each one given must fit.
@@ -71,11 +74,30 @@ pub(super) fn mentions(review: &Review, words: &[String]) -> bool {
     words.iter().all(|w| text.contains(w))
 }
 
-/// A review found in one of the working copies, read from that copy (else the project's own store).
-pub(super) fn whole(found: &Found, store: &FileStore) -> Result<Review> {
-    FileStore::open(&found.working_copy.join(TASK_DIR))
-        .and_then(|s| s.get_review(&ReviewRef(found.header.id.0.clone())))
-        .or_else(|_| store.get_review(&found.header.reference))
+/// The working copies' reviews, whole, by ID: each copy's read once, when a review found there is first asked for
+/// (ATM-775). Reading one review from its store reads the whole folder to find it, so a list asking for each in turn
+/// read n² of them.
+#[derive(Default)]
+pub(super) struct Wholes(HashMap<PathBuf, HashMap<String, Review>>);
+
+impl Wholes {
+    /// A review found in one of the working copies, read from that copy (else the project's own store).
+    pub(super) fn of(&mut self, found: &Found, store: &FileStore) -> Result<Review> {
+        let copy = self.0.entry(found.working_copy.clone()).or_insert_with(|| {
+            FileStore::open(&found.working_copy.join(TASK_DIR))
+                .and_then(|s| s.reviews())
+                .map(|all| {
+                    all.into_iter()
+                        .map(|r| (r.header.id.0.clone(), r))
+                        .collect()
+                })
+                .unwrap_or_default()
+        });
+        match copy.get(&found.header.id.0) {
+            Some(review) => Ok(review.clone()),
+            None => store.get_review(&found.header.reference),
+        }
+    }
 }
 
 /// The reviews of every working copy the query keeps, the latest activity first: `{reviews: [{review, branch, chains,
@@ -106,11 +128,12 @@ pub fn list_reviews(project: &Project, query: &ReviewQuery) -> Result<Value> {
     };
     let (me, words) = (me(project), words(&query.q));
     let mut listed: Vec<(String, Value)> = Vec::new();
+    let mut wholes = Wholes::default();
     for found in reviews::list_naming(project, root, &filter)? {
         if !fits(&found.header, found.branch.as_deref(), query) {
             continue;
         }
-        let review = whole(&found, &store)?;
+        let review = wholes.of(&found, &store)?;
         if !mentions(&review, &words) {
             continue;
         }

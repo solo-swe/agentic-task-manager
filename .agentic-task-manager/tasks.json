@@ -22148,7 +22148,7 @@
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-24T17:35:36Z",
-      "updated_at": "2026-11-24T17:35:44Z",
+      "updated_at": "2026-11-24T17:55:51Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -22161,7 +22161,8 @@
       "review": "async",
       "number": 774,
       "started_at": "2026-11-24T17:35:44Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "9cc701b4da46e8e29cd7a85db6fb5aed79dfb2f5"
     },
     {
       "id": "01a20ea3-39a1-7679-9b4b-441ae7c5c873",
