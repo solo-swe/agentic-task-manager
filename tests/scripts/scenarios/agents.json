@@ -95,7 +95,7 @@
     "env": { "CODEX_THREAD_ID": "abc12345" },
     "expect": {
       "exit": 2,
-      "stderrIncludes": ["T-1 is reviewed (blocker): ask for it with atm task state T-1 in_review"]
+      "stderrIncludes": ["T-1 is reviewed (blocker): open its code review with atm review create --task T-1"]
     }
   }
 ]

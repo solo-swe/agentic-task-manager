@@ -13,7 +13,7 @@
     "expect": {
       "exit": 2,
       "stderrIncludes": [
-        "T-1 is reviewed (blocker): ask for it with atm task state T-1 in_review --note '<what to check>'"
+        "T-1 is reviewed (blocker): open its code review with atm review create --task T-1 --range BASE..HEAD --summary-file F (atm docs reviews)"
       ]
     }
   },
@@ -33,7 +33,7 @@
     "expect": {
       "stdoutIncludes": ["T-1: in_progress -> done"],
       "files": {
-        "err.txt": "atm: T-1 is reviewed (async): ask for it with atm task state T-1 in_review --note '<what to check>'\n"
+        "err.txt": "atm: T-1 is reviewed (async): open its code review with atm review create --task T-1 --range BASE..HEAD --summary-file F (atm docs reviews)\n"
       }
     }
   },

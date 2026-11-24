@@ -245,9 +245,40 @@ fn newly_ready(
 /// One status command on a task, as the project's actor.
 ///
 /// # Errors
-/// What the state machine or the claims refuse; an unknown task (it says when the task is archived); a store error.
-#[allow(clippy::too_many_lines)] // reason: one step per rule, in the order the Python change_task_status runs them
+/// What the state machine or the claims refuse; an unknown task (it says when the task is archived); a store error;
+/// an agent's move to review with no code review the task waits on (ATM-770).
 pub fn change_task_status(
+    project: &mut Project,
+    command: Command,
+    task_id: &str,
+    options: &Options,
+) -> Result<StatusChange> {
+    // An agent's review is a code review (ATM-770): the dashboard decides a task through one, so a task asked into
+    // review without one would wait on a decision nobody there can make. Opening the review puts the task in review
+    // (`atm review create`, `atm review round`, which move it with [`move_task_status`]); a person may still ask for
+    // it, and decide it, themselves
+    if command == Command::Review
+        && atm_common::edits::is_agent(project.actor())
+        && crate::reviews::awaited_reviews(project, task_id)?
+            .is_some_and(|awaited| awaited.is_empty())
+    {
+        let key = crate::reviews::task_reference(project, task_id);
+        return Err(Error::Refused(format!(
+            "{key} is reviewed through a code review: `atm review create --task {key} --range BASE..HEAD \
+             --summary-file F` opens one and puts it in review; for a review sent back, `atm review round CR-N` \
+             (atm docs reviews)"
+        )));
+    }
+    move_task_status(project, command, task_id, options)
+}
+
+/// [`change_task_status`] without the rule that an agent's review is a code review: the reviews' own moves, which
+/// put a task in review as its review asks (a review opened, a round, a live review's approval).
+///
+/// # Errors
+/// As [`change_task_status`].
+#[allow(clippy::too_many_lines)] // reason: one step per rule, in the order the Python change_task_status runs them
+pub(crate) fn move_task_status(
     project: &mut Project,
     command: Command,
     task_id: &str,

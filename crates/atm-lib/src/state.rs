@@ -265,7 +265,8 @@ fn check_guards(
             let mode = vocab.effective_review(task);
             if (mode == "blocker" || mode == "async") && is_agent(agent) && kind == Kind::Active {
                 return Err(usage(format!(
-                    "{id} is reviewed ({mode}): ask for it with atm task state {id} in_review --note '<what to check>'"
+                    "{id} is reviewed ({mode}): open its code review with atm review create --task {id} --range \
+                     BASE..HEAD --summary-file F (atm docs reviews)"
                 )));
             }
             if kind == Kind::Review && !state_is("approved") {

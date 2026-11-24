@@ -21009,7 +21009,7 @@
       "description": "[The inbox design](docs/inbox-design.md) §7.\n\n## Change\n- `GET …/projects/<id>/inbox?state=&archived=` (with `ETag`), `POST …/inbox` `{text}`, `PATCH …/inbox/<IN>` `{text}`, `POST …/inbox/<IN>/decisions` (`discarded` with a reason, or `restored`), v2 and v1 forms.\n- **The write routes get the review routes' guards exactly:** Host check, the server's own `Origin`, the session token in `X-Atm-Session`, a JSON body of at most 1 MB with `deny_unknown_fields`, acting as the user at the machine (never an agent's identity), one atm-lib call each. No inject route.\n- The project summary's `inbox: {open}`.\n- The app's commands `project_inbox`, `add_inbox_item`, `edit_inbox_item`, `decide_inbox_item` (I27), in the capability's manifest.\n- **In the same change:** `docs/security-architecture.md` (I11's write routes, I27, the entry points) and `docs/multi-project-api.md`.\n\n## Tests\natm-api unit tests with a fake atm-lib (each answer class, status codes, `ETag`); serve tests for every guard (no token, another origin, a form, an unknown field, an agent identity); the app's command tests.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e8910f0acbe3"
       ],
@@ -21020,7 +21020,7 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T06:44:24Z",
+      "updated_at": "2026-11-24T07:02:39Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21033,7 +21033,24 @@
       "review": "async",
       "number": 761,
       "started_at": "2026-11-24T06:44:24Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "e6d06b7833562d28af9889fdfedc5b406e17ea5a",
+      "code_reviews": [
+        {
+          "id": "01a20c5d-1e62-7295-a269-6291645a8df1",
+          "ref": "CR-150"
+        }
+      ],
+      "review_requested_at": "2026-11-24T07:02:39Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-24T07:02:39Z",
+          "kind": "review",
+          "text": "CR-150: Inbox: REST routes and the app's commands",
+          "by": "claude:ba530ebb"
+        }
+      ]
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e8942c011d6d",
@@ -21339,7 +21356,7 @@
       "description": "Found on ATM-728 (Hakan: \"if it is a bug, let's fix this in atm state machine as well\"). All of its code reviews (CR-135, CR-136, CR-137) were approved; then the agent asked for one more review with `atm task state ATM-728 in_review --note '…'` (review → review), which opens no CR. The dashboard decides a task only through a CR (it has no route or button for `atm task review`), so the task sat in review with nothing for Hakan to approve; only `atm task review approve` on the CLI could let it out.\n\n## Change (atm-lib, the state machine: `state.rs`, `lifecycle.rs`)\n- **An agent's move to review needs a CR open on the task.** Since 0.40.0 every review is a CR (`atm docs reviews`): `atm task state <id> in_review` by an agent session is refused when no open CR (waiting or changes requested) names the task, the refusal naming what to do: `atm review create --task <id> …`, or `atm review round CR-N` for a CR it has. Opening a CR keeps putting its tasks in review as now.\n- **The user's own moves and decisions are unchanged**: `atm task review approve|request-changes|reject`, and a person's `in_review` (they may decide it themselves).\n- **`atm doctor` warns about a task stranded in review**: in review with no open CR naming it, saying how to get it out (open a CR, or `atm task review …`).\n- `docs/agent/states.md` and `docs/agent/reviews.md` say so.\n\n## Tests\natm-lib unit tests for each case: no CR, a CR open (waiting, changes requested), only approved or closed CRs, a CR naming another task, a person's move; doctor's warning (stranded, not stranded). A CLI suite scenario (`tests/scripts/scenarios/`) for the refusal and its message.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/state.rs",
@@ -21350,7 +21367,7 @@
         "docs/agent/reviews.md"
       ],
       "created_at": "2026-11-24T03:49:34Z",
-      "updated_at": "2026-11-24T03:49:34Z",
+      "updated_at": "2026-11-24T07:02:51Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21364,7 +21381,9 @@
       "related": [
         "01a207f0-a2e1-7602-b260-d97d26c2073b"
       ],
-      "number": 770
+      "number": 770,
+      "started_at": "2026-11-24T07:02:51Z",
+      "started_by": "claude:ba530ebb"
     }
   ]
 }

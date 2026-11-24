@@ -154,11 +154,16 @@
       "git": true,
       "commit": true,
       "files": {
-        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] }
+        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] },
+        "a.txt": "columns\n"
       },
       "commands": [
         ["sh", "-c", "ATM_AGENT=claude:aaaa1111 \"$ATM\" task state T-1 in_progress"],
-        ["sh", "-c", "ATM_AGENT=claude:aaaa1111 \"$ATM\" task state T-1 in_review --note 'Check the columns'"],
+        [
+          "sh",
+          "-c",
+          "ATM_AGENT=claude:aaaa1111 \"$ATM\" review create --title 'Check the columns' --task T-1 --file a.txt"
+        ],
         ["sh", "-c", "ATM_AGENT=Hakan \"$ATM\" task review request-changes T-1 --reason 'Name the columns'"]
       ]
     },
@@ -172,11 +177,16 @@
       "git": true,
       "commit": true,
       "files": {
-        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] }
+        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] },
+        "a.txt": "columns\n"
       },
       "commands": [
         ["sh", "-c", "ATM_AGENT=claude:aaaa1111 \"$ATM\" task state T-1 in_progress"],
-        ["sh", "-c", "ATM_AGENT=claude:aaaa1111 \"$ATM\" task state T-1 in_review --note 'Check the columns'"],
+        [
+          "sh",
+          "-c",
+          "ATM_AGENT=claude:aaaa1111 \"$ATM\" review create --title 'Check the columns' --task T-1 --file a.txt"
+        ],
         ["sh", "-c", "ATM_AGENT=Hakan \"$ATM\" task review approve T-1"]
       ]
     },

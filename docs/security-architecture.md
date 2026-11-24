@@ -1396,6 +1396,18 @@ they landed (I11, I13, I24, I25, I30, I35). Fields:
   - the Linux screenshots in Docker (84; sixteen regenerated: the Kanban and List with atm's progress in the header,
     the projects overview, the Settings menu and the update notice).
 
+**An agent's review is a code review (ATM-770).** atm refuses an agent's `atm task state <id> in_review` when no code
+review waiting, live or sent back names the task: the dashboard decides a task only through its review, so a task
+asked into review without one waited on a decision nobody there could make (ATM-728 did). A review opened, a round and
+a live review's approval still move their tasks, as before; a person's moves and decisions are unchanged (I23: the
+decision stays theirs). `atm doctor` warns of a task in review that no review waits on. No new entry point or field.
+The skills changed, so a written skill review (no API key for the sandbox run; §3.3):
+- **`atm-do-task` and `atm-loop-tasks`**: an agent's review is its code review (`atm review create`, the command they
+  already named); work with no change to review is blocked on the user with a question (`atm task state … blocked
+  --on user`, a command they already use) instead of asked into review; a check in the preview is a review of its
+  change (`--range`). Nothing new is run, fetched or pushed, and no agent decides a review.
+- **`docs/agent/states.md` and `reviews.md`**: the same rule, and the doctor's warning.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:
