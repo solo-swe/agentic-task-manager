@@ -1934,7 +1934,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 771,
+    "next_number": 772,
     "review": "async"
   },
   "tasks": [
@@ -19887,11 +19887,11 @@
       "description": "When the dependency graph is zoomed out too far for text, its nodes show as empty boxes: smart, but confusing. Draw a few wiggly placeholder lines in place of the text, so a node still reads as a card with content.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T16:22:09Z",
+      "updated_at": "2026-11-24T16:36:46Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -19904,7 +19904,38 @@
       "review": "async",
       "number": 735,
       "started_at": "2026-11-24T16:22:09Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "1aa1d8f3699d7c59a3973f5fb1fa087222680ed8",
+      "code_reviews": [
+        {
+          "id": "01a20e66-afe5-74f8-a0cd-724d1c2b14c7",
+          "ref": "CR-164"
+        }
+      ],
+      "review_requested_at": "2026-11-24T16:32:20Z",
+      "notes": [
+        {
+          "at": "2026-11-24T16:32:20Z",
+          "kind": "review",
+          "text": "CR-164: Dependency graph placeholder lines on small nodes",
+          "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T16:36:23Z",
+          "kind": "note",
+          "text": "Approved: in CR-164 (round 1)",
+          "by": "Hakan Serce"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T16:32:20Z",
+          "to": "2026-11-24T16:36:23Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T16:36:46Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d985bd59fa46",
@@ -20844,7 +20875,7 @@
       "description": "[The sidebar overhaul](docs/sidebar-overhaul-design.md) §2: the app's sidebar becomes a scope selector and the items.\n\n## Change\n- **The scope selector** at the top (§2.1): *All projects*, then the workspace's projects with logo, name, progress bar and needs-you badge (missing ones dimmed), a Bits UI menu. It follows the active tab; a choice by hand holds until the next tab switch; kept in the preferences.\n- **The items** (§2.2), with Lucide icons (`layout-dashboard`, `inbox`, `square-kanban`, `file-diff`, `file-text`, `trending-up`; add the missing ones to `Icon.svelte`): six for a project, four for All. Each is a real link; a click **always opens a new tab** right of the active one and goes to it; ⌘/Ctrl or middle click in the background; right-click is ATM-699's link menu. The current item is marked.\n- **Badges:** Inbox's open count (0 until the inbox exists), Code Reviews' waiting-on-you count.\n- **The app's title bar** loses the project chooser (`ProjectSelector`) and the view tabs. The webapp keeps the chooser.\n- The workspace switcher stays as it is.\n\n## Tests\nComponent tests for the selector (following the tab, the hand choice, missing projects) and the items (new tab, background, the mark, badges); e2e in the app fixture: an item opens a new tab, the chooser gone from the title bar.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e889c1f825f3",
         "01a20ae0-5493-734f-9c10-e88adf1461c5"
@@ -20856,7 +20887,7 @@
         "dashboard/src/lib/ui/Icon.svelte"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T04:02:37Z",
+      "updated_at": "2026-11-24T16:34:50Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -20878,15 +20909,29 @@
         }
       ],
       "review_requested_at": "2026-11-24T04:02:37Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-24T04:02:37Z",
           "kind": "review",
           "text": "CR-148: The app's sidebar: a scope selector and the items",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T16:34:33Z",
+          "kind": "note",
+          "text": "Approved: in CR-148 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T04:02:37Z",
+          "to": "2026-11-24T16:34:33Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T16:34:50Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e88c3ee7f2b3",
@@ -20900,7 +20945,7 @@
       "description": "[The sidebar overhaul](docs/sidebar-overhaul-design.md) §3: an app tab's title is `<scope> - <item>` with the item's icon: `ATM - Tasks`, `All - Code Reviews`. The scope is the project's key, else its name cut to 16 characters; All is `All`. A review or a document open in the tab names itself instead (`ATM - CR-134`, `ATM - sidebar-overhaul-design.md`), keeping the item's icon. `/new` is *New Tab*.\n\n## Tests\nUnit tests for the title of each kind of address (each item, a review, a document, a project without a key, a long name, `/new`).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e889c1f825f3"
       ],
@@ -20909,7 +20954,7 @@
         "dashboard/src/lib/places.ts"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T15:57:57Z",
+      "updated_at": "2026-11-24T16:36:10Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -20931,15 +20976,29 @@
         }
       ],
       "review_requested_at": "2026-11-24T15:42:11Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-24T15:42:11Z",
           "kind": "review",
           "text": "CR-160: Tab titles: <scope> - <item>, with the item's icon",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T16:35:59Z",
+          "kind": "note",
+          "text": "Approved: in CR-160 (round 2)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T15:42:11Z",
+          "to": "2026-11-24T16:35:59Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T16:36:10Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e88db033076e",
@@ -20953,7 +21012,7 @@
       "description": "[The sidebar overhaul](docs/sidebar-overhaul-design.md) §3: the + button, File ▸ New Tab and ⌘T open a new tab on `/new`, a chooser of scope and item (the app only).\n\n## Change\n- **Two columns:** the scopes (All, then the projects, as the scope selector lists them, with badges) and the chosen scope's items with their badges. The sidebar's scope is chosen when it opens.\n- **Choosing an item opens it in this tab**, in place of the chooser (the chooser is the tab's first entry: Back returns to it).\n- **Keys:** ↑↓ in a column, ←→ between them, typing filters the projects, Enter opens. No item shortcuts.\n- Reuse the scope selector's project list from the sidebar task.\n\n## Tests\nComponent tests for the columns, the keys and opening in place; e2e: + opens it, choosing opens the page, Back returns to the chooser.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e88bc947df5c"
       ],
@@ -20962,7 +21021,7 @@
         "dashboard/src/lib/tab-actions.ts"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T16:34:55Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -20973,7 +21032,9 @@
       ],
       "sprint": "Sidebar overhaul",
       "review": "async",
-      "number": 755
+      "number": 755,
+      "started_at": "2026-11-24T16:34:55Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e88e728b0f5d",
@@ -20986,7 +21047,7 @@
       "description": "[The sidebar overhaul](docs/sidebar-overhaul-design.md) §2.4: a project now opens on its Overview, so the Overview links into the Board, in place in the tab: the active sprint (its name and progress), each planned and recent closed sprint it lists, and the backlog open the Board on that one (`/projects/<id>/kanban?sprint=<name>`); a count by status (to do, in review, blocked) opens the List filtered by it. Everything else on the Overview stays as the Project tab has it.\n\nFind the Project tab's component first (the `project` view), and add the links where it names a sprint or counts tasks.\n\n## Tests\nComponent tests for each link's address; e2e: from the Overview to the Board on a sprint and Back.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e889c1f825f3"
       ],
@@ -20994,7 +21055,7 @@
         "dashboard/src/lib/overview/ProjectsOverview.svelte"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T16:02:55Z",
+      "updated_at": "2026-11-24T16:37:06Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21016,15 +21077,29 @@
         }
       ],
       "review_requested_at": "2026-11-24T16:02:55Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-24T16:02:55Z",
           "kind": "review",
           "text": "CR-161: A project's Overview links into the Board and the List",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T16:36:53Z",
+          "kind": "note",
+          "text": "Approved: in CR-161 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T16:02:55Z",
+          "to": "2026-11-24T16:36:53Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T16:37:06Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e88f1d3ccd68",
@@ -21038,7 +21113,7 @@
       "description": "[The sidebar overhaul](docs/sidebar-overhaul-design.md) §2.5: All's Code Reviews (`/reviews`) gets a project filter at the top of the list: All projects, or one or more projects, in the list's address like its other filters (`?projects=atm,compmd`), next to its search.\n\n## Tests\nUnit tests for the address (read, written, unknown projects ignored); component tests for the filter; e2e: filtering by a project, kept across a reload.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e889c1f825f3"
       ],
@@ -21047,7 +21122,7 @@
         "dashboard/src/lib/address.ts"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T16:13:23Z",
+      "updated_at": "2026-11-24T16:37:15Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21069,15 +21144,29 @@
         }
       ],
       "review_requested_at": "2026-11-24T16:13:23Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-24T16:13:23Z",
           "kind": "review",
           "text": "CR-162: All reviews: a project filter",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T16:37:00Z",
+          "kind": "note",
+          "text": "Approved: in CR-162 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T16:13:23Z",
+          "to": "2026-11-24T16:37:00Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T16:37:15Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e890ef3d8071",
@@ -21190,7 +21279,7 @@
       "description": "[The inbox design](docs/inbox-design.md) §3–§5: the CLI.\n\n## Change\n- `atm inbox add '<text>' | --text-file F`, `edit IN-3 --text-file F`, `list [--state …] [--archived] [--json]`, `show IN-3`, `discard IN-3 --reason '…'`, `inject IN-3 --task ATM-760 …`, `restore IN-3`.\n- `atm db archive` and `atm db unarchive IN-3` for items; the archive hint counts them.\n- `atm project status`: one line, *Inbox: N open (`/atm-triage-inbox`)*; `atm loop next` and the review watch never read the inbox.\n- `atm vcs commit` takes `inbox.json` along with `tasks.json` when it changed.\n- `docs/agent/commands.md` (and a topic if it needs one), `atm docs` embedding it.\n\n## Tests\nCLI scenarios (`tests/scripts/scenarios/`) for each command, its refusals and `--json`; the status line; the commit taking `inbox.json`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e8910f0acbe3"
       ],
@@ -21199,7 +21288,7 @@
         "docs/agent/commands.md"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T06:44:19Z",
+      "updated_at": "2026-11-24T16:37:52Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21230,6 +21319,12 @@
           "kind": "review",
           "text": "CR-149: Inbox: atm inbox commands",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T16:37:37Z",
+          "kind": "note",
+          "text": "Approved: in CR-149 (round 1)",
+          "by": "Hakan Serce"
         }
       ],
       "started_at": "2026-11-24T06:40:31Z",
@@ -21242,7 +21337,15 @@
         }
       ],
       "review_requested_at": "2026-11-24T06:44:19Z",
-      "review_state": "waiting"
+      "reviews": [
+        {
+          "from": "2026-11-24T06:44:19Z",
+          "to": "2026-11-24T16:37:37Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T16:37:52Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e89307ded508",
@@ -21257,7 +21360,7 @@
       "description": "[The inbox design](docs/inbox-design.md) §7.\n\n## Change\n- `GET …/projects/<id>/inbox?state=&archived=` (with `ETag`), `POST …/inbox` `{text}`, `PATCH …/inbox/<IN>` `{text}`, `POST …/inbox/<IN>/decisions` (`discarded` with a reason, or `restored`), v2 and v1 forms.\n- **The write routes get the review routes' guards exactly:** Host check, the server's own `Origin`, the session token in `X-Atm-Session`, a JSON body of at most 1 MB with `deny_unknown_fields`, acting as the user at the machine (never an agent's identity), one atm-lib call each. No inject route.\n- The project summary's `inbox: {open}`.\n- The app's commands `project_inbox`, `add_inbox_item`, `edit_inbox_item`, `decide_inbox_item` (I27), in the capability's manifest.\n- **In the same change:** `docs/security-architecture.md` (I11's write routes, I27, the entry points) and `docs/multi-project-api.md`.\n\n## Tests\natm-api unit tests with a fake atm-lib (each answer class, status codes, `ETag`); serve tests for every guard (no token, another origin, a form, an unknown field, an agent identity); the app's command tests.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e8910f0acbe3"
       ],
@@ -21268,7 +21371,7 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T07:02:39Z",
+      "updated_at": "2026-11-24T16:38:01Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21290,15 +21393,29 @@
         }
       ],
       "review_requested_at": "2026-11-24T07:02:39Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-24T07:02:39Z",
           "kind": "review",
           "text": "CR-150: Inbox: REST routes and the app's commands",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T16:37:45Z",
+          "kind": "note",
+          "text": "Approved: in CR-150 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T07:02:39Z",
+          "to": "2026-11-24T16:37:45Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T16:38:01Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e8942c011d6d",
@@ -21383,14 +21500,14 @@
       "description": "[The documents design](docs/documents-design.md) §2–§3: `list_documents` in atm-docs, through atm-lib.\n\n## Change\n- **Which files:** `*.md` and `*.markdown` that git tracks or has untracked and not ignored (atm-vcs: `ls-files` and `ls-files --others --exclude-standard`, literal pathspecs), refused as `document_path` refuses (`.git/`, `.agentic-task-manager/`, environment and key files). None without git.\n- **Submodules included:** each checked-out submodule's documents by the same rules from its own repository, nested ones too, their paths from the project's root; one not checked out listed as such.\n- **Each entry:** `path`, `title` (the first ATX or Setext heading in the first 8 KB, else the name without `.md`), `bytes`, `modified_at`, `tracked`.\n- **At most 500**, the first by path, with how many more; `q` (titles and paths, at most 200 characters) matched before the cut.\n- A stamp for the `ETag` (the index, `HEAD`, the listed files' sizes and mtimes).\n\n## Tests\nUnit tests for each rule: refused paths, ignored and untracked files, submodules (checked out, not, nested), titles of each kind, the cap and `q` past it, no git.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-docs/src/lib.rs",
         "crates/atm-vcs/src/lib.rs"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T16:22:00Z",
+      "updated_at": "2026-11-24T16:38:15Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21412,15 +21529,29 @@
         }
       ],
       "review_requested_at": "2026-11-24T16:22:00Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-24T16:22:00Z",
           "kind": "review",
           "text": "CR-163: Documents: the listing in atm-docs",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T16:37:56Z",
+          "kind": "note",
+          "text": "Approved: in CR-163 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T16:22:00Z",
+          "to": "2026-11-24T16:37:56Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T16:38:15Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e897f4d0ca72",
@@ -21506,7 +21637,7 @@
       "description": "From [the memory analysis §3b](docs/memory-growth-analysis.md#3b-what-a-reload-does-in-the-app-the-code-cr-140), CR-140. Every atm command an agent runs renews its lease and writes `.agentic-task-manager/claims.json`; the app's subscriptions (`api/changes.ts`, the app's watchers) tell the page about any change in the task folder, and the page reloads everything (`dashboard.reload()`: the project list, the tasks, claims, worktrees). While an agent works that is a full reload every few seconds, a few MB each in WebKit's memory.\n\n## Change\n- The change notice says what changed (`tasks.json`, `claims.json`, `reviews/`, …), and the page reloads only that part.\n- A change of `claims.json` that only moves a lease's end (the page shows a claim's holder, not its lease) reloads nothing.\n- The same for the browser's polling where it applies (`atm serve`), so both front ends behave alike.\n\n## Tests\nUnit tests for the notice's kinds and what each reloads; an e2e in the app fixture counting the commands the page calls after a lease renewal (none) and after a claim change (the claims only).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/api/changes.ts",
@@ -21515,7 +21646,7 @@
         "app/src-tauri/src/lib.rs"
       ],
       "created_at": "2026-11-24T02:41:26Z",
-      "updated_at": "2026-11-24T07:19:50Z",
+      "updated_at": "2026-11-24T16:38:26Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21543,15 +21674,29 @@
         }
       ],
       "review_requested_at": "2026-11-24T07:19:50Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-24T07:19:50Z",
           "kind": "review",
           "text": "CR-152: App: a lease renewal doesn't reload the page",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T16:38:06Z",
+          "kind": "note",
+          "text": "Approved: in CR-152 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T07:19:50Z",
+          "to": "2026-11-24T16:38:06Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T16:38:26Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a20b6d-f9af-72ac-9448-da292a487519",
@@ -21605,14 +21750,14 @@
       "description": "From [the memory analysis §3b](docs/memory-growth-analysis.md#3b-what-a-reload-does-in-the-app-the-code-cr-140), CR-140. `ipcFetch` (`api/ipc.ts`) turns each parsed `invoke` answer back into text (`new Response(JSON.stringify(answer))`), which the client parses again: about three copies of every answer, two of them in WebKit's own memory.\n\n## Change\nHand the client a `Response`-like object whose `json()` returns the parsed answer as it is (with the status and headers the client reads), so no answer is serialised again.\n\n## Tests\n`ipc.test.ts`: the answer comes through as the same object, statuses and errors as before; the client's tests still pass against it.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/api/ipc.ts",
         "dashboard/tests/unit/ipc.test.ts"
       ],
       "created_at": "2026-11-24T02:41:26Z",
-      "updated_at": "2026-11-24T14:31:07Z",
+      "updated_at": "2026-11-24T16:38:27Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21649,6 +21794,12 @@
           "kind": "review",
           "text": "CR-153: App: ipcFetch hands the parsed answer through",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T16:38:16Z",
+          "kind": "note",
+          "text": "Approved: in CR-153 (round 1)",
+          "by": "Hakan Serce"
         }
       ],
       "started_at": "2026-11-24T14:14:50Z",
@@ -21661,7 +21812,15 @@
         }
       ],
       "review_requested_at": "2026-11-24T14:31:07Z",
-      "review_state": "waiting"
+      "reviews": [
+        {
+          "from": "2026-11-24T14:31:07Z",
+          "to": "2026-11-24T16:38:16Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T16:38:27Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a20bac-5c81-7593-a6ce-57fe10d96ef7",
@@ -21674,7 +21833,7 @@
       "description": "Found on ATM-728 (Hakan: \"if it is a bug, let's fix this in atm state machine as well\"). All of its code reviews (CR-135, CR-136, CR-137) were approved; then the agent asked for one more review with `atm task state ATM-728 in_review --note '…'` (review → review), which opens no CR. The dashboard decides a task only through a CR (it has no route or button for `atm task review`), so the task sat in review with nothing for Hakan to approve; only `atm task review approve` on the CLI could let it out.\n\n## Change (atm-lib, the state machine: `state.rs`, `lifecycle.rs`)\n- **An agent's move to review needs a CR open on the task.** Since 0.40.0 every review is a CR (`atm docs reviews`): `atm task state <id> in_review` by an agent session is refused when no open CR (waiting or changes requested) names the task, the refusal naming what to do: `atm review create --task <id> …`, or `atm review round CR-N` for a CR it has. Opening a CR keeps putting its tasks in review as now.\n- **The user's own moves and decisions are unchanged**: `atm task review approve|request-changes|reject`, and a person's `in_review` (they may decide it themselves).\n- **`atm doctor` warns about a task stranded in review**: in review with no open CR naming it, saying how to get it out (open a CR, or `atm task review …`).\n- `docs/agent/states.md` and `docs/agent/reviews.md` say so.\n\n## Tests\natm-lib unit tests for each case: no CR, a CR open (waiting, changes requested), only approved or closed CRs, a CR naming another task, a person's move; doctor's warning (stranded, not stranded). A CLI suite scenario (`tests/scripts/scenarios/`) for the refusal and its message.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/state.rs",
@@ -21685,7 +21844,7 @@
         "docs/agent/reviews.md"
       ],
       "created_at": "2026-11-24T03:49:34Z",
-      "updated_at": "2026-11-24T07:15:44Z",
+      "updated_at": "2026-11-24T16:40:08Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21710,14 +21869,65 @@
         }
       ],
       "review_requested_at": "2026-11-24T07:15:44Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-24T07:15:44Z",
           "kind": "review",
           "text": "CR-151: An agent's review is a code review: refuse in_review without one, warn of a stranded task",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T16:39:37Z",
+          "kind": "note",
+          "text": "Approved: in CR-151 (round 1)",
+          "by": "Hakan Serce"
         }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T07:15:44Z",
+          "to": "2026-11-24T16:39:37Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T16:40:08Z",
+      "completed_by": "claude:ba530ebb"
+    },
+    {
+      "id": "01a20e67-969c-7295-9a1e-a5969c007066",
+      "name": "The hidden sidebar is a thin rail of icons; a hover shows it",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "sidebar",
+        "app"
+      ],
+      "description": "From Hakan on CR-148 (ATM-753's review): with the sidebar overhaul the sidebar is how a user gets around the app, so a hidden one shouldn't leave nothing behind for a new user.\n\n## Change\n- **The rail:** in the app, with the sidebar hidden, a thin strip stays at the window's left edge (a few dozen px), icons only: the scope (the project's logo, or All's), then the scope's items' icons with their badges, in the sidebar's order. The page keeps its width less the rail.\n- **A hover shows the sidebar:** pointing at the rail (or focusing it with the keyboard) shows the full sidebar over the page, not pushing it, until the pointer or the focus leaves it; nothing is saved, it is still hidden after.\n- **Clicks work from either:** a rail icon opens its item as a sidebar item does (a new tab, ⌘-click in the background, ATM-753); so does an item of the shown sidebar.\n- **Show Sidebar** (the button, View ▸ Show Sidebar) still pins it open, as now; hiding it brings the rail back.\n- The browser has no sidebar (docs/sidebar-overhaul-design.md §5): no rail there.\n\n## Tests\n- Component tests (`Sidebar.component.test.ts`): hidden, the rail with the scope and each item's icon and badge, no labels; a hover or focus shows the full sidebar, leaving hides it; an icon's click opens its item.\n- e2e (`app.spec.ts`): the rail's width and the page's beside it; hovering shows the sidebar over the page, a click on an item there opens it, moving away hides it; Show Sidebar pins it.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a20ae0-5493-734f-9c10-e88bc947df5c"
+      ],
+      "files": [
+        "dashboard/src/lib/shell/Sidebar.svelte",
+        "dashboard/src/app.css"
+      ],
+      "created_at": "2026-11-24T16:33:19Z",
+      "updated_at": "2026-11-24T16:33:28Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T16:33:19Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 771,
+      "components": [
+        "dashboard"
       ]
     }
   ]

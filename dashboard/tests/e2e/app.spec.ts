@@ -568,7 +568,7 @@ test.describe('the dashboard in the atm app', () => {
     await expect(page.locator('#app-tab-t2-label')).toContainText('Standard Project - CR-2');
   });
 
-  test('tabs are addresses (T-514): + opens the overview, a click goes back, × closes, the menu steps', async ({
+  test('tabs are addresses (T-514): + opens the chooser, a click goes back, × closes, the menu steps', async ({
     page,
     tasksServer,
   }) => {
@@ -581,11 +581,29 @@ test.describe('the dashboard in the atm app', () => {
     await expect(page.locator('#dashboard-title')).toHaveText(/^Standard Project - /);
     await expect(tabs).toHaveCount(1);
 
-    // + : a second tab, on the overview
+    // + : a second tab, on the chooser of scope and item (ATM-755)
     await page.locator('#app-tab-new').click();
     await expect(tabs).toHaveCount(2);
-    await expect(page.locator('#dashboard-title')).toHaveText(/^All - /);
+    await expect(page.locator('#dashboard-title')).toHaveText('New Tab');
     await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+    await expect.poll(() => addressOf(page)).toBe('/new');
+    await expect(page.locator('#new-tab-scopes [data-scope]')).toHaveCount(3);
+    // Choosing: the page in this tab; Back returns to the chooser
+    await page.locator('#new-tab-scopes [data-scope="second"]').click();
+    await page.locator('#new-tab-items [data-item="tasks"]').click();
+    await expect(tabs).toHaveCount(2);
+    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project - Tasks');
+    // (with its Sprint filter, as the board writes it: T-323)
+    await expect.poll(() => addressOf(page)).toMatch(/^\/projects\/second\/kanban(\?|$)/);
+    await tasksServer.chooseMenu({ kind: 'back' });
+    await expect(page.locator('#new-tab')).toBeVisible();
+    await expect(page.locator('#dashboard-title')).toHaveText('New Tab');
+    // And the keys: All, its Overview, Enter
+    await page.locator('#new-tab').focus();
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#dashboard-title')).toHaveText(/^All - /);
     // The other tab keeps its project's name, and a click goes back to where it was
     await expect(page.locator('#app-tab-t1-label')).toContainText('Standard Project');
     await tabs.nth(0).click();
@@ -769,9 +787,9 @@ test.describe('the dashboard in the atm app', () => {
 
     // A new tab: its own history, Back going nowhere
     await page.locator('#app-tab-new').click();
-    await expect(page.locator('#dashboard-title')).toHaveText(/^All - /);
+    await expect(page.locator('#dashboard-title')).toHaveText('New Tab');
     await tasksServer.chooseMenu({ kind: 'back' });
-    await expect(page.locator('#dashboard-title')).toHaveText(/^All - /);
+    await expect(page.locator('#dashboard-title')).toHaveText('New Tab');
     // Back to the first tab: as it was left, and its Back still the list (the switch added nothing)
     await page.locator('#app-titlebar [role="tab"]').nth(0).click();
     await expect.poll(at).toBe(`${base}/kanban`);
@@ -855,7 +873,7 @@ test.describe('the dashboard in the atm app', () => {
 
     // A new tab: its own history, both disabled; back to the first, the arrows follow it
     await page.locator('#app-tab-new').click();
-    await expect(page.locator('#dashboard-title')).toHaveText(/^All - /);
+    await expect(page.locator('#dashboard-title')).toHaveText('New Tab');
     await expect(backArrow).toBeDisabled();
     await expect(forwardArrow).toBeDisabled();
     await page.locator('#app-titlebar [role="tab"]').nth(0).click();

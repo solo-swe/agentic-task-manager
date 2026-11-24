@@ -114,4 +114,10 @@ describe('routeFor', () => {
     expect(routeFor([project('gone', true)], '/')).toEqual({ page: 'none' });
     expect(routeFor([], '/')).toEqual({ page: 'none' });
   });
+
+  it('the new tab is its own page, whatever the projects: never the one project’s (ATM-755)', () => {
+    for (const projects of [[], [project('a')], two])
+      expect(routeFor(projects, '/new'), String(projects.length)).toEqual({ page: 'new' });
+    expect(routeFor(two, '/w/work/new')).toEqual({ page: 'new' });
+  });
 });

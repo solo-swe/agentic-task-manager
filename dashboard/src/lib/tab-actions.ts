@@ -6,6 +6,9 @@ import { closeWindow, openWindow } from './api/shell';
 import { rememberScroll, showTab } from './navigation';
 import { forgetTab } from './tab-parked';
 
+/** Where + (and File ▸ New Tab, ⌘T) opens a tab: the chooser of scope and item (ATM-755) */
+export const NEW_TAB_ADDRESS = '/new';
+
 /** A click that asks for a new tab: ⌘-click, Ctrl-click or a middle click, as in a browser */
 export function wantsNewTab(e: MouseEvent): boolean {
   return e.metaKey || e.ctrlKey || e.button === 1;
@@ -17,8 +20,9 @@ export function inBackground(e: MouseEvent): boolean {
 }
 
 export interface TabActions {
-  /** A new tab at `address` (the workspace's overview by default), shown; in the `background`, right of this one,
-   * which stays shown (ATM-698: ⌘-click and a middle click; ⇧⌘-click brings it forward) */
+  /** A new tab at `address` (by default the new tab's chooser of scope and item, `/new`: ATM-755), shown; in the
+   * `background`, right of this one, which stays shown (ATM-698: ⌘-click and a middle click; ⇧⌘-click brings it
+   * forward) */
   open(address?: string, background?: boolean): void;
   select(id: string): void;
   /** Close tab `id`, the active one by default */
@@ -54,7 +58,7 @@ export function tabActions(tabs: AppTabs = appTabs, win: TabWindow = window_): T
     return change();
   };
   return {
-    open: (address = '/', background = false) =>
+    open: (address = NEW_TAB_ADDRESS, background = false) =>
       background ? void tabs.open(address, true) : go(leaving(() => tabs.open(address))),
     select: (id) => go(id === tabs.active ? undefined : (leaving(() => tabs.select(id)) ?? undefined)),
     close: (id = tabs.active) => {
