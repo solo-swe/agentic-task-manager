@@ -202,6 +202,180 @@
     }
   },
   {
+    "name": "inbox show --project: the item an agent left there, as that project has it, its tasks' statuses once injected (ATM-773)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "id": "lfb00001", "key": "LFB" },
+          "tasks": []
+        },
+        "atm/.agentic-task-manager/tasks.json": {
+          "meta": { "id": "atm00001", "key": "ATM" },
+          "tasks": [
+            { "id": "T-001", "name": "Answer 400 on an empty body", "status": "done" },
+            { "id": "T-002", "name": "Say so in the API docs", "status": "in_progress" }
+          ]
+        },
+        "atm/.agentic-task-manager/inbox.json": {
+          "version": 1,
+          "next": 2,
+          "items": [
+            {
+              "id": "IN-1",
+              "text": "Your API answers 500 on an empty body",
+              "state": "injected",
+              "tasks": ["T-001", "T-002", "T-009"],
+              "created_at": "2026-11-24T09:00:00Z",
+              "created_by": "claude:abc",
+              "updated_at": "2026-11-24T10:00:00Z",
+              "from_project": "LFB",
+              "decided_at": "2026-11-24T10:00:00Z",
+              "decided_by": "Ana"
+            }
+          ]
+        }
+      },
+      "commands": [["sh", "-c", "ATM_HOME=\"$PWD/.atm-home\" \"$ATM\" workspace add-project default atm"]]
+    },
+    "env": { "ATM_AGENT": "claude:abc" },
+    "args": ["inbox", "show", "IN-1", "--project", "ATM"],
+    "expect": {
+      "stdoutIncludes": [
+        "IN-1  injected  Your API answers 500 on an empty body → T-001 (done), T-002 (in_progress), T-009 (not found)",
+        "  created 2026-11-24T09:00:00Z by claude:abc, from LFB",
+        "  decided 2026-11-24T10:00:00Z by Ana",
+        "  T-001  done  Answer 400 on an empty body",
+        "  T-002  in_progress  Say so in the API docs",
+        "  T-009  not found"
+      ]
+    }
+  },
+  {
+    "name": "inbox show KEY:IN-1 --json: the same item, its tasks' statuses with their kinds",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "id": "lfb00001", "key": "LFB" },
+          "tasks": []
+        },
+        "atm/.agentic-task-manager/tasks.json": {
+          "meta": { "id": "atm00001", "key": "ATM" },
+          "tasks": [{ "id": "T-001", "name": "Answer 400 on an empty body", "status": "done" }]
+        },
+        "atm/.agentic-task-manager/inbox.json": {
+          "version": 1,
+          "next": 2,
+          "items": [
+            {
+              "id": "IN-1",
+              "text": "Your API answers 500 on an empty body",
+              "state": "injected",
+              "tasks": ["T-001"],
+              "created_at": "2026-11-24T09:00:00Z",
+              "created_by": "claude:abc",
+              "updated_at": "2026-11-24T10:00:00Z",
+              "from_project": "LFB",
+              "decided_at": "2026-11-24T10:00:00Z",
+              "decided_by": "Ana"
+            }
+          ]
+        }
+      },
+      "commands": [["sh", "-c", "ATM_HOME=\"$PWD/.atm-home\" \"$ATM\" workspace add-project default atm"]]
+    },
+    "env": { "ATM_AGENT": "claude:abc" },
+    "args": ["inbox", "show", "atm:in-1", "--json"],
+    "expect": {
+      "stdoutIncludes": ["\"task_states\"", "\"key\": \"T-001\"", "\"kind\": \"done\"", "\"found\": true"]
+    }
+  },
+  {
+    "name": "inbox show names one project: KEY:IN-1 and another --project together are refused",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "id": "lfb00001", "key": "LFB" },
+          "tasks": []
+        }
+      }
+    },
+    "args": ["inbox", "show", "ATM:IN-1", "--project", "CMD"],
+    "expect": {
+      "exit": 2,
+      "stderrIncludes": ["names the project ATM, and --project another"]
+    }
+  },
+  {
+    "name": "inbox list --project --mine: the items this agent left there from this project, the others' left out",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "id": "lfb00001", "key": "LFB" },
+          "tasks": []
+        },
+        "atm/.agentic-task-manager/tasks.json": {
+          "meta": { "id": "atm00001", "key": "ATM" },
+          "tasks": []
+        },
+        "atm/.agentic-task-manager/inbox.json": {
+          "version": 1,
+          "next": 4,
+          "items": [
+            {
+              "id": "IN-1",
+              "text": "Mine",
+              "state": "created",
+              "created_at": "2026-11-24T09:00:00Z",
+              "created_by": "claude:abc",
+              "updated_at": "2026-11-24T09:00:00Z",
+              "from_project": "LFB"
+            },
+            {
+              "id": "IN-2",
+              "text": "Another agent's",
+              "state": "created",
+              "created_at": "2026-11-24T09:00:00Z",
+              "created_by": "claude:xyz",
+              "updated_at": "2026-11-24T09:00:00Z",
+              "from_project": "LFB"
+            },
+            {
+              "id": "IN-3",
+              "text": "Its user's own",
+              "state": "created",
+              "created_at": "2026-11-24T09:00:00Z",
+              "created_by": "Ana",
+              "updated_at": "2026-11-24T09:00:00Z"
+            }
+          ]
+        }
+      },
+      "commands": [["sh", "-c", "ATM_HOME=\"$PWD/.atm-home\" \"$ATM\" workspace add-project default atm"]]
+    },
+    "env": { "ATM_AGENT": "claude:abc" },
+    "args": ["inbox", "list", "--project", "ATM", "--mine"],
+    "expect": {
+      "stdout": "IN-1  created  Mine\n3 items in the inbox: 3 open, 0 discarded, 0 injected\n"
+    }
+  },
+  {
+    "name": "inbox list --project refuses a project that isn't registered",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "id": "lfb00001", "key": "LFB" },
+          "tasks": []
+        }
+      }
+    },
+    "env": { "ATM_AGENT": "claude:abc" },
+    "args": ["inbox", "list", "--project", "ATM"],
+    "expect": {
+      "exit": 1,
+      "stderrIncludes": ["no registered project \"ATM\""]
+    }
+  },
+  {
     "name": "inbox add refuses no text, and empty text",
     "setup": {
       "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } }

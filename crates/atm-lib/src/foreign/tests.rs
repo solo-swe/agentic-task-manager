@@ -174,6 +174,37 @@ fn a_project_removed_from_the_workspaces_or_gone_is_unregistered_on_the_next_use
     );
 }
 
+/// ATM-773: an inbox item's task in another registered project, read back as that project has it now, with its name
+#[test]
+fn an_inbox_item_s_task_in_another_project_is_read_as_that_project_has_it() {
+    let scene = Scene::new("inbox");
+    let item = json!({"id": "IN-1", "text": "x", "state": "injected", "tasks": ["ATM-1", "ATM-7"],
+        "created_at": "2026-11-24T09:00:00Z", "created_by": "Hakan", "updated_at": "2026-11-24T09:00:00Z"});
+    let meta = json!({"id": "a", "format": 2, "key": "LFB", "next_number": 1});
+    let Value::Object(meta) = meta else {
+        unreachable!()
+    };
+    let store = MemoryStore::new(Vec::new(), Vec::new(), &meta)
+        .unwrap()
+        .with_inbox(
+            json!({"version": 1, "next": 2, "items": [item]}),
+            atm_common::inbox::empty_inbox(),
+        );
+    let a = Project::new(Box::new(store));
+    let states = |a: &Project| crate::inbox::show(a, "IN-1").unwrap()["task_states"].clone();
+    assert_eq!(
+        states(&a),
+        json!([
+            {"key": "ATM-1", "found": true, "project": "atm", "name": "the API", "status": "in_progress",
+             "kind": "active", "archived": false},
+            {"key": "ATM-7", "found": false},
+        ])
+    );
+    // As it is there now
+    scene.write_b("done");
+    assert_eq!(states(&a)[0]["kind"], json!("done"));
+}
+
 /// ATM-772: another registered project, by its key (any case) or its ID; never the one asking; none or two of a key
 /// refused, saying which there are
 #[test]

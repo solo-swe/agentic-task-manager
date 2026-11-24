@@ -86,6 +86,36 @@ describe('InboxPage', () => {
     expect(tasks.querySelector('a[data-task="T-001"]')).toHaveAttribute('href', '/projects/fixture/inbox?task=T-001');
     expect(tasks).toHaveTextContent('LFB-5');
     expect(tasks.querySelector('a[data-task="LFB-5"]')).toBeNull();
+    // Without states in the answer, the keys alone
+    expect(tasks.querySelector('.inbox-task-status')).toBeNull();
+  });
+
+  it('an injected item’s tasks say what each is now: its status by its label, one atm can’t find so (ATM-773)', async () => {
+    api.loadInbox.mockResolvedValue({
+      unchanged: false,
+      listing: listing([
+        {
+          id: 'IN-1',
+          text: 'Remember the diff position',
+          state: 'injected',
+          tasks: ['T-001', 'LFB-5', 'T-099'],
+          task_states: [
+            { key: 'T-001', found: true, name: 'One', status: 'done', kind: 'done', archived: false },
+            { key: 'LFB-5', found: true, name: 'Theirs', status: 'in_progress', kind: 'active', project: 'lfb' },
+            { key: 'T-099', found: false },
+          ],
+        },
+      ]),
+      validators: {},
+    });
+    const { container } = render(InboxPage);
+    await waitFor(() => expect(row(container, 'IN-1')).toBeTruthy());
+    const states = [...row(container, 'IN-1').querySelectorAll<HTMLElement>('.inbox-task-status')];
+    expect(states.map((s) => [s.textContent, s.dataset.kind, s.title])).toEqual([
+      ['Done', 'done', 'One'],
+      ['In Progress', 'active', 'Theirs'],
+      ['not found', 'missing', 'atm can’t find this task'],
+    ]);
   });
 
   it('the rest of an item’s text on a click on its title', async () => {

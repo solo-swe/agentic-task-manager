@@ -1440,6 +1440,11 @@ shown, as the user, as before.
 - **What it carries is data** (I1): the triage skill, the only reader, never runs anything an item says
   (`/atm-triage-inbox`'s rule, above); `docs/agent/commands.md` tells agents to write a finding for the user, never
   instructions for its agents. The page shows *from LFB* beside its author, so the user sees where it came from.
+- **Reading it back (ATM-773):** `atm inbox show IN-3 --project <key or ID>` (or `KEY:IN-3`) and `atm inbox list
+  --project … --mine` read that project's inbox, read only, through the same lookup (registered projects only, never a
+  path). The answer adds `task_states`, what each task an injected item became is now (its name, status, kind), read
+  from that project's store or, for a third project's key, as ADR-007 §7 reads one: data like the item's text (I1),
+  shown, never acted on (`docs/agent/commands.md`: its tasks are that project's work).
 - **Tests:** atm-lib's `an_agent_of_another_project_adds_an_item_with_its_origin` and the text limits with an origin;
   `a_registered_project_is_found_by_its_key_or_id_never_the_one_asking`; the CLI suite's `inbox add --project` scenarios
   (two registered projects: the item and its origin, `--json`, an unregistered project and this one refused, dry run).

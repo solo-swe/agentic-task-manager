@@ -13,12 +13,14 @@
 //! Each move runs in one change of the store, under its lock: an injection records the item's tasks and each task's
 //! `from` together.
 
+use atm_common::Task;
 use atm_common::archive::recent_since;
 use atm_common::edits::is_agent;
 use atm_common::inbox::{
     InboxState, checked_reason, checked_text, item_id, item_number, next_number, state_of,
 };
 use atm_common::time::{now_iso, parse_iso};
+use atm_common::vocabulary::Kind;
 use atm_common::{Error, Result};
 use atm_db::working::Working;
 use serde::Deserialize;
@@ -69,10 +71,86 @@ fn number_of(item: &Value) -> u64 {
         .unwrap_or(0)
 }
 
-/// The project's inbox (or its archive, `archived`) as `which` lists it.
+/// What each task an injected item became is now (ATM-773), beside its `tasks` (kept as their keys): `task_states`, in
+/// the same order, each `{key, found}` and, found, its `name`, `status`, `kind` and `archived` (an archived task is
+/// done, unless skipped). A task of this project is read from its store, the archive too; a key of another registered
+/// project's task as ADR-007 §7 reads one (`foreign`), with its `project`. Items with no tasks are as they are.
+fn with_task_states(project: &Project, mut item: Value) -> Result<Value> {
+    let keys: Vec<String> = item
+        .get("tasks")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(String::from)
+        .collect();
+    if keys.is_empty() {
+        return Ok(item);
+    }
+    let store = project.store();
+    let vocabulary = store.vocabulary()?;
+    let working = store.list_tasks()?;
+    let archive = store.list_archived()?;
+    let refs_of = |task: &Task| {
+        [
+            project.task_key(task),
+            task.get("id")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+        ]
+    };
+    let mut lookup = crate::foreign::Lookup::default();
+    let states: Vec<Value> = keys
+        .iter()
+        .map(|key| {
+            let named = |task: &&&Task| refs_of(task).iter().any(|n| n.eq_ignore_ascii_case(key));
+            let own = working
+                .iter()
+                .find(named)
+                .map(|t| (*t, false))
+                .or_else(|| archive.iter().find(named).map(|t| (*t, true)));
+            if let Some((task, archived)) = own {
+                let kind = match (archived, vocabulary.kind_of(task.get("status"))) {
+                    (true, Some(Kind::Skipped)) => Some(Kind::Skipped),
+                    (true, _) => Some(Kind::Done),
+                    (false, kind) => kind,
+                };
+                return json!({
+                    "key": key, "found": true,
+                    "name": task.get("name").cloned().unwrap_or_else(|| json!("")),
+                    "status": task.get("status").cloned().unwrap_or(Value::Null),
+                    "kind": kind.map(Kind::as_str),
+                    "archived": archived,
+                });
+            }
+            // Another registered project's task, by its key
+            match crate::foreign::resolve_in_other_project(key, project.root()) {
+                Ok(Some(reference)) => {
+                    let view = lookup.view(&reference);
+                    if view["found"] == json!(true) {
+                        return json!({
+                            "key": key, "found": true, "project": view["project_name"],
+                            "name": view["name"], "status": view["status"],
+                            "kind": view.get("kind").cloned().unwrap_or(Value::Null),
+                            "archived": view["archived"],
+                        });
+                    }
+                    json!({"key": key, "found": false})
+                }
+                _ => json!({"key": key, "found": false}),
+            }
+        })
+        .collect();
+    item["task_states"] = Value::Array(states);
+    Ok(item)
+}
+
+/// The project's inbox (or its archive, `archived`) as `which` lists it, each injected item with what its tasks are
+/// now (`task_states`, ATM-773).
 ///
 /// # Errors
-/// When the inbox can't be read.
+/// When the inbox or the task data can't be read.
 pub fn list(project: &Project, which: Listing, archived: bool) -> Result<Listed> {
     let mut all = items(&project.store().inbox(archived)?);
     all.sort_by_key(|i| std::cmp::Reverse(number_of(i)));
@@ -89,7 +167,8 @@ pub fn list(project: &Project, which: Listing, archived: bool) -> Result<Listed>
             Listing::Open => state_of(i) == Some(InboxState::Created),
             Listing::In(state) => state_of(i) == Some(state),
         })
-        .collect();
+        .map(|i| with_task_states(project, i))
+        .collect::<Result<_>>()?;
     Ok(Listed {
         items,
         created,
@@ -98,10 +177,23 @@ pub fn list(project: &Project, which: Listing, archived: bool) -> Result<Listed>
     })
 }
 
-/// The item `id` names (`IN-3`, any case), in the inbox or else its archive.
+/// The items of `listed` that `who` added from the project named `from` (ATM-773: `atm inbox list --project …
+/// --mine`, an agent finding the notes it left in another project's inbox), or, with no `from`, the project's own items
+/// `who` added. The counts stay the whole inbox's.
+#[must_use]
+pub fn added_by(mut listed: Listed, who: &str, from: Option<&str>) -> Listed {
+    listed.items.retain(|i| {
+        i.get("created_by").and_then(Value::as_str) == Some(who)
+            && i.get("from_project").and_then(Value::as_str) == from
+    });
+    listed
+}
+
+/// The item `id` names (`IN-3`, any case), in the inbox or else its archive; injected, with what its tasks are now
+/// (`task_states`, ATM-773).
 ///
 /// # Errors
-/// `Invalid` for no item ID, `NotFound` for no such item; an inbox that can't be read.
+/// `Invalid` for no item ID, `NotFound` for no such item; an inbox or task data that can't be read.
 pub fn show(project: &Project, id: &str) -> Result<Value> {
     let number = parsed(id)?;
     for archived in [false, true] {
@@ -109,7 +201,7 @@ pub fn show(project: &Project, id: &str) -> Result<Value> {
             .into_iter()
             .find(|i| number_of(i) == number)
         {
-            return Ok(item);
+            return with_task_states(project, item);
         }
     }
     Err(no_item(number))

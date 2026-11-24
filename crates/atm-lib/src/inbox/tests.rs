@@ -455,6 +455,90 @@ fn an_item_is_shown_from_the_inbox_or_else_its_archive() {
     }
 }
 
+/// ATM-773: an injected item read back with what each of its tasks is now: a working one by its status's kind, an
+/// archived one done (or skipped), one atm can't find said so; items with no tasks as they are
+#[test]
+fn an_injected_item_is_read_with_what_its_tasks_are_now() {
+    let mut injected = item("IN-1", "injected", Some("2026-11-24T10:00:00Z"));
+    injected["tasks"] = json!(["T-1", "T-2", "T-0", "T-5", "T-9"]);
+    let store = MemoryStore::new(
+        vec![
+            task(json!({"id": "T-1", "name": "One", "status": "in_progress"})),
+            task(json!({"id": "T-2", "name": "Two", "status": "todo"})),
+        ],
+        vec![
+            task(json!({"id": "T-0", "name": "Old", "status": "done"})),
+            task(json!({"id": "T-5", "name": "Dropped", "status": "skipped"})),
+        ],
+        &serde_json::Map::new(),
+    )
+    .unwrap()
+    .with_inbox(
+        inbox(&[injected, item("IN-2", "created", None)]),
+        atm_common::inbox::empty_inbox(),
+    );
+    let p = Project::new(Box::new(store)).with_actor(Some(AGENT.to_string()));
+    let shown = show(&p, "IN-1").unwrap();
+    assert_eq!(
+        shown["tasks"],
+        json!(["T-1", "T-2", "T-0", "T-5", "T-9"]),
+        "kept as keys"
+    );
+    assert_eq!(
+        shown["task_states"],
+        json!([
+            {"key": "T-1", "found": true, "name": "One", "status": "in_progress", "kind": "active", "archived": false},
+            {"key": "T-2", "found": true, "name": "Two", "status": "todo", "kind": "todo", "archived": false},
+            {"key": "T-0", "found": true, "name": "Old", "status": "done", "kind": "done", "archived": true},
+            {"key": "T-5", "found": true, "name": "Dropped", "status": "skipped", "kind": "skipped", "archived": true},
+            {"key": "T-9", "found": false},
+        ])
+    );
+    // The listing's answer has them too; an item of no tasks none
+    let all = list(&p, Listing::All, false).unwrap();
+    assert_eq!(all.items[1]["task_states"], shown["task_states"]);
+    assert!(all.items[0].get("task_states").is_none());
+    assert!(show(&p, "IN-2").unwrap().get("task_states").is_none());
+}
+
+/// ATM-773: `--mine`, the items one actor added from one project (another's inbox), or its own project's
+#[test]
+fn the_items_one_added_are_those_by_it_from_its_project_with_the_counts_kept() {
+    let from = |id: &str, by: &str, project: Option<&str>| {
+        let mut i = item(id, "created", None);
+        i["created_by"] = json!(by);
+        if let Some(project) = project {
+            i["from_project"] = json!(project);
+        }
+        i
+    };
+    let p = project_with(
+        inbox(&[
+            from("IN-1", AGENT, Some("LFB")),
+            from("IN-2", "claude:other", Some("LFB")),
+            from("IN-3", AGENT, Some("CMD")),
+            from("IN-4", PERSON, None),
+            from("IN-5", AGENT, Some("LFB")),
+        ]),
+        atm_common::inbox::empty_inbox(),
+        PERSON,
+    );
+    let all = || list(&p, Listing::All, false).unwrap();
+    let mine = added_by(all(), AGENT, Some("LFB"));
+    assert_eq!(ids(&mine), ["IN-5", "IN-1"]);
+    assert_eq!(mine.created, 5, "the counts stay the whole inbox's");
+    assert_eq!(ids(&added_by(all(), PERSON, None)), ["IN-4"]);
+    assert_eq!(
+        ids(&added_by(all(), AGENT, None)),
+        Vec::<String>::new(),
+        "none of its own project's"
+    );
+    assert_eq!(
+        ids(&added_by(all(), "claude:none", Some("LFB"))),
+        Vec::<String>::new()
+    );
+}
+
 // Archiving
 
 #[test]

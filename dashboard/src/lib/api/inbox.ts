@@ -4,7 +4,18 @@
 import { browserFetch, fetchFile, inboxUrl, type Fetch, type InboxState, type Validators } from './http';
 import { send, type ChangeResult } from './review-changes';
 
-/** An item, as atm keeps it (`inbox.json`) */
+/** What a task an item became is now, as atm answers it (ATM-773): another project's names its `project` */
+export interface TaskState {
+  key: string;
+  found: boolean;
+  name?: string;
+  status?: string;
+  kind?: string | null;
+  archived?: boolean;
+  project?: string;
+}
+
+/** An item, as atm keeps it (`inbox.json`), with what atm adds to its answer (`task_states`) */
 export interface InboxItem {
   id: string;
   text: string;
@@ -15,6 +26,8 @@ export interface InboxItem {
   created_by?: string;
   /** The project it came from, when another project's agent or person added it (ATM-772) */
   from_project?: string;
+  /** Injected: what each of its tasks is now, in `tasks`' order (ATM-773); `found: false` for a task atm can't find */
+  task_states?: TaskState[];
   updated_at?: string;
   decided_at?: string;
   decided_by?: string;

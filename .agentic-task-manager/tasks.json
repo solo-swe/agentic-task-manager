@@ -1934,7 +1934,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 780,
+    "next_number": 781,
     "review": "async"
   },
   "tasks": [
@@ -20355,7 +20355,7 @@
       "description": "Bring the docs in line with [the sidebar overhaul](docs/sidebar-overhaul-design.md) as built: `docs/app-desktop-ui-design.md` §4 (the sidebar) replaced by a pointer to the overhaul design, and Help's pages on the sidebar, the items, the new tab's chooser and tab titles.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e88bc947df5c",
         "01a20ae0-5493-734f-9c10-e88db033076e"
@@ -20365,7 +20365,7 @@
         "docs/help.md"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T23:13:57Z",
+      "updated_at": "2026-11-24T23:23:06Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:33cba067",
       "sprint_history": [
@@ -20387,15 +20387,35 @@
         }
       ],
       "review_requested_at": "2026-11-24T23:13:57Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-24T23:13:57Z",
           "kind": "review",
           "text": "CR-180: Docs: Help on the sidebar and tabs; the desktop UI design points to the overhaul",
           "by": "claude:33cba067"
+        },
+        {
+          "at": "2026-11-24T23:22:56Z",
+          "kind": "note",
+          "text": "Approved: in CR-180 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-24T23:23:06Z",
+          "kind": "outcome",
+          "text": "Approved in CR-180. Help covers the sidebar, its items, the new tab’s chooser and tab titles, and the desktop UI design points to the overhaul.",
+          "by": "claude:33cba067"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T23:13:57Z",
+          "to": "2026-11-24T23:22:56Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T23:23:06Z",
+      "completed_by": "claude:33cba067"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e8910f0acbe3",
@@ -21336,7 +21356,7 @@
       "description": "From Hakan: an agent working in one project can leave a note in another project's inbox, for that project's user to triage, as a person would.\n\n**No new API.** The dashboard's routes, the app's commands and `atm inbox` already call one atm-lib function per operation (`inbox::add`, `inbox::list`, `inbox::show`, `inbox::decide`). This task makes `inbox::add` reachable for another project. The only new thing is how the project is found: `--project` opens it through the workspaces, as atm-api's routes open a project (`Workspace::project(id)` → `Member`). There is no second add, no new route, and no new command.\n\n## Change\n- `atm inbox add --project <key or ID> --text-file F` (or `'<text>'`): the same `inbox::add`, on the project the workspaces find. The project must be registered (the workspaces' projects, as [ADR-007 §7](docs/adr/ADR-007-cross-project-references.md) finds another project's task). One that isn't is refused, naming the registered ones.\n- **Who:** `inbox::add`'s rule, the one place it is decided. An agent may add to **another** project's inbox. Adding to its own stays a person's (the inbox is the user's input there, [the design §3](docs/inbox-design.md#3-states-and-who-moves-them)).\n- **Its origin:** `created_by` is the agent, as now. `inbox::add` also records `from_project` (the adding project's key, else its ID) when it comes from another project. Because it is in the item, the dashboard's answer, its page and `atm inbox show` all have it; the page shows *from <project>*.\n- **Nothing else changes for the target:** the item is `created`. Edit, discard, restore and inject stay as they are (its user's, its triage skill's). The text's limits are the same (20,000 characters, not empty).\n- `--json` answers the item with its project, so the agent can ask about it later (ATM-773).\n\n## Security\nA new write across projects by an agent:\n- The item's text is data (I1): the target's triage never runs anything an item says, as now.\n- Only registered projects. The target's own files only, through its store (its lock), never a path the agent names.\n- Update `docs/security-architecture.md` (the entry points and I1's note) and the inbox design's §3 table (who may add).\n- Update `docs/agent/commands.md`: the option, and what it is for. It carries a finding for another project's user, never instructions for its agents.\n\n## Tests\n- atm-lib unit tests of `inbox::add`'s rule and origin: an agent adding to another project (origin recorded), to its own (refused), a person as now, the text limits.\n- A test that `--project` opens the project through the workspaces (registered, unregistered, missing).\n- CLI suite scenarios in `tests/scripts/scenarios/inbox.json` with two registered projects.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e8925a26795e"
       ],
@@ -21349,7 +21369,7 @@
         "tests/scripts/scenarios/inbox.json"
       ],
       "created_at": "2026-11-24T17:07:34Z",
-      "updated_at": "2026-11-24T23:05:33Z",
+      "updated_at": "2026-11-24T23:24:09Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:33cba067",
       "sprint_history": [
@@ -21384,9 +21404,33 @@
           "kind": "review",
           "text": "CR-178: Inbox: an agent adds an item to another project's inbox",
           "by": "claude:33cba067"
+        },
+        {
+          "at": "2026-11-24T23:22:48Z",
+          "kind": "note",
+          "text": "Approved: in CR-178 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-24T23:23:16Z",
+          "kind": "review",
+          "text": "Nothing changed since CR-178 approved it: the loop handed the task back after the approval, with no work left.",
+          "by": "claude:33cba067"
+        },
+        {
+          "at": "2026-11-24T23:24:05Z",
+          "kind": "note",
+          "text": "Approved: Approved by Hakan in chat: unchanged since CR-178.",
+          "by": "claude:33cba067"
+        },
+        {
+          "at": "2026-11-24T23:24:09Z",
+          "kind": "outcome",
+          "text": "Approved in CR-178. atm inbox add --project leaves an item in another registered project’s inbox, recorded as from_project.",
+          "by": "claude:33cba067"
         }
       ],
-      "started_at": "2026-11-24T23:03:59Z",
+      "started_at": "2026-11-24T23:22:58Z",
       "started_by": "claude:33cba067",
       "commit": "c93cfefabe74d800909dcb651400e76b5b5a8696",
       "code_reviews": [
@@ -21395,8 +21439,21 @@
           "ref": "CR-178"
         }
       ],
-      "review_requested_at": "2026-11-24T23:05:33Z",
-      "review_state": "waiting"
+      "reviews": [
+        {
+          "from": "2026-11-24T23:05:33Z",
+          "to": "2026-11-24T23:22:48Z",
+          "outcome": "approved"
+        },
+        {
+          "from": "2026-11-24T23:23:16Z",
+          "to": "2026-11-24T23:24:05Z",
+          "outcome": "approved"
+        }
+      ],
+      "review_requested_at": "2026-11-24T23:23:16Z",
+      "completed_at": "2026-11-24T23:24:09Z",
+      "completed_by": "claude:33cba067"
     },
     {
       "id": "01a20e86-f20a-70b2-9d4a-35d0eac05318",
@@ -21410,7 +21467,7 @@
       "description": "From Hakan: the agent that left a note in another project's inbox (ATM-772) can check what became of it.\n\n**No new API.** This reads through the same atm-lib functions the dashboard's route and the app's command call (`inbox::show`, `inbox::list`), on the project the workspaces find for `--project` (as ATM-772 opens it). The injected tasks' statuses are added **in those functions**, so the dashboard's inbox answer, its page and `atm inbox show` get them from the one answer. There is no second reader and no new route.\n\n## Change\n- **`inbox::show` and `inbox::list`:** an injected item's `tasks` come with what each task is now: its key, name, status and its status's kind, `done` when archived. A task not found says so.\n  - The project's own tasks are read from its store.\n  - A task in a third project (by its key) is read as [ADR-007 §7](docs/adr/ADR-007-cross-project-references.md) reads another project's task (atm-lib's `foreign`).\n  - The page's injected items then show each task's status beside its link.\n- **`atm inbox show IN-3 --project <key or ID> [--json]`:** the item as that project has it, in its inbox or its archive: its state, its reason when discarded, its tasks with their statuses when injected. `<KEY>:IN-3` (the project's key before the item's) works too.\n- **`atm inbox list --project <key or ID> --mine [--json]`:** the items this agent added there (by their `created_by`, as kept now), so an agent finds its notes without keeping their IDs.\n- Read-only; registered projects only.\n\n## Tests\n- atm-lib unit tests of `inbox::show` and `inbox::list`: each state's answer (created; discarded with its reason; injected with each task's status, including an archived task, a task not found, and one in another project); an archived item; `--mine`.\n- The route's tests and `InboxPage`'s: the tasks' statuses in the answer and on the page.\n- CLI suite scenarios with two registered projects: add from one, inject in the other, show from the first.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a20e86-f20a-70b2-9d4a-35cff3a353eb"
       ],
@@ -21419,13 +21476,17 @@
         "crates/atm-cli/src/commands/inbox.rs",
         "docs/agent/commands.md",
         "tests/scripts/scenarios/inbox.json",
-        "crates/atm-api/src/routes/inbox.rs",
-        "dashboard/src/lib/inbox/InboxPage.svelte"
+        "dashboard/src/lib/inbox/InboxPage.svelte",
+        "crates/atm-lib/src/inbox/tests.rs",
+        "crates/atm-lib/src/foreign/tests.rs",
+        "dashboard/src/lib/api/inbox.ts",
+        "dashboard/tests/unit/InboxPage.component.test.ts",
+        "docs/security-architecture.md"
       ],
       "created_at": "2026-11-24T17:07:34Z",
-      "updated_at": "2026-11-24T17:20:19Z",
+      "updated_at": "2026-11-24T23:36:35Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -21439,7 +21500,9 @@
         "cli",
         "docs",
         "dashboard"
-      ]
+      ],
+      "started_at": "2026-11-24T23:24:10Z",
+      "started_by": "claude:33cba067"
     },
     {
       "id": "01a20ea0-9cc0-77e3-8aa6-ec22e4e6b22b",
@@ -21752,14 +21815,14 @@
       "description": "The timed test *a click on a tab, and Next Tab round them all* (`performance.spec.ts`, T-525) fails about one run in two locally: its first click into the second project's tab takes 107 to 329 ms against the 200 ms budget, while every other switch, that tab by Next Tab included, takes 30 to 130 ms. It fails the same way before ATM-771 (170, 139, 266 ms over three runs alone, `--project timed --no-deps --repeat-each 3`), so it isn't that change's.\n\n## Look into\nWhat the first show of a project not shown before does that the next doesn't (its load, its parse, its first render of the board; `--trace on` on a failing run). Never raise the budget (AGENTS.md, Performance budgets): a real fix.\n\n## Tests\nThe timed test passing on repeated runs alone (`--repeat-each 5`), and in the full suite.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/state.svelte.ts",
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-24T19:30:52Z",
-      "updated_at": "2026-11-24T23:11:57Z",
+      "updated_at": "2026-11-24T23:22:57Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:33cba067",
       "sprint_history": [
@@ -21781,15 +21844,35 @@
         }
       ],
       "review_requested_at": "2026-11-24T23:11:57Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-24T23:11:57Z",
           "kind": "review",
           "text": "CR-179: App: a switch to another project's tab loads its data first",
           "by": "claude:33cba067"
+        },
+        {
+          "at": "2026-11-24T23:22:43Z",
+          "kind": "note",
+          "text": "Approved: in CR-179 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-24T23:22:57Z",
+          "kind": "outcome",
+          "text": "Approved in CR-179. A switch to another project’s tab loads its data first, not after the project list: the first switch 94 to 96 ms (was 106 to 173).",
+          "by": "claude:33cba067"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T23:11:57Z",
+          "to": "2026-11-24T23:22:43Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T23:22:57Z",
+      "completed_by": "claude:33cba067"
     },
     {
       "id": "01a20fc4-92be-7263-87d6-894ac379109d",
@@ -21936,6 +22019,40 @@
       ],
       "completed_at": "2026-11-24T23:02:52Z",
       "completed_by": "claude:33cba067"
+    },
+    {
+      "id": "01a20fe0-ae78-72ff-88c4-f6621c301a92",
+      "name": "Migrate to CompMD 0.10.0",
+      "type": "infra",
+      "priority": "P2",
+      "labels": [
+        "compmd"
+      ],
+      "description": "From Hakan: move atm from CompMD 0.9.0 to 0.10.0.\n\n## Change\n- The dashboard's CompMD npm packages and the crates atm and the app use (`compmd-host`, `compmd-pack`, `tauri-plugin-compmd`) at 0.10.0, from the **published** packages and crates, their release notes and their guide; never the local CompMD checkout.\n- Adapt to what changed between 0.9.0 and 0.10.0, as the release notes say: APIs, options, the runtime's files.\n- The CompMD runtime the dashboard ships is rebuilt at its new version (`dashboard/dist/assets/compmd/0.10.0/`, from `vite.compmd.config.ts`).\n- `atm docs compmd` (`docs/agent/compmd-llms.txt`), the guide for agents, from 0.10.0's published guide.\n\n## Tests\n`pnpm run check`, the unit tests, the functional e2e suite, `cargo test` and clippy; the app built once (`cargo build -p atm-app`).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/package.json",
+        "pnpm-lock.yaml",
+        "Cargo.toml",
+        "Cargo.lock",
+        "docs/agent/compmd-llms.txt"
+      ],
+      "created_at": "2026-11-24T23:25:12Z",
+      "updated_at": "2026-11-24T23:25:12Z",
+      "created_by": "claude:33cba067",
+      "updated_by": "claude:33cba067",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T23:25:12Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 780
     }
   ]
 }

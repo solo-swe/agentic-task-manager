@@ -56,11 +56,22 @@ pub enum InboxCommand {
         /// The archive's items instead
         #[arg(long)]
         archived: bool,
+        /// Another registered project's inbox (its key or ID): read only
+        #[arg(long, value_name = "KEY")]
+        project: Option<String>,
+        /// Only the items you added (with --project, those you left there from this project)
+        #[arg(long)]
+        mine: bool,
+        #[arg(long)]
+        agent: Option<String>,
     },
-    /// An item in full: its text, state, and what became of it
+    /// An item in full: its text, state, and what became of it (its tasks' statuses once injected)
     Show {
-        /// The item (IN-3)
+        /// The item (IN-3; KEY:IN-3 for another registered project's)
         item: String,
+        /// Another registered project's inbox (its key or ID): read only
+        #[arg(long, value_name = "KEY")]
+        project: Option<String>,
     },
     /// Discard an open item, saying why (on the user's word, for an agent)
     Discard {
@@ -123,25 +134,71 @@ fn title(item: &Value) -> String {
     title
 }
 
+/// What an injected item's tasks are now, as one line's end: `ATM-760 (done), ATM-761 (in_progress)`; a task not
+/// found says so (ATM-773). Without their states, their keys.
+fn tasks_line(item: &Value) -> String {
+    if let Some(states) = item.get("task_states").and_then(Value::as_array) {
+        return states
+            .iter()
+            .map(|s| {
+                let key = field(s, "key");
+                if s.get("found") == Some(&json!(true)) {
+                    format!("{key} ({})", field(s, "status"))
+                } else {
+                    format!("{key} (not found)")
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+    }
+    item.get("tasks")
+        .and_then(Value::as_array)
+        .map(|t| {
+            t.iter()
+                .filter_map(Value::as_str)
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
+        .unwrap_or_default()
+}
+
 /// One line per item: its ID, its state, its title, and what became of it
 fn line(item: &Value) -> String {
     let state = field(item, "state");
     let outcome = match state {
         "discarded" => format!(" · {}", field(item, "reason")),
-        "injected" => format!(
-            " → {}",
-            item.get("tasks")
-                .and_then(Value::as_array)
-                .map(|t| t
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .collect::<Vec<_>>()
-                    .join(", "))
-                .unwrap_or_default()
-        ),
+        "injected" => format!(" → {}", tasks_line(item)),
         _ => String::new(),
     };
     format!("{}  {state}  {}{outcome}", field(item, "id"), title(item))
+}
+
+/// The project an inbox is read from (ATM-773): this one, or the user's registered one `project` names (its key or
+/// ID, never a path), read only.
+fn inbox_project(cwd: &Path, project: Option<&str>) -> Result<Project> {
+    let here = Project::open(cwd)?;
+    match project {
+        None => Ok(here),
+        Some(name) => Project::open(&atm_lib::foreign::registered_project(name, here.root())?),
+    }
+}
+
+/// An item as `atm inbox show` takes it: `IN-3`, or `KEY:IN-3` for another registered project's (as `--project KEY`)
+fn item_and_project<'a>(
+    item: &'a str,
+    project: Option<&'a str>,
+) -> Result<(&'a str, Option<&'a str>)> {
+    match item.split_once(':') {
+        Some((key, id)) if !key.trim().is_empty() => {
+            if project.is_some_and(|p| !p.eq_ignore_ascii_case(key.trim())) {
+                return Err(Error::Invalid(format!(
+                    "{item} names the project {key}, and --project another: give one"
+                )));
+            }
+            Ok((id, Some(key.trim())))
+        }
+        _ => Ok((item, project)),
+    }
 }
 
 /// What a move did, as one line, or the item as JSON
@@ -153,9 +210,29 @@ fn report(ctx: Context, item: &Value, did: &str) {
     }
 }
 
-/// `atm inbox list`: the items `state` names (the open ones without it), of the inbox or its archive
-fn list(ctx: Context, cwd: &Path, state: Option<&str>, archived: bool) -> Result<()> {
-    let listed = inbox::list(&Project::open(cwd)?, inbox::listing_of(state)?, archived)?;
+/// What `atm inbox list` lists: of which state, the archive's, of which project, only whose
+struct ListOf<'a> {
+    state: Option<&'a str>,
+    archived: bool,
+    project: Option<&'a str>,
+    mine: bool,
+    agent: Option<&'a str>,
+}
+
+/// `atm inbox list`: the items `state` names (the open ones without it), of the inbox or its archive, of this project
+/// or another registered one; `mine`, those the one asking added (from this project, to another's)
+fn list(ctx: Context, cwd: &Path, of: &ListOf) -> Result<()> {
+    let project = inbox_project(cwd, of.project)?;
+    let mut listed = inbox::list(&project, inbox::listing_of(of.state)?, of.archived)?;
+    if of.mine {
+        let who = agent_identity(of.agent, cwd);
+        let from = match of.project {
+            Some(_) => Some(inbox::project_name(&Project::open(cwd)?)?),
+            None => None,
+        };
+        listed = inbox::added_by(listed, &who, from.as_deref());
+    }
+    let archived = of.archived;
     if ctx.json {
         print_json(&json!({
             "items": listed.items,
@@ -181,18 +258,23 @@ fn list(ctx: Context, cwd: &Path, state: Option<&str>, archived: bool) -> Result
     Ok(())
 }
 
-/// `atm inbox show`: an item in full
-fn show(ctx: Context, cwd: &Path, id: &str) -> Result<()> {
-    let item = inbox::show(&Project::open(cwd)?, id)?;
+/// `atm inbox show`: an item in full, of this project or another registered one (`--project`, `KEY:IN-3`)
+fn show(ctx: Context, cwd: &Path, item: &str, project: Option<&str>) -> Result<()> {
+    let (id, project) = item_and_project(item, project)?;
+    let item = inbox::show(&inbox_project(cwd, project)?, id)?;
     if ctx.json {
         print_json(&item);
         return Ok(());
     }
     println!("{}", line(&item));
     println!(
-        "  created {} by {}",
+        "  created {} by {}{}",
         field(&item, "created_at"),
-        field(&item, "created_by")
+        field(&item, "created_by"),
+        match field(&item, "from_project") {
+            "" => String::new(),
+            from => format!(", from {from}"),
+        }
     );
     if !field(&item, "decided_at").is_empty() {
         println!(
@@ -200,6 +282,28 @@ fn show(ctx: Context, cwd: &Path, id: &str) -> Result<()> {
             field(&item, "decided_at"),
             field(&item, "decided_by")
         );
+    }
+    for state in item
+        .get("task_states")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        if state.get("found") == Some(&json!(true)) {
+            println!(
+                "  {}  {}  {}{}",
+                field(state, "key"),
+                field(state, "status"),
+                field(state, "name"),
+                if state.get("archived") == Some(&json!(true)) {
+                    " (archived)"
+                } else {
+                    ""
+                }
+            );
+        } else {
+            println!("  {}  not found", field(state, "key"));
+        }
     }
     println!();
     for text in field(&item, "text").lines() {
@@ -274,8 +378,24 @@ pub fn run(command: InboxCommand, ctx: Context, cwd: &Path) -> Result<()> {
             let item = inbox::edit(&mut opened(cwd, agent.as_deref())?, &item, &text)?;
             report(ctx, &item, "text changed");
         }
-        InboxCommand::List { state, archived } => list(ctx, cwd, state.as_deref(), archived)?,
-        InboxCommand::Show { item } => show(ctx, cwd, &item)?,
+        InboxCommand::List {
+            state,
+            archived,
+            project,
+            mine,
+            agent,
+        } => list(
+            ctx,
+            cwd,
+            &ListOf {
+                state: state.as_deref(),
+                archived,
+                project: project.as_deref(),
+                mine,
+                agent: agent.as_deref(),
+            },
+        )?,
+        InboxCommand::Show { item, project } => show(ctx, cwd, &item, project.as_deref())?,
         InboxCommand::Discard {
             item,
             reason,

@@ -15,7 +15,9 @@
     restoreItem,
     type InboxItem,
     type InboxListing,
+    type TaskState,
   } from '../api/inbox';
+  import { statusLabel } from '../vocab';
   import type { ChangeResult } from '../api/review-changes';
   import { appTabs } from '../app-tabs.svelte';
   import CompMd from '../documents/CompMd.svelte';
@@ -158,6 +160,9 @@
   const ago = (at: string | undefined) => (at ? formatAgoOrDate(at, Date.now()) : '');
   /** A task the item became: its details over this page, when it is one of this project's */
   const taskLink = (key: string) => (dashboard.findTask(key) ? withTask(currentAddress(), key) : null);
+  /** What a task the item became is now, as atm answered it (ATM-773) */
+  const taskState = (item: InboxItem, key: string): TaskState | undefined =>
+    item.task_states?.find((s) => s.key === key);
 </script>
 
 <div class="inbox-page" id="inbox-page">
@@ -226,10 +231,15 @@
             {/if}
             {#if item.state === 'injected' && item.tasks?.length}
               <span class="inbox-tasks"
-                >→ {#each item.tasks as key, i (key)}{i ? ', ' : ''}{#if taskLink(key)}<a
-                      href={taskLink(key)}
-                      data-task={key}>{key}</a
-                    >{:else}{key}{/if}{/each}</span
+                >→ {#each item.tasks as key, i (key)}{@const now = taskState(item, key)}{i
+                    ? ', '
+                    : ''}{#if taskLink(key)}<a href={taskLink(key)} data-task={key}>{key}</a
+                    >{:else}{key}{/if}{#if now}<span
+                      class="inbox-task-status"
+                      data-kind={now.found ? (now.kind ?? '') : 'missing'}
+                      title={now.found ? now.name : 'atm can’t find this task'}
+                      >{now.found ? statusLabel(dashboard.vocab, now.status ?? '') : 'not found'}</span
+                    >{/if}{/each}</span
               >
             {/if}
           </div>
@@ -420,6 +430,18 @@
   }
   .inbox-tasks a {
     color: var(--accent);
+  }
+  /* A task's status beside its key (ATM-773): done in green, a task atm can't find muted */
+  .inbox-task-status {
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    margin-left: var(--space-1);
+  }
+  .inbox-task-status[data-kind='done'] {
+    color: var(--green);
+  }
+  .inbox-task-status[data-kind='missing'] {
+    font-style: italic;
   }
   .inbox-meta {
     display: flex;
