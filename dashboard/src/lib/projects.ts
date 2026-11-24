@@ -19,6 +19,11 @@ export function reviewsWaiting(p: ProjectEntry | undefined): number {
   return p?.summary?.needs_you.code_reviews ?? 0;
 }
 
+/** The items waiting in a project's inbox (ATM-761, ATM-762): the Inbox item's badge; none from an older server */
+export function inboxOpen(p: ProjectEntry | undefined): number {
+  return p?.summary?.inbox?.open ?? 0;
+}
+
 /** Tasks still to do: neither done nor skipped */
 export function openTasks(p: ProjectEntry): number {
   return p.summary ? p.summary.total - p.summary.done - p.summary.skipped : 0;

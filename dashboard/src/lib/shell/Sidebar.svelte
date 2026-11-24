@@ -13,7 +13,7 @@
   import type { ProjectEntry } from '../load';
   import { ITEM_NAMES } from '../places';
   import { getPref, setPref } from '../prefs';
-  import { needsYou, reviewsWaiting } from '../projects';
+  import { inboxOpen, needsYou, reviewsWaiting } from '../projects';
   import {
     itemAddress,
     itemsOf,
@@ -77,9 +77,10 @@
     setPref('sidebarScope', scopePref(next));
   }
 
-  /** The item's badge: Code Reviews, the reviews waiting on you (the scope's: All's sums its projects'); Inbox's comes
-   * with the inbox (ATM-762) */
+  /** The item's badge: Code Reviews, the reviews waiting on you (the scope's: All's sums its projects'); Inbox, the
+   * items waiting in it (a project's, ATM-762) */
   function badgeOf(item: Item): number {
+    if (item === 'inbox') return scope === null ? 0 : inboxOpen(scoped ?? undefined);
     if (item !== 'reviews') return 0;
     return scope === null
       ? dashboard.projects.reduce((n, p) => n + reviewsWaiting(p), 0)

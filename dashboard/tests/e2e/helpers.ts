@@ -32,6 +32,19 @@ const V1_FILES = /\/api\/v1\/projects\/([^/]+)\/files\?/;
 const V1_REVIEWS = /\/api\/v1\/projects\/([^/]+)\/reviews(?:\/([^/?]+))?(?:\?.*)?$/;
 /** The review routes that change something, always v2 (ATM-572): the project, and the path past `reviews` */
 const V2_REVIEW_CHANGES = /\/api\/v2\/workspaces\/[^/]+\/projects\/([^/]+)\/reviews(\/[^?]*)?(?:\?.*)?$/;
+/** A project's inbox (ATM-761, ATM-762), v1's and v2's: its items, and on v2 the page's changes */
+const INBOX = /\/api\/(?:v1\/projects|v2\/workspaces\/[^/]+\/projects)\/([^/]+)\/inbox(\/[^?]*)?(?:\?.*)?$/;
+
+/** An inbox item, as atm keeps it */
+export interface FixtureInboxItem {
+  id: string;
+  text: string;
+  state: 'created' | 'discarded' | 'injected';
+  reason?: string;
+  tasks?: string[];
+  created_at?: string;
+  created_by?: string;
+}
 
 /** A file as the documents route answers it (docs/multi-project-api.md §2.6): Markdown by default, as it is */
 export function projectDocument(path: string, text: string, fields: Record<string, unknown> = {}) {
@@ -426,6 +439,64 @@ export class TasksServer {
   /** What the next changes are answered with: their status and body */
   private reviewChangeAnswer: { status: number; body: unknown } = { status: 201, body: { comment: 'c9' } };
 
+  /** The default project's inbox (ATM-762), and its archive, newest first; atm's rules for its changes, played */
+  inbox: FixtureInboxItem[] = [];
+  inboxArchive: FixtureInboxItem[] = [];
+  /** The inbox listings asked for (their query), and the changes the page sent with their session token */
+  inboxRequests: string[] = [];
+  inboxChanges: { method: string; path: string; body: unknown; session: string | undefined }[] = [];
+
+  /** The inbox's answer to one operation, as atm's routes and commands give it: `[status, body]` */
+  private answerInbox(
+    op:
+      | { list: { state?: string | null; archived: boolean } }
+      | { add: string }
+      | { edit: [string, string] }
+      | {
+          decide: [string, { decision?: string; reason?: string }];
+        },
+  ): [number, unknown] {
+    if ('list' in op) {
+      const all = op.list.archived ? this.inboxArchive : this.inbox;
+      const state = op.list.state || 'created';
+      const count = (s: string) => all.filter((i) => i.state === s).length;
+      const items = state === 'all' ? all : all.filter((i) => i.state === state);
+      return [200, { items, created: count('created'), discarded: count('discarded'), injected: count('injected') }];
+    }
+    if ('add' in op) {
+      if (!op.add.trim()) return [400, { error: 'an item needs some text' }];
+      const next = Math.max(0, ...[...this.inbox, ...this.inboxArchive].map((i) => Number(i.id.slice(3)))) + 1;
+      const item: FixtureInboxItem = {
+        id: `IN-${next}`,
+        text: op.add,
+        state: 'created',
+        created_at: '2026-11-24T09:00:00Z',
+        created_by: 'Ana',
+      };
+      this.inbox.unshift(item);
+      return [201, { item }];
+    }
+    const [id] = 'edit' in op ? op.edit : op.decide;
+    const item = this.inbox.find((i) => i.id === id);
+    if (!item) return [404, { error: `no item ${id}` }];
+    if ('edit' in op) {
+      if (item.state !== 'created') return [403, { error: `${id} isn't open` }];
+      item.text = op.edit[1];
+      return [200, { item }];
+    }
+    const decision = op.decide[1];
+    if (decision.decision === 'discarded' && item.state === 'created' && decision.reason?.trim()) {
+      Object.assign(item, { state: 'discarded', reason: decision.reason });
+      return [200, { item }];
+    }
+    if (decision.decision === 'restored' && item.state === 'discarded') {
+      item.state = 'created';
+      delete item.reason;
+      return [200, { item }];
+    }
+    return [403, { error: `${id} can't be ${decision.decision} now` }];
+  }
+
   /** Serve the reviews list (`GET …/reviews`) */
   setReviews(list: unknown) {
     this.reviewList = withEnded(list);
@@ -666,6 +737,33 @@ export class TasksServer {
         contentType: 'application/json',
         body: JSON.stringify(this.reviewChangeAnswer.body),
       });
+    });
+    await this.page.route(INBOX, (route) => {
+      const request = route.request();
+      const [, id, rest] = INBOX.exec(request.url())!;
+      if (decodeURIComponent(id) !== this.projectId)
+        return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error": "unknown project"}' });
+      const url = new URL(request.url());
+      const answer = ([status, body]: [number, unknown]) =>
+        route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+      if (request.method() === 'GET') {
+        this.inboxRequests.push(url.search);
+        return answer(
+          this.answerInbox({
+            list: { state: url.searchParams.get('state'), archived: url.searchParams.get('archived') === '1' },
+          }),
+        );
+      }
+      const path = rest ?? '';
+      const body = request.postDataJSON() as { text?: string; decision?: string; reason?: string };
+      this.inboxChanges.push({ method: request.method(), path, body, session: request.headers()['x-atm-session'] });
+      const [, item, decisions] = /^\/?([^/]*)(\/decisions)?$/.exec(path) ?? [];
+      if (request.method() === 'POST' && !item) return answer(this.answerInbox({ add: body.text ?? '' }));
+      if (request.method() === 'PATCH' && item && !decisions)
+        return answer(this.answerInbox({ edit: [decodeURIComponent(item), body.text ?? ''] }));
+      if (request.method() === 'POST' && item && decisions)
+        return answer(this.answerInbox({ decide: [decodeURIComponent(item), body] }));
+      return answer([405, { error: 'no such route' }]);
     });
     await this.page.route(V1_DOCUMENTS, (route) => {
       const url = new URL(route.request().url());
@@ -1029,6 +1127,26 @@ export class TasksServer {
       }
       case 'project_reviews':
         return body ? { ok: this.reviewList ?? { reviews: [], you: 'Ana' } } : unknown;
+      case 'project_inbox':
+      case 'add_inbox_item':
+      case 'edit_inbox_item':
+      case 'decide_inbox_item': {
+        if (project !== this.projectId) return unknown;
+        const [status, answered] = this.answerInbox(
+          command === 'project_inbox'
+            ? { list: { state: (args.which as string | undefined) ?? null, archived: args.archived === true } }
+            : command === 'add_inbox_item'
+              ? { add: String((args.item as { text?: string }).text ?? '') }
+              : command === 'edit_inbox_item'
+                ? { edit: [String(args.id), String((args.edit as { text?: string }).text ?? '')] }
+                : { decide: [String(args.id), args.decision as { decision?: string; reason?: string }] },
+        );
+        if (command !== 'project_inbox')
+          this.inboxChanges.push({ method: command, path: String(args.id ?? ''), body: args, session: undefined });
+        if (status < 300) return { ok: answered };
+        const kind = status === 404 ? 'not_found' : status === 400 ? 'invalid' : 'refused';
+        return { error: { kind, message: (answered as { error: string }).error } };
+      }
       case 'project_review': {
         const page = this.reviewPages.get(String(args.review));
         return page ? { ok: page } : { error: { kind: 'not_found', message: `no review ${String(args.review)}` } };

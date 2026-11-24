@@ -297,6 +297,10 @@ export class DashboardState {
     );
   }
 
+  /** The page's address as the last navigation left it, for what a page reads from its query (the Inbox's filter,
+   * ATM-762): the router's, kept here so a component needn't read the router itself */
+  address = $state(typeof location === 'undefined' ? '/' : currentAddress());
+
   filters = $state.raw<Filters>(emptyFilters());
   /** Keyword search over ID, name, description and type; part of the saved view */
   query = $state('');
@@ -655,6 +659,7 @@ export class DashboardState {
    * the task, and the page when it names another one. */
   onNavigate() {
     let address = currentAddress();
+    this.address = address;
     // An older address's dialog flag (?about): its dialog opens, and the address is the page's without it
     const named = dialogOf(address);
     if (named) {

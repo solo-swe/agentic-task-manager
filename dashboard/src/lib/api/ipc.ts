@@ -109,6 +109,11 @@ function projectCall(workspace: string, project: string, route: string[], query:
         args: { ...at, path: query.get('path') ?? '', at: query.get('at') || undefined },
         image: true,
       };
+    case 'inbox': {
+      // Its items (ATM-761, ATM-762): those of `state` (the open ones without), of the archive with `archived`
+      const archived = ['1', 'true'].includes(query.get('archived') ?? '');
+      return { command: 'project_inbox', args: { ...at, which: query.get('state') || undefined, archived } };
+    }
     case 'claims':
     case 'claims.json':
       return { command: 'claims', args: at };

@@ -10,7 +10,7 @@
   import { navigate } from '../navigation';
   import { ITEM_NAMES } from '../places';
   import { getPref } from '../prefs';
-  import { needsYou, reviewsWaiting } from '../projects';
+  import { inboxOpen, needsYou, reviewsWaiting } from '../projects';
   import { itemAddress, itemsOf, scopeFromPref, type Scope } from '../sidebar';
   import { dashboard } from '../state.svelte';
   import { ITEM_ICONS } from '../tabs';
@@ -29,8 +29,9 @@
   const address = (scope: Scope, item: Item) => itemAddress(dashboard.workspace, scope, item) ?? '/';
   const projectOf = (id: string) => present.find((p) => p.id === id);
 
-  /** An item's badge: Code Reviews, the reviews waiting on you (All's sums its projects') */
+  /** An item's badge: Code Reviews, the reviews waiting on you (All's sums its projects'); Inbox, the items in it */
   function badgeOf(item: Item): number {
+    if (item === 'inbox') return chooser.scope === null ? 0 : inboxOpen(projectOf(chooser.scope));
     if (item !== 'reviews') return 0;
     return chooser.scope === null
       ? present.reduce((n, p) => n + reviewsWaiting(p), 0)

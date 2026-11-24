@@ -21012,7 +21012,7 @@
       "description": "[The sidebar overhaul](docs/sidebar-overhaul-design.md) §3: the + button, File ▸ New Tab and ⌘T open a new tab on `/new`, a chooser of scope and item (the app only).\n\n## Change\n- **Two columns:** the scopes (All, then the projects, as the scope selector lists them, with badges) and the chosen scope's items with their badges. The sidebar's scope is chosen when it opens.\n- **Choosing an item opens it in this tab**, in place of the chooser (the chooser is the tab's first entry: Back returns to it).\n- **Keys:** ↑↓ in a column, ←→ between them, typing filters the projects, Enter opens. No item shortcuts.\n- Reuse the scope selector's project list from the sidebar task.\n\n## Tests\nComponent tests for the columns, the keys and opening in place; e2e: + opens it, choosing opens the page, Back returns to the chooser.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e88bc947df5c"
       ],
@@ -21021,7 +21021,7 @@
         "dashboard/src/lib/tab-actions.ts"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T16:34:55Z",
+      "updated_at": "2026-11-24T16:47:45Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21034,7 +21034,24 @@
       "review": "async",
       "number": 755,
       "started_at": "2026-11-24T16:34:55Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "c7c4eff501436a23471afc6cf2d2d49cae1f464c",
+      "code_reviews": [
+        {
+          "id": "01a20e74-cee1-7230-aaef-3184ec3891b4",
+          "ref": "CR-165"
+        }
+      ],
+      "review_requested_at": "2026-11-24T16:47:45Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-24T16:47:45Z",
+          "kind": "review",
+          "text": "CR-165: The new tab's chooser of scope and item (/new)",
+          "by": "claude:ba530ebb"
+        }
+      ]
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e88e728b0f5d",
@@ -21429,7 +21446,7 @@
       "description": "[The inbox design](docs/inbox-design.md) §6: the Inbox item's page, in the app and the webapp.\n\n## Change\n- The **quick-add box** at the top, focused on open, Enter adds (⇧Enter a new line), focus kept for the next; its draft kept on its tab.\n- The **filter** Open (default) · Discarded · Injected · All and *archived*, in the address (`?state=&archived=`).\n- **Each item:** first line as title (the rest on a click), when and who; Edit and Discard (a dialog asking the reason) when open; reason and Restore when discarded; its tasks as links when injected.\n- The sidebar's Inbox **badge** from the summary's open count.\n\n## Tests\nComponent tests (adding, the filter, each state's actions, the reason dialog); e2e with the fixture playing the routes.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e89307ded508",
         "01a20ae0-5493-734f-9c10-e88bc947df5c"
@@ -21439,7 +21456,7 @@
         "dashboard/src/lib/api/inbox.ts"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T16:47:51Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21450,7 +21467,9 @@
       ],
       "sprint": "Sidebar overhaul",
       "review": "async",
-      "number": 762
+      "number": 762,
+      "started_at": "2026-11-24T16:47:51Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e895a1716a0b",

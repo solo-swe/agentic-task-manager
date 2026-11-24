@@ -26,9 +26,11 @@ async function token(): Promise<string | null> {
   }
 }
 
-/** One change: its REST method and resource, and its command with the arguments past workspace and project */
-interface Change {
+/** One change: its REST method, its resource (under the project's `area`: its reviews, or its inbox, ATM-762), and its
+ * command with the arguments past workspace and project */
+export interface Change {
   method: 'POST' | 'PATCH' | 'PUT' | 'DELETE';
+  area?: 'reviews' | 'inbox';
   resource: string;
   body: unknown;
   command: string;
@@ -40,7 +42,8 @@ interface Change {
 const DOTTED = new Set(['.', '..']);
 const dotted = (segments: string[]) => segments.some((s) => DOTTED.has(s));
 
-async function send(project: string, change: Change): Promise<ChangeResult> {
+/** A change of the project's, from the page, as the user: the app's command, or the REST route with the page's token */
+export async function send(project: string, change: Change): Promise<ChangeResult> {
   const workspace = apiWorkspace();
   if (dotted([workspace, project, ...change.resource.split('/').map((s) => decodeURIComponent(s))]))
     return { ok: false, message: 'A review, project or workspace ID can’t be . or ..' };
@@ -53,8 +56,13 @@ async function send(project: string, change: Change): Promise<ChangeResult> {
     }
   }
   const session = await token();
-  if (!session) return { ok: false, message: 'This page wasn’t served by atm, so it can’t change a review.' };
-  const url = `/api/v2/workspaces/${encodeURIComponent(workspace)}/projects/${encodeURIComponent(project)}/reviews${change.resource}`;
+  const area = change.area ?? 'reviews';
+  if (!session)
+    return {
+      ok: false,
+      message: `This page wasn’t served by atm, so it can’t change ${area === 'inbox' ? 'the inbox' : 'a review'}.`,
+    };
+  const url = `/api/v2/workspaces/${encodeURIComponent(workspace)}/projects/${encodeURIComponent(project)}/${area}${change.resource}`;
   try {
     const resp = await fetch(url, {
       method: change.method,

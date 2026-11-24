@@ -63,6 +63,12 @@ describe('Sidebar (ATM-753)', () => {
     expect(document.documentElement.style.getPropertyValue('--sidebar-offset')).toBe('240px');
   });
 
+  it('Inbox: the items waiting in the project’s inbox, from its summary (ATM-762)', () => {
+    dashboard.projects = [{ ...project('a', 'Alpha', { ...summary(40), inbox: { open: 4 } }) }];
+    const { container } = render(Sidebar);
+    expect(container.querySelector('[data-item="inbox"] .app-sidebar-badge')).toHaveTextContent('4');
+  });
+
   it('on All projects’ page: All, its four items, the reviews waiting summed over the projects', async () => {
     dashboard.route = { page: 'overview' };
     dashboard.overviewTab = 'progress';

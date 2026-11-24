@@ -291,6 +291,34 @@ export function withReviewList(address: string, query: ReviewListAddress): strin
   return formatAddress(params);
 }
 
+/** The Inbox page's filter (docs/inbox-design.md §6, ATM-762): which items, and whether of the archive */
+export interface InboxListAddress {
+  state: 'created' | 'discarded' | 'injected' | 'all';
+  archived: boolean;
+}
+const INBOX_STATES: readonly InboxListAddress['state'][] = ['created', 'discarded', 'injected', 'all'];
+
+/** The Inbox page's filter `address` names (`?state=all&archived=1`): the open items, not archived, by default; a
+ * state that isn't one is the default */
+export function inboxListOf(address: string): InboxListAddress {
+  const params = addressParams(address);
+  const state = params.get('state') as InboxListAddress['state'] | null;
+  return {
+    state: state && INBOX_STATES.includes(state) ? state : 'created',
+    archived: ['1', 'true'].includes(params.get('archived') ?? ''),
+  };
+}
+
+/** `address` (the Inbox page's) listing by `list`: the defaults left out */
+export function withInboxList(address: string, list: InboxListAddress): string {
+  const params = addressParams(address);
+  params.delete('state');
+  params.delete('archived');
+  if (list.state !== 'created') params.set('state', list.state);
+  if (list.archived) params.set('archived', '1');
+  return formatAddress(params);
+}
+
 /** All reviews' project filter (ATM-757, docs/sidebar-overhaul-design.md §2.5): the projects `?projects=atm,compmd`
  * names, those among `known` in its order; none (every project) when it names none of them */
 export function reviewProjectsOf(address: string, known: readonly string[]): string[] {

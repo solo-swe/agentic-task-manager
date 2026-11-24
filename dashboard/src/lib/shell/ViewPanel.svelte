@@ -13,6 +13,7 @@
   import ProgressTab from '../progress/ProgressTab.svelte';
   import ProjectTab from './ProjectTab.svelte';
   import ReviewsTab from './ReviewsTab.svelte';
+  import InboxPage from '../inbox/InboxPage.svelte';
   import ScopeBar from './ScopeBar.svelte';
   import SubTabs from './SubTabs.svelte';
   import TaskGrid from '../tasks/TaskGrid.svelte';
@@ -105,17 +106,23 @@
       <!-- Mounted only while selected: it asks the server for the reviews, and again now and then -->
       {#if view === 'reviews'}<ReviewsTab />{/if}
     </div>
-    <!-- The Inbox (docs/inbox-design.md) and Documents (docs/documents-design.md) pages come with their own tasks -->
-    {#each ['inbox', 'documents'] as const as id (id)}
-      <div class="view-panel" id="panel-{id}" role="tabpanel" aria-labelledby="item-{id}" hidden={view !== id}>
-        {#if view === id}
-          <p class="view-placeholder" id="{id}-placeholder">
-            {id === 'inbox'
-              ? 'The Inbox is coming: what you note for later, for an agent to make tasks of.'
-              : 'Documents are coming: the project’s documents, listed and searchable, to open in the viewer.'}
-          </p>
-        {/if}
-      </div>
-    {/each}
+    <div class="view-panel" id="panel-inbox" role="tabpanel" aria-labelledby="item-inbox" hidden={view !== 'inbox'}>
+      <!-- Mounted only while selected: it asks the server for the inbox, and again now and then (ATM-762) -->
+      {#if view === 'inbox'}<InboxPage />{/if}
+    </div>
+    <!-- The Documents page (docs/documents-design.md) comes with its own task -->
+    <div
+      class="view-panel"
+      id="panel-documents"
+      role="tabpanel"
+      aria-labelledby="item-documents"
+      hidden={view !== 'documents'}
+    >
+      {#if view === 'documents'}
+        <p class="view-placeholder" id="documents-placeholder">
+          Documents are coming: the project’s documents, listed and searchable, to open in the viewer.
+        </p>
+      {/if}
+    </div>
   </div>
 </div>

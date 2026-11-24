@@ -68,6 +68,19 @@ export function statsUrl(project: string, request: StatsRequest = {}): string {
   return projectRoute(project, 'stats') + (text ? `?${text}` : '');
 }
 
+/** Which of a project's inbox items a listing gives (docs/inbox-design.md §6, ATM-762) */
+export type InboxState = 'created' | 'discarded' | 'injected' | 'all';
+
+/** A project's inbox items (GET …/projects/<id>/inbox, ATM-761): those in `state` (the open ones by default), of the
+ * archive with `archived` */
+export function inboxUrl(project: string, state: InboxState = 'created', archived = false): string {
+  const query = new URLSearchParams();
+  if (state !== 'created') query.set('state', state);
+  if (archived) query.set('archived', '1');
+  const text = query.toString();
+  return projectRoute(project, 'inbox') + (text ? `?${text}` : '');
+}
+
 /** A file of the project for the document viewer: what it is, and the CompMD document to render (T-392) */
 export function v1DocumentUrl(project: string, path: string): string {
   return `${projectRoute(project, 'documents')}?path=${encodeURIComponent(path)}`;
