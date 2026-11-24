@@ -19690,11 +19690,11 @@
       "description": "atm was once seen growing from about 70 MB of RAM to 4.5 GB after a few hours of use. Find out why:\n\n1. Reproduce it: run `atm service` with the dashboard and the app open, agents working and reviews watched, and measure its memory over time.\n2. Find what grows (caches, watchers, event subscribers, open connections, retained task file versions, …).\n3. Fix it if the cause is clear, with a test that would have caught it, or record the findings and create the follow-up tasks.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T00:33:27Z",
+      "updated_at": "2026-11-24T00:48:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -19707,7 +19707,24 @@
       "review": "async",
       "number": 734,
       "started_at": "2026-11-24T00:33:27Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "878fb1daff11dadc2ad33fc7e62bb0762c8a3d84",
+      "code_reviews": [
+        {
+          "id": "01a20b06-334a-74c9-b822-cf1fa366f6a1",
+          "ref": "CR-140"
+        }
+      ],
+      "review_requested_at": "2026-11-24T00:48:05Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-24T00:48:05Z",
+          "kind": "review",
+          "text": "CR-140: Memory growth: the app page grows with every reload in WebKit; findings and follow-ups",
+          "by": "claude:ba530ebb"
+        }
+      ]
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d9843d6019f3",
@@ -19868,7 +19885,7 @@
       "description": "Long `/atm-loop-tasks` sessions carry every finished task's context into the next one, which is a large share of usage-limit consumption. Instead of one long session, atm could run the loop from outside and start a **fresh, headless agent session per task**: a full main agent (same model, same `AGENTS.md`, memory and skills), not a subagent, briefed by the task itself.\n\n```\natm loop run --agent '<harness command template, e.g. claude -p \"/atm-do-task {task}\">' [selection] [--max N]\n```\n\n## Step 1: Evaluate (stop here for a decision)\n- Do a few tasks the fresh way by hand (`/clear`, then `/atm-do-task <id>` with no other context) and compare with tasks done inside a long loop: did the fresh session miss anything (decisions said only in chat, conventions), and what did each cost (tool calls, tokens, from the session transcripts)?\n- Write the findings, what a fresh session lacked and what a task must carry so it doesn't, in `docs/fresh-session-loop.md`, commit it, and block this task `--on user` asking whether to implement. Subagents went badly before in this project, so the user decides from evidence, not from this description.\n\n## Step 2: Implement (only after the user says go)\n- `atm loop run` in `atm-cli` (logic in `atm-lib`, per the layer rule): claims the next task (`atm loop next --claim`), starts the configured command with the task's key filled in, waits for it, reads back the outcome (done, in review, blocked, back to to do) and goes on; `--max`, the selection flags and exit codes as `atm loop next`'s.\n- The command template comes **only from the user's config or the command line, never from task text** (rule 7); the task key is passed as an argument, never interpolated into a shell string.\n- The review watch moves to the runner: comments that arrive are handed to a session started to answer them (or to the next task's session).\n- `--pause` and `--with-user` keep working as prompts in the runner's terminal; the end-of-loop `/atm-push` runs in its own session.\n- Headless runs get only the skill's pre-approved commands (`skills/claude-code.json` for Claude Code), nothing broader.\n\n## Must not break the other harness integrations\n- **`/atm-loop-tasks` stays as it is** for harnesses without a headless mode and for users who loop in one session; the runner is an addition, not a replacement.\n- The skills stay portable (`name` and `description` frontmatter only, detail from `atm docs`): nothing Claude Code-specific goes into `skills/atm-*/SKILL.md`; harness-specific command templates are config examples in `docs/agent/` (Claude Code, Codex, Gemini CLI, opencode, ...), documented as examples, none hard-coded as a default.\n- `atm agents install` / `status` / `uninstall` for every harness (claude, agents, antigravity, and the tools that read them: codex, copilot, cursor, opencode, gemini) are unchanged: their tests in `tests/scripts/` pass as they are.\n- The public skills export (`.github/workflows/skills.yml`, `solo-swe/skills`) still exports the same skills.\n\n## Security\nAn atm command that starts processes is a new entry point: update `docs/security-architecture.md` in the same PR, and run the agent sandbox (or its written review, §3.3) since it changes what agents act on.\n\n## Tests\n- `atm-lib` unit tests for the runner's loop with a fake agent process (each outcome, a crash, a timeout, a lease expiring, nothing ready).\n- A CLI scenario in `tests/scripts/` running a stub agent command that finishes, blocks and fails tasks.\n- The existing `atm agents` and loop tests unchanged and passing.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "docs/fresh-session-loop.md",
@@ -19879,9 +19896,9 @@
         "tests/scripts/loop-run.test.mjs"
       ],
       "created_at": "2026-11-23T10:51:34Z",
-      "updated_at": "2026-11-23T10:52:58Z",
+      "updated_at": "2026-11-24T00:48:10Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:cf4e9e60",
+      "updated_by": "claude:ba530ebb",
       "components": [
         "cli",
         "docs"
@@ -19894,7 +19911,9 @@
           "from": "2026-11-23T10:52:58Z"
         }
       ],
-      "sprint": "Sidebar overhaul"
+      "sprint": "Sidebar overhaul",
+      "started_at": "2026-11-24T00:48:10Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a20922-b137-7532-a01a-b872ae882998",
