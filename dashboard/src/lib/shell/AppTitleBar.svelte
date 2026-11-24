@@ -122,7 +122,8 @@
     display: flex;
     gap: var(--space-3);
     height: 40px;
-    margin: calc(-1 * var(--space-9)) calc(-1 * var(--space-9)) 0;
+    /* Over the hidden sidebar's rail too (ATM-771): the rail is under it, so the bar keeps the window's width */
+    margin: calc(-1 * var(--space-9)) calc(-1 * var(--space-9)) 0 calc(-1 * (var(--space-9) + var(--sidebar-rail, 0px)));
     padding: 0 var(--space-2) 0 var(--space-3);
     position: sticky;
     top: 0;

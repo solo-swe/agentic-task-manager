@@ -1,5 +1,5 @@
 import { fireEvent, render } from '@testing-library/svelte';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { appTabs } from '../../src/lib/app-tabs.svelte';
 import type { ProjectEntry, ProjectSummary } from '../../src/lib/load';
 import { setPref } from '../../src/lib/prefs';
@@ -146,5 +146,130 @@ describe('Sidebar (ATM-753)', () => {
     dashboard.sidebarOpen = false;
     await Promise.resolve();
     expect(container.querySelector('#app-sidebar')).toBeNull();
+  });
+});
+
+describe('the hidden sidebar’s rail (ATM-771)', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    dashboard.projects = [project('a', 'Alpha', summary(40, 1, 0, 2)), project('b', 'Beta', summary(90))];
+    dashboard.projectsLoaded = true;
+    dashboard.route = { page: 'project', id: 'a' };
+    dashboard.tab = 'kanban';
+    dashboard.sidebarOpen = false;
+    appTabs.start('/projects/a/kanban');
+  });
+  afterEach(() => {
+    dashboard.sidebarOpen = true;
+    history.replaceState(null, '', '/');
+  });
+
+  const rail = (container: HTMLElement) => container.querySelector<HTMLElement>('#app-sidebar-rail');
+  const railItems = (container: HTMLElement) =>
+    [...container.querySelectorAll<HTMLAnchorElement>('.app-sidebar-rail-item')].map((a) => a.dataset.item);
+  const zone = (container: HTMLElement) => container.querySelector<HTMLElement>('.app-sidebar-zone')!;
+
+  it('hidden: the rail, the scope’s icon and each item’s icon and badge, no labels; the page leaves its room', () => {
+    const { container } = render(Sidebar);
+    expect(container.querySelector('#app-sidebar')).toBeNull();
+    expect(rail(container)).not.toBeNull();
+    expect(container.querySelector('#app-sidebar-rail-scope')).toHaveAttribute('data-scope', 'a');
+    expect(container.querySelector('#app-sidebar-rail-scope')).toHaveAttribute('title', 'Alpha');
+    expect(railItems(container)).toEqual(['overview', 'inbox', 'tasks', 'reviews', 'documents', 'analysis']);
+    // Icons only: the names are their labels and titles, never text
+    expect(rail(container)!.textContent?.replace(/\d/g, '').trim()).toBe('');
+    const reviews = container.querySelector('.app-sidebar-rail-item[data-item="reviews"]')!;
+    expect(reviews).toHaveAttribute('aria-label', 'Code Reviews (2 waiting for you)');
+    expect(reviews.querySelector('.app-sidebar-rail-badge')).toHaveTextContent('2');
+    expect(container.querySelector('.app-sidebar-rail-item[data-item="tasks"]')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(document.documentElement.style.getPropertyValue('--sidebar-offset')).toBe('0px');
+    expect(document.documentElement.style.getPropertyValue('--sidebar-rail')).toBe('44px');
+  });
+
+  it('All projects: its icon, and All’s items', async () => {
+    dashboard.route = { page: 'overview' };
+    setPref('sidebarScope', '');
+    const { container } = render(Sidebar);
+    await Promise.resolve();
+    expect(container.querySelector('#app-sidebar-rail-scope')).toHaveAttribute('title', 'All projects');
+    expect(railItems(container)).not.toContain('inbox');
+  });
+
+  it('the pointer resting on it shows the whole sidebar over the page, which keeps its room; leaving hides it, unsaved', async () => {
+    vi.useFakeTimers();
+    const { container } = render(Sidebar);
+    await fireEvent.mouseEnter(zone(container));
+    // Not at once: a quick click on an icon is the icon's
+    await vi.advanceTimersByTimeAsync(200);
+    expect(container.querySelector('#app-sidebar')).toBeNull();
+    await vi.advanceTimersByTimeAsync(100);
+    vi.useRealTimers();
+    const shown = container.querySelector('#app-sidebar')!;
+    expect(shown).not.toBeNull();
+    expect(shown).toHaveClass('peeking');
+    expect(document.documentElement.style.getPropertyValue('--sidebar-offset')).toBe('0px');
+    expect(dashboard.sidebarOpen).toBe(false);
+    await fireEvent.mouseLeave(zone(container));
+    expect(container.querySelector('#app-sidebar')).toBeNull();
+    expect(dashboard.sidebarOpen).toBe(false);
+  });
+
+  it('the keyboard’s focus in it shows it; the focus leaving, or Escape, hides it; a click’s focus doesn’t hold it', async () => {
+    const { container } = render(Sidebar);
+    const tasks = container.querySelector<HTMLElement>('.app-sidebar-rail-item[data-item="tasks"]')!;
+    await fireEvent.focusIn(tasks);
+    expect(container.querySelector('#app-sidebar')).not.toBeNull();
+    await fireEvent.focusOut(tasks, { relatedTarget: document.body });
+    expect(container.querySelector('#app-sidebar')).toBeNull();
+    await fireEvent.focusIn(tasks);
+    await fireEvent.keyDown(zone(container), { key: 'Escape' });
+    expect(container.querySelector('#app-sidebar')).toBeNull();
+    // A click's focus doesn't show it, nor hold it once the pointer leaves
+    await fireEvent.mouseEnter(zone(container));
+    await fireEvent.pointerDown(tasks);
+    await fireEvent.focusIn(tasks);
+    expect(container.querySelector('#app-sidebar')).toBeNull();
+    await fireEvent.mouseLeave(zone(container));
+    expect(container.querySelector('#app-sidebar')).toBeNull();
+  });
+
+  it('a quick click on an icon: its item, and no sidebar shown over the rail', async () => {
+    vi.useFakeTimers();
+    const { container } = render(Sidebar);
+    await fireEvent.mouseEnter(zone(container));
+    const reviews = container.querySelector<HTMLElement>('.app-sidebar-rail-item[data-item="reviews"]')!;
+    await fireEvent.pointerDown(reviews);
+    await fireEvent.click(reviews);
+    await vi.advanceTimersByTimeAsync(1000);
+    vi.useRealTimers();
+    expect(appTabs.current?.address).toBe('/projects/a/reviews');
+    expect(container.querySelector('#app-sidebar')).toBeNull();
+  });
+
+  it('a rail icon opens its item as the sidebar’s does: a new tab, ⌘-click in the background', async () => {
+    const { container } = render(Sidebar);
+    const first = appTabs.active;
+    await fireEvent.click(container.querySelector('.app-sidebar-rail-item[data-item="reviews"]')!);
+    expect(appTabs.tabs).toHaveLength(2);
+    expect(appTabs.current?.address).toBe('/projects/a/reviews');
+    expect(appTabs.active).not.toBe(first);
+    const shown = appTabs.active;
+    await fireEvent.click(container.querySelector('.app-sidebar-rail-item[data-item="analysis"]')!, { metaKey: true });
+    expect(appTabs.tabs).toHaveLength(3);
+    expect(appTabs.active).toBe(shown);
+  });
+
+  it('shown again (Show Sidebar), no rail; the sidebar takes its room', async () => {
+    const { container } = render(Sidebar);
+    dashboard.sidebarOpen = true;
+    await Promise.resolve();
+    expect(rail(container)).toBeNull();
+    expect(container.querySelector('#app-sidebar')).not.toHaveClass('peeking');
+    expect(document.documentElement.style.getPropertyValue('--sidebar-rail')).toBe('0px');
+    expect(document.documentElement.style.getPropertyValue('--sidebar-offset')).toBe('240px');
   });
 });

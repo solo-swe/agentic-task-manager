@@ -21679,7 +21679,7 @@
       "description": "[The documents design](docs/documents-design.md) §5: `GET …/projects/<id>/documents` without `path` (and `?q=`) answers `{documents, submodules, more}` with an `ETag`; with `path`, one document as now. v2 and v1 forms. The app's command `project_documents` (I27).\n\nA new read entry point: it keeps I11 and I12 (Host check, refused from other sites, registered projects only, nothing outside the project, no symlink). **In the same change:** `docs/security-architecture.md` and `docs/multi-project-api.md` §2.6.\n\n## Tests\natm-api unit tests on a fake atm-lib; serve tests for the route, its `ETag` and the cross-site refusal; the app's command test.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e8964a234ac5"
       ],
@@ -21690,7 +21690,7 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T18:53:47Z",
+      "updated_at": "2026-11-24T19:17:05Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21703,7 +21703,38 @@
       "review": "async",
       "number": 765,
       "started_at": "2026-11-24T18:53:47Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "8b00478d930b3bb72bbb0222f060f605ced7352a",
+      "code_reviews": [
+        {
+          "id": "01a20ef6-0b8d-7516-89ae-99dbe3f53821",
+          "ref": "CR-171"
+        }
+      ],
+      "review_requested_at": "2026-11-24T19:08:55Z",
+      "notes": [
+        {
+          "at": "2026-11-24T19:08:55Z",
+          "kind": "review",
+          "text": "CR-171: Documents: the listing route and the app's command",
+          "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T19:16:47Z",
+          "kind": "note",
+          "text": "Approved: in CR-171 (round 1)",
+          "by": "Hakan Serce"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T19:08:55Z",
+          "to": "2026-11-24T19:16:47Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T19:17:05Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e89835dfc661",
@@ -22053,7 +22084,7 @@
       "description": "From Hakan on CR-148 (ATM-753's review): with the sidebar overhaul the sidebar is how a user gets around the app, so a hidden one shouldn't leave nothing behind for a new user.\n\n## Change\n- **The rail:** in the app, with the sidebar hidden, a thin strip stays at the window's left edge (a few dozen px), icons only: the scope (the project's logo, or All's), then the scope's items' icons with their badges, in the sidebar's order. The page keeps its width less the rail.\n- **A hover shows the sidebar:** pointing at the rail (or focusing it with the keyboard) shows the full sidebar over the page, not pushing it, until the pointer or the focus leaves it; nothing is saved, it is still hidden after.\n- **Clicks work from either:** a rail icon opens its item as a sidebar item does (a new tab, ⌘-click in the background, ATM-753); so does an item of the shown sidebar.\n- **Show Sidebar** (the button, View ▸ Show Sidebar) still pins it open, as now; hiding it brings the rail back.\n- The browser has no sidebar (docs/sidebar-overhaul-design.md §5): no rail there.\n\n## Tests\n- Component tests (`Sidebar.component.test.ts`): hidden, the rail with the scope and each item's icon and badge, no labels; a hover or focus shows the full sidebar, leaving hides it; an icon's click opens its item.\n- e2e (`app.spec.ts`): the rail's width and the page's beside it; hovering shows the sidebar over the page, a click on an item there opens it, moving away hides it; Show Sidebar pins it.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e88bc947df5c"
       ],
@@ -22062,7 +22093,7 @@
         "dashboard/src/app.css"
       ],
       "created_at": "2026-11-24T16:33:19Z",
-      "updated_at": "2026-11-24T16:33:28Z",
+      "updated_at": "2026-11-24T19:17:10Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -22076,7 +22107,9 @@
       "number": 771,
       "components": [
         "dashboard"
-      ]
+      ],
+      "started_at": "2026-11-24T19:17:10Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a20e86-f20a-70b2-9d4a-35cff3a353eb",
@@ -22315,7 +22348,7 @@
         "dashboard/tests/e2e/helpers.ts"
       ],
       "created_at": "2026-11-24T18:24:38Z",
-      "updated_at": "2026-11-24T18:55:33Z",
+      "updated_at": "2026-11-24T19:11:33Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -22327,14 +22360,7 @@
       "sprint": "Sidebar overhaul",
       "review": "async",
       "number": 776,
-      "started_at": "2026-11-24T18:24:46Z",
-      "started_by": "claude:ba530ebb",
       "commit": "9dde7899f875d14951cdb3459e8641c8ffb6db48",
-      "waiting_on": "user",
-      "questions": [
-        "What does the start look like: tabs appearing one at a time, other tabs' pages or the root shown before the active one, or a blank window for a while? How many tabs and windows, of which kinds?"
-      ],
-      "blocked_at": "2026-11-24T18:44:09Z",
       "notes": [
         {
           "at": "2026-11-24T18:44:09Z",
@@ -22347,8 +22373,41 @@
           "kind": "note",
           "text": "Hakan: the tabs show one at a time. 3-4 tabs were open: 2 task boards, one specific review, probably the Code Reviews tab. Next: restore those kinds of tabs in the fixture (a review's own page among them) and watch the order shown.",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T19:09:26Z",
+          "kind": "answer",
+          "text": "What does the start look like: tabs appearing one at a time, other tabs' pages or the root shown before the active one, or a blank window for a while? How many tabs and windows, of which kinds? → The tabs show one at a time. 3-4 tabs: 2 task boards, a specific review, probably the Code Reviews tab.",
+          "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T19:11:33Z",
+          "kind": "note",
+          "text": "Still not reproduced: with 2 boards, a review's page and the Code Reviews list restored, the fixture shows all four tabs at once (~0.2 s) and loads only the active tab's project, whichever is active. The fixture stands in for the app's Rust side and its real data.",
+          "by": "claude:ba530ebb"
         }
-      ]
+      ],
+      "blocks": [
+        {
+          "from": "2026-11-24T18:44:09Z",
+          "to": "2026-11-24T19:09:26Z",
+          "on": "user"
+        }
+      ],
+      "attempts": [
+        {
+          "from": "2026-11-24T18:24:46Z",
+          "to": "2026-11-24T18:44:09Z",
+          "by": "claude:ba530ebb"
+        }
+      ],
+      "started_at": "2026-11-24T19:09:26Z",
+      "started_by": "claude:ba530ebb",
+      "waiting_on": "user",
+      "questions": [
+        "Which app was it: the installed release, or a build of this branch (tauri dev)? And what does 'one at a time' look like: tabs appearing in the strip one by one, the page switching through tabs, or several windows opening? A short screen recording would settle it."
+      ],
+      "blocked_at": "2026-11-24T19:11:33Z"
     }
   ]
 }

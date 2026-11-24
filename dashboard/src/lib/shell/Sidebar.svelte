@@ -33,10 +33,55 @@
 
   const MIN = 180;
   const MAX = 420;
+  /** The rail's width, while the sidebar is hidden (ATM-771) */
+  const RAIL = 44;
   const tabs = tabActions();
 
   let width = $state(Math.min(MAX, Math.max(MIN, getPref('sidebarWidth', 240))));
   let menuOpen = $state(false);
+
+  // Hidden, the sidebar is a rail of icons (ATM-771): the pointer over it, or the keyboard's focus in it, shows the
+  // whole sidebar over the page until both have left it (and the scope's menu is closed); nothing is kept
+  let hovering = $state(false);
+  let focused = $state(false);
+  // The pointer shows it once it rests on the rail a moment, so a quick click on a rail icon opens that icon's item
+  // rather than landing on the sidebar shown over it
+  const HOVER_DELAY = 250;
+  let hoverTimer: ReturnType<typeof setTimeout> | undefined;
+  function onzoneenter() {
+    if (dashboard.sidebarOpen || hovering) return;
+    clearTimeout(hoverTimer);
+    hoverTimer = setTimeout(() => (hovering = true), HOVER_DELAY);
+  }
+  function onzoneleave() {
+    clearTimeout(hoverTimer);
+    hovering = false;
+  }
+  onMount(() => () => clearTimeout(hoverTimer));
+  function onzonepointerdown() {
+    byPointer = true;
+    // A click on the rail itself: its item, not the sidebar
+    if (!hovering) clearTimeout(hoverTimer);
+  }
+  const peeking = $derived(!dashboard.sidebarOpen && (hovering || focused || menuOpen));
+  // A focus a click gives isn't the keyboard's: it would hold the sidebar shown after the pointer left
+  let byPointer = false;
+  function onfocusin() {
+    if (!byPointer) focused = true;
+    byPointer = false;
+  }
+  function onfocusout(e: FocusEvent) {
+    const to = e.relatedTarget as Node | null;
+    const zone = e.currentTarget as HTMLElement;
+    if (!to || (!zone.contains(to) && !document.getElementById('app-sidebar-scopes')?.contains(to))) focused = false;
+  }
+  function onzonekeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape' && peeking && !menuOpen) {
+      focused = false;
+      hovering = false;
+      (document.activeElement as HTMLElement | null)?.blur();
+    }
+  }
 
   // The active tab's page's scope: a project's, All's, or none (the landing page's choice, the new tab)
   const pageScope = $derived<Scope | undefined>(
@@ -93,11 +138,17 @@
     void appShell().then((s) => (shell = s));
   });
 
-  // The page leaves room for it: the title bar and the page shift by its width (app.css, --sidebar-offset)
+  // The page leaves room for it: the title bar and the page shift by its width (app.css, --sidebar-offset); hidden, the
+  // page leaves the rail's (--sidebar-rail), which is under the title bar, so the bar keeps the window's width. Shown
+  // over the page from the rail, it takes no more room
   $effect(() => {
-    const offset = dashboard.sidebarOpen ? `${width}px` : '0px';
-    document.documentElement.style.setProperty('--sidebar-offset', offset);
-    return () => document.documentElement.style.removeProperty('--sidebar-offset');
+    const style = document.documentElement.style;
+    style.setProperty('--sidebar-offset', dashboard.sidebarOpen ? `${width}px` : '0px');
+    style.setProperty('--sidebar-rail', dashboard.sidebarOpen ? '0px' : `${RAIL}px`);
+    return () => {
+      style.removeProperty('--sidebar-offset');
+      style.removeProperty('--sidebar-rail');
+    };
   });
 
   /** A project's progress as its overview card counts it (T-533): the active sprint's, else the whole project's (the
@@ -180,117 +231,170 @@
   {/if}
 {/snippet}
 
-{#if dashboard.sidebarOpen}
-  <nav class="app-sidebar" id="app-sidebar" aria-label="Sidebar" style:width="{width}px">
-    <!-- Its top strip, the title bar's height (T-535): room for macOS's traffic lights, then the sidebar button; its
+<!-- The rail and the sidebar it shows: the pointer leaving both, or the focus, hides it again (ATM-771) -->
+<div
+  class="app-sidebar-zone"
+  role="presentation"
+  onmouseenter={onzoneenter}
+  onmouseleave={onzoneleave}
+  onpointerdown={onzonepointerdown}
+  {onfocusin}
+  {onfocusout}
+  onkeydown={onzonekeydown}
+>
+  {#if !dashboard.sidebarOpen}
+    <!-- Hidden: a rail at the window's left edge, under the title bar, with the scope's icon and its items' icons -->
+    <nav class="app-sidebar-rail" id="app-sidebar-rail" aria-label="Sidebar, hidden: point at it to show it">
+      <span
+        class="app-sidebar-rail-scope"
+        id="app-sidebar-rail-scope"
+        data-scope={scope ?? ''}
+        title={scope === null ? 'All projects' : (scoped?.name ?? scope)}
+      >
+        {#if scope !== null && scoped}<ProjectLogo project={scoped} size={20} />{:else}<Icon
+            name="layout-grid"
+            size={18}
+          />{/if}
+      </span>
+      <ul class="app-sidebar-rail-list">
+        {#each itemsOf(scope) as item (item)}
+          {@const address = itemAddress(dashboard.workspace, scope, item)}
+          {@const badge = badgeOf(item)}
+          {#if address}
+            <li>
+              <a
+                class="app-sidebar-rail-item"
+                class:current={currentItem === item}
+                aria-current={currentItem === item ? 'page' : undefined}
+                aria-label={badge ? `${ITEM_NAMES[item]} (${badge} waiting for you)` : ITEM_NAMES[item]}
+                title={ITEM_NAMES[item]}
+                href={address}
+                data-item={item}
+                onclick={(e) => open(e, address)}
+                onauxclick={(e) => open(e, address)}
+                ><Icon name={ITEM_ICONS[item]} size={18} />{#if badge}<span class="app-sidebar-rail-badge">{badge}</span
+                  >{/if}</a
+              >
+            </li>
+          {/if}
+        {/each}
+      </ul>
+    </nav>
+  {/if}
+  {#if dashboard.sidebarOpen || peeking}
+    <nav class="app-sidebar" class:peeking id="app-sidebar" aria-label="Sidebar" style:width="{width}px">
+      <!-- Its top strip, the title bar's height (T-535): room for macOS's traffic lights, then the sidebar button; its
          free space drags the window, as the title bar's does -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      class="app-sidebar-top"
-      class:system-buttons={shell?.system_window_buttons}
-      id="app-sidebar-top"
-      onmousedown={onBarMouseDown}
-    >
-      <!-- Back and Forward left of the toggle (ATM-695), as in the title bar while the sidebar is closed -->
-      <HistoryArrows />
-      <SidebarToggle />
-    </div>
-    <!-- The scope (§2.1): All projects, then the workspace's projects; missing ones dimmed and not chosen. Its list
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="app-sidebar-top"
+        class:system-buttons={shell?.system_window_buttons}
+        id="app-sidebar-top"
+        onmousedown={onBarMouseDown}
+      >
+        <!-- Back and Forward left of the toggle (ATM-695), as in the title bar while the sidebar is closed -->
+        <HistoryArrows />
+        <SidebarToggle />
+      </div>
+      <!-- The scope (§2.1): All projects, then the workspace's projects; missing ones dimmed and not chosen. Its list
          floats over the window under the button (Bits UI's portal, ATM-774): never clipped by the sidebar or its
          width, over its edge when the sidebar is narrow -->
-    <DropdownMenu.Root bind:open={menuOpen}>
-      <DropdownMenu.Trigger>
-        {#snippet child({ props })}
-          <button
-            {...props}
-            class="app-sidebar-item app-sidebar-scope"
-            id="app-sidebar-scope"
-            data-scope={scope ?? ''}
-            aria-label="Scope: {scope === null ? 'All projects' : (scoped?.name ?? scope)}; choose another"
-            >{@render scopeLabel(scope === null ? null : scoped, false)}<span class="app-sidebar-chevron"
-              ><Icon name="chevron-down" size={14} /></span
-            ></button
+      <DropdownMenu.Root bind:open={menuOpen}>
+        <DropdownMenu.Trigger>
+          {#snippet child({ props })}
+            <button
+              {...props}
+              class="app-sidebar-item app-sidebar-scope"
+              id="app-sidebar-scope"
+              data-scope={scope ?? ''}
+              aria-label="Scope: {scope === null ? 'All projects' : (scoped?.name ?? scope)}; choose another"
+              >{@render scopeLabel(scope === null ? null : scoped, false)}<span class="app-sidebar-chevron"
+                ><Icon name="chevron-down" size={14} /></span
+              ></button
+            >
+          {/snippet}
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content
+            side="bottom"
+            align="start"
+            sideOffset={4}
+            collisionPadding={8}
+            preventScroll={false}
+            aria-label="Scopes"
           >
-        {/snippet}
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content
-          side="bottom"
-          align="start"
-          sideOffset={4}
-          collisionPadding={8}
-          preventScroll={false}
-          aria-label="Scopes"
-        >
-          {#snippet child({ props, wrapperProps })}
-            <div {...wrapperProps}>
-              <div {...props} class="app-sidebar-scopes" id="app-sidebar-scopes">
-                <DropdownMenu.Item onSelect={() => choose(null)}>
-                  {#snippet child({ props })}
-                    <button
-                      {...props}
-                      class="app-sidebar-item"
-                      class:current={scope === null}
-                      aria-current={scope === null ? 'true' : undefined}
-                      data-scope="">{@render scopeLabel(null, true)}</button
-                    >
-                  {/snippet}
-                </DropdownMenu.Item>
-                {#each dashboard.projects as project (project.id)}
-                  <DropdownMenu.Item disabled={project.missing} onSelect={() => choose(project.id)}>
+            {#snippet child({ props, wrapperProps })}
+              <!-- Its wrapper is what is placed over the window: over the sidebar, the page's header and the sidebar
+                   shown from the rail (60), whatever z-index Bits UI read for it -->
+              <div {...wrapperProps} style:z-index="70">
+                <div {...props} class="app-sidebar-scopes" id="app-sidebar-scopes">
+                  <DropdownMenu.Item onSelect={() => choose(null)}>
                     {#snippet child({ props })}
                       <button
                         {...props}
                         class="app-sidebar-item"
-                        class:current={scope === project.id}
-                        class:missing={project.missing}
-                        aria-current={scope === project.id ? 'true' : undefined}
-                        title={project.missing ? `${project.path}: not found` : project.path}
-                        data-scope={project.id}>{@render scopeLabel(project, true)}</button
+                        class:current={scope === null}
+                        aria-current={scope === null ? 'true' : undefined}
+                        data-scope="">{@render scopeLabel(null, true)}</button
                       >
                     {/snippet}
                   </DropdownMenu.Item>
-                {/each}
+                  {#each dashboard.projects as project (project.id)}
+                    <DropdownMenu.Item disabled={project.missing} onSelect={() => choose(project.id)}>
+                      {#snippet child({ props })}
+                        <button
+                          {...props}
+                          class="app-sidebar-item"
+                          class:current={scope === project.id}
+                          class:missing={project.missing}
+                          aria-current={scope === project.id ? 'true' : undefined}
+                          title={project.missing ? `${project.path}: not found` : project.path}
+                          data-scope={project.id}>{@render scopeLabel(project, true)}</button
+                        >
+                      {/snippet}
+                    </DropdownMenu.Item>
+                  {/each}
+                </div>
               </div>
-            </div>
-          {/snippet}
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
-    <!-- The scope's items (§2.2): each a link to its page, opened in a new tab -->
-    <ul class="app-sidebar-list" aria-label="{scope === null ? 'All projects' : (scoped?.name ?? scope)}: pages">
-      {#each itemsOf(scope) as item (item)}
-        {@const address = itemAddress(dashboard.workspace, scope, item)}
-        {@const badge = badgeOf(item)}
-        {#if address}
-          <li>
-            <a
-              class="app-sidebar-item app-sidebar-link"
-              class:current={currentItem === item}
-              aria-current={currentItem === item ? 'page' : undefined}
-              href={address}
-              data-item={item}
-              onclick={(e) => open(e, address)}
-              onauxclick={(e) => open(e, address)}
-              ><span class="app-sidebar-icon"><Icon name={ITEM_ICONS[item]} size={16} /></span>
-              <span class="app-sidebar-name">{ITEM_NAMES[item]}</span>
-              {#if badge}<span class="app-sidebar-badge" title="{badge} waiting for you">{badge}</span>{/if}</a
-            >
-          </li>
-        {/if}
-      {/each}
-    </ul>
-    <!-- The edge: drag it, or focus it and use the arrows, to resize -->
-    <button
-      class="app-sidebar-edge"
-      id="app-sidebar-edge"
-      aria-label="Resize the sidebar ({width} pixels; the arrow keys change it)"
-      title="Drag to resize"
-      {onpointerdown}
-      {onkeydown}
-    ></button>
-  </nav>
-{/if}
+            {/snippet}
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+      <!-- The scope's items (§2.2): each a link to its page, opened in a new tab -->
+      <ul class="app-sidebar-list" aria-label="{scope === null ? 'All projects' : (scoped?.name ?? scope)}: pages">
+        {#each itemsOf(scope) as item (item)}
+          {@const address = itemAddress(dashboard.workspace, scope, item)}
+          {@const badge = badgeOf(item)}
+          {#if address}
+            <li>
+              <a
+                class="app-sidebar-item app-sidebar-link"
+                class:current={currentItem === item}
+                aria-current={currentItem === item ? 'page' : undefined}
+                href={address}
+                data-item={item}
+                onclick={(e) => open(e, address)}
+                onauxclick={(e) => open(e, address)}
+                ><span class="app-sidebar-icon"><Icon name={ITEM_ICONS[item]} size={16} /></span>
+                <span class="app-sidebar-name">{ITEM_NAMES[item]}</span>
+                {#if badge}<span class="app-sidebar-badge" title="{badge} waiting for you">{badge}</span>{/if}</a
+              >
+            </li>
+          {/if}
+        {/each}
+      </ul>
+      <!-- The edge: drag it, or focus it and use the arrows, to resize -->
+      <button
+        class="app-sidebar-edge"
+        id="app-sidebar-edge"
+        aria-label="Resize the sidebar ({width} pixels; the arrow keys change it)"
+        title="Drag to resize"
+        {onpointerdown}
+        {onkeydown}
+      ></button>
+    </nav>
+  {/if}
+</div>
 
 <style>
   /* A column of the window's full height, as Notion's (T-535): the title bar is only over the area right of it */
@@ -304,6 +408,77 @@
     position: fixed;
     top: 0;
     z-index: 30;
+  }
+  /* The rail and the sidebar shown from it take no place of their own in the page: both are fixed */
+  .app-sidebar-zone {
+    display: contents;
+  }
+  /* Shown from the rail (ATM-771): over the page, which keeps its place, with a shadow to tell it apart */
+  .app-sidebar.peeking {
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--overlay) 60%, transparent);
+    /* Over the title bar too (its z-index is 50), as the sidebar is a column of the window's full height */
+    z-index: 60;
+  }
+  /* Hidden: a thin rail at the window's left edge, under the title bar (which keeps the window's width), the icons in
+     a column */
+  .app-sidebar-rail {
+    align-items: center;
+    background: var(--surface2);
+    border-right: 1px solid var(--border);
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    left: 0;
+    overflow-y: auto;
+    padding: var(--space-3) 0;
+    position: fixed;
+    top: 40px;
+    width: 44px;
+    z-index: 30;
+  }
+  .app-sidebar-rail-scope {
+    align-items: center;
+    color: var(--text-muted);
+    display: inline-flex;
+  }
+  .app-sidebar-rail-list {
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    list-style: none;
+    margin: 0;
+    padding: var(--space-3) 0 0;
+  }
+  .app-sidebar-rail-item {
+    align-items: center;
+    border-radius: var(--radius-md);
+    color: var(--text-muted);
+    display: inline-flex;
+    justify-content: center;
+    padding: var(--space-2);
+    position: relative;
+  }
+  .app-sidebar-rail-item:hover,
+  .app-sidebar-rail-item.current {
+    background: var(--surface);
+  }
+  .app-sidebar-rail-item.current {
+    color: var(--accent);
+  }
+  /* Its badge on the icon's corner */
+  .app-sidebar-rail-badge {
+    background: var(--accent);
+    border-radius: var(--radius-pill);
+    color: var(--on-accent);
+    font-size: var(--text-2xs);
+    font-weight: 600;
+    line-height: 1.4;
+    padding: 0 var(--space-1);
+    position: absolute;
+    right: calc(-1 * var(--space-1));
+    top: calc(-1 * var(--space-1));
   }
   /* Its top strip: the title bar's height and colour, the button on its middle line, pinned while the list scrolls */
   .app-sidebar-top {

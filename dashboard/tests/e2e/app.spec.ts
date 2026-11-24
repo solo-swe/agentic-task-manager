@@ -1079,6 +1079,61 @@ test.describe('the dashboard in the atm app', () => {
     await expect.poll(async () => Math.round((await box(bar)).x)).toBe(edge);
   });
 
+  test('hidden, the sidebar is a rail of icons beside the page; pointing at it shows the sidebar over the page; Show Sidebar pins it (ATM-771)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    await page.goto(`/projects/${tasksServer.projectId}/kanban`);
+    const sidebar = page.locator('#app-sidebar');
+    const rail = page.locator('#app-sidebar-rail');
+    const bar = page.locator('#app-titlebar');
+    const tabs = page.locator('#app-titlebar [role="tab"]');
+    const box = async (l: ReturnType<typeof page.locator>) => (await l.boundingBox())!;
+    await expect(sidebar).toBeVisible();
+    await expect(rail).toHaveCount(0);
+    await page.locator('#app-sidebar-toggle').click();
+    // Hidden: the rail at the window's left edge under the title bar, which keeps the window's width; the page beside it
+    await expect(sidebar).toHaveCount(0);
+    await expect(rail).toBeVisible();
+    const strip = await box(rail);
+    const barBox = await box(bar);
+    expect([Math.round(strip.x), Math.round(strip.width)]).toEqual([0, 44]);
+    expect(Math.round(strip.y)).toBe(Math.round(barBox.y + barBox.height));
+    expect(Math.round(barBox.x)).toBe(0);
+    const main = await box(page.locator('#app-main'));
+    expect(main.x).toBeGreaterThanOrEqual(strip.x + strip.width);
+    await expect(rail.locator('.app-sidebar-rail-item')).toHaveCount(6);
+    await expect(rail.locator('[data-item="tasks"]')).toHaveAttribute('aria-current', 'page');
+    // Pointing at it: the whole sidebar over the page, which stays where it is
+    await rail.locator('[data-item="overview"]').hover();
+    await expect(sidebar).toBeVisible();
+    await expect(sidebar).toHaveClass(/peeking/);
+    expect(Math.round((await box(sidebar)).x)).toBe(0);
+    expect((await box(page.locator('#app-main'))).x).toBe(main.x);
+    // A click on one of its items opens it in a new tab, as the sidebar's items do
+    await sidebar.locator('[data-item="analysis"]').click();
+    await expect(tabs).toHaveCount(2);
+    await expect.poll(() => addressOf(page)).toMatch(/\/progress(\?|$)/);
+    // The pointer leaving: hidden again, still the rail; nothing was saved
+    await page.mouse.move(600, 400);
+    await expect(sidebar).toHaveCount(0);
+    await expect(rail).toBeVisible();
+    // A rail icon's own click opens its item too
+    await rail.locator('[data-item="reviews"]').click();
+    await expect(tabs).toHaveCount(3);
+    await page.mouse.move(600, 400);
+    await expect(sidebar).toHaveCount(0);
+    // Show Sidebar pins it: the sidebar takes its room, no rail
+    await page.locator('#app-titlebar #app-sidebar-toggle').click();
+    await expect(sidebar).toBeVisible();
+    await expect(sidebar).not.toHaveClass(/peeking/);
+    await expect(rail).toHaveCount(0);
+    await page.mouse.move(600, 400);
+    await expect(sidebar).toBeVisible();
+  });
+
   test('Progress and Activity are the tab’s: at the right of its subtitle line, not in the title bar; they give way on a narrow tab (T-530)', async ({
     page,
     tasksServer,
