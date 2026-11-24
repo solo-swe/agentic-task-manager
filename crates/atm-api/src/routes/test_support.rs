@@ -41,6 +41,8 @@ pub(super) enum Call {
     FileVersion(String),
     Head,
     Document(String),
+    Documents(String),
+    DocumentsStamp,
     Image(String),
     DocumentAt(String, String),
     ImageAt(String, String),
@@ -163,6 +165,10 @@ pub(super) struct FakeProject {
     pub inbox: Result<Value>,
     /// What a change of its inbox answers (the item); an error refuses to open the project as the user
     pub inbox_changes: Result<Result<Value>>,
+    /// What listing its documents answers (ATM-765)
+    pub documents: Result<Value>,
+    /// What its documents' listing is made from: none without git
+    pub documents_stamp: Result<Option<String>>,
 }
 
 impl Default for FakeProject {
@@ -185,6 +191,10 @@ impl Default for FakeProject {
             live_stamp: Ok(None),
             inbox: Ok(json!({"items": [], "created": 0, "discarded": 0, "injected": 0})),
             inbox_changes: Ok(Ok(json!({"id": "IN-1", "state": "created"}))),
+            documents: Ok(
+                json!({"documents": [{"path": "README.md", "title": "Read me"}], "submodules": [], "more": 0}),
+            ),
+            documents_stamp: Ok(Some("s1".into())),
         }
     }
 }
@@ -385,6 +395,16 @@ impl ProjectSource for Bound<FakeProject> {
     fn document(&self, path: &str) -> Result<Value> {
         self.calls.note(Call::Document(path.into()));
         self.file(path)?.document
+    }
+
+    fn documents(&self, query: &str) -> Result<Value> {
+        self.calls.note(Call::Documents(query.into()));
+        self.fake.documents.clone()
+    }
+
+    fn documents_stamp(&self) -> Result<Option<String>> {
+        self.calls.note(Call::DocumentsStamp);
+        self.fake.documents_stamp.clone()
     }
 
     fn document_at(&self, path: &str, revision: &str) -> Result<Value> {

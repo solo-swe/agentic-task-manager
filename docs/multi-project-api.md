@@ -30,6 +30,7 @@ parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev
 | `GET /p/<id>/logo` | that project's logo image (§2.3) | yes |
 | `GET /api/v1/projects/<id>/tasks` | that project's tasks, each with what atm derives for it (§2.5) | yes |
 | `GET /api/v1/projects/<id>/documents?path=<p>` | a file of that project, for the document viewer (§2.6); `&at=<rev>` as a commit or tree has it | yes (with `at`, only at a full object ID, kept by the browser) |
+| `GET /api/v1/projects/<id>/documents` (no `path`; `?q=`) | the project's documents, for the Documents page (§2.6, ATM-765) | yes |
 | `GET /api/v1/projects/<id>/files?path=<p>` | an image file of that project, its bytes (§2.6) | yes |
 | `GET /api/v1/projects/<id>/reviews?q=&status=&…` | that project's code reviews (§2.9) | no |
 | `GET /api/v1/projects/<id>/reviews/<CR>?round=&against=` | a review's page for one view of it (§2.9) | no |
@@ -40,6 +41,7 @@ parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev
 | `GET /api/v2/workspaces/<w>/search?q=<text>` | the tasks matching a search, in its projects (§2.4) | no |
 | `GET /api/v2/workspaces/<w>/projects/<id>/tasks` | as `api/v1/projects/<id>/tasks`, in that workspace | yes |
 | `GET /api/v2/workspaces/<w>/projects/<id>/documents?path=`, `files?path=` | as the v1 file routes (§2.6) | yes |
+| `GET /api/v2/workspaces/<w>/projects/<id>/documents` (no `path`; `?q=`) | as v1's documents listing (§2.6) | yes |
 | `GET /api/v2/workspaces/<w>/projects/<id>/claims`, `worktrees`, `logo` | as `/p/<id>/claims.json`, `worktrees.json`, `logo` | yes |
 | `GET /api/v2/workspaces/<w>/projects/<id>/reviews`, `reviews/<CR>` | as the v1 review routes (§2.9) | no |
 | `POST`, `PATCH`, `PUT` `/api/v2/workspaces/<w>/projects/<id>/reviews/…` | a change to that project's code reviews, from atm's own page (§2.9) | no |
@@ -291,6 +293,14 @@ reads the working copy through the version control. `path` is relative to the pr
   With `&at=<revision>` (ATM-689: a review's image file, its old and new sides), the image as that commit or tree has
   it, through `documents?…&at=`'s checks and then the image's; kept as `documents?…&at=` is at a full object ID
   (tagged by the revision and the path, `immutable`), neither tagged nor kept at any other revision.
+- `documents` without `path` (and without `at`; ATM-765, docs/documents-design.md §5) answers the project's documents,
+  for the Documents page: `{documents: [{path, title, bytes, modified_at, tracked}], submodules: [{path,
+  checked_out}], more}`. Its Markdown files (`*.md`, `*.markdown`) that git lists, tracked or new (`tracked` false),
+  never one git ignores, in `.git` or `.agentic-task-manager`, or reached through a symlink; a submodule's documents
+  among them by their path from the project's root; at most 500, `more` saying how many were left out. `?q=` (at most
+  200 characters, else `400`) keeps those whose title or path holds it, before the cap. The ETag is what the listing is
+  made from (the files git lists, their versions, the commit) and the query; a project outside git has none. Read-only,
+  answered by atm-docs' `list_documents` through atm-lib, as the app's `project_documents` command (I27).
 - Refused: a malformed path (`..`, absolute, empty parts, a backslash, over 512 characters) `400`; git's or atm's own
   folder (`.git`, `.agentic-task-manager`), an environment file (`.env`, `.env.local`; not `.env.example`), a key file
   (`*.pem`, `id_rsa*`, …) or one git ignores `403` (other hidden files, `.github/` or `.gitignore`, are shown: CR-3); a missing file, or one reached through a

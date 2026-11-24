@@ -91,6 +91,17 @@ pub trait ProjectSource {
     /// # Errors
     /// As [`ProjectSource::file_version`].
     fn document(&self, path: &str) -> Result<Value>;
+    /// Its documents, for the Documents page (ATM-765): those `query` names (titles and paths), at most 500, with its
+    /// submodules and how many more there were (`{documents, submodules, more}`).
+    ///
+    /// # Errors
+    /// A project that can't be opened; a query longer than 200 characters (`Invalid`).
+    fn documents(&self, query: &str) -> Result<Value>;
+    /// What its documents' listing is made from, for its `ETag`: none without git (then it isn't tagged).
+    ///
+    /// # Errors
+    /// A project that can't be opened.
+    fn documents_stamp(&self) -> Result<Option<String>>;
     /// The image at `path`, and its content type.
     ///
     /// # Errors
@@ -350,6 +361,14 @@ impl ProjectSource for Member {
 
     fn document(&self, path: &str) -> Result<Value> {
         Member::document(self, path)
+    }
+
+    fn documents(&self, query: &str) -> Result<Value> {
+        Member::documents(self, query)
+    }
+
+    fn documents_stamp(&self) -> Result<Option<String>> {
+        Member::documents_stamp(self)
     }
 
     fn image(&self, path: &str) -> Result<(Vec<u8>, &'static str)> {

@@ -209,6 +209,15 @@ pub fn document_of(
     })
 }
 
+/// `GET …/projects/<p>/documents` without a path (`?q=`): its documents, its submodules, and how many more past the
+/// cap (ATM-765).
+///
+/// # Errors
+/// No such workspace or project; a query longer than 200 characters.
+pub fn documents_of(workspaces: &Workspaces, w: &str, p: &str, q: &str) -> Result<Value, AppError> {
+    Ok(member(workspaces, w, p)?.documents(q)?)
+}
+
 /// `GET …/projects/<p>/reviews`: its reviews the filters keep, which need the user.
 ///
 /// # Errors
@@ -409,6 +418,27 @@ pub async fn document(
         &project,
         &path,
         at.as_deref(),
+    )
+    .map(Json)
+}
+
+/// A project's documents, for the Documents page (ATM-765): those `q` names (titles and paths), at most 500.
+///
+/// # Errors
+/// As [`documents_of`].
+#[tauri::command]
+#[specta::specta]
+pub async fn project_documents(
+    state: State<'_, AppState>,
+    workspace: String,
+    project: String,
+    q: Option<String>,
+) -> Result<Json, AppError> {
+    documents_of(
+        &state.workspaces,
+        &workspace,
+        &project,
+        q.as_deref().unwrap_or_default(),
     )
     .map(Json)
 }

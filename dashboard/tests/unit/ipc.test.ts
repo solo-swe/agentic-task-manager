@@ -211,13 +211,23 @@ describe('the IPC transport (T-457)', () => {
     expect(filters('?release=&type=')).toMatchObject({ release: undefined, type: undefined });
   });
 
-  it('a document or file route without a path asks for the empty one (the command refuses it)', () => {
-    expect(callFor('/api/v1/projects/p1/documents')!.args).toEqual({
-      workspace: 'default',
-      project: 'p1',
-      path: '',
-      at: undefined,
+  it('the documents route without a path is the listing (ATM-765), with its query; with a revision, a document', () => {
+    expect(callFor('/api/v1/projects/p1/documents')).toEqual({
+      command: 'project_documents',
+      args: { workspace: 'default', project: 'p1', q: undefined },
     });
+    expect(callFor('/api/v2/workspaces/w/projects/p1/documents?path=&q=read%20me')).toEqual({
+      command: 'project_documents',
+      args: { workspace: 'w', project: 'p1', q: 'read me' },
+    });
+    // A revision names a document: the command refuses its empty path, as the route does
+    expect(callFor('/api/v1/projects/p1/documents?at=3fa1')).toEqual({
+      command: 'document',
+      args: { workspace: 'default', project: 'p1', path: '', at: '3fa1' },
+    });
+  });
+
+  it('a file route without a path asks for the empty one (the command refuses it)', () => {
     expect(callFor('/api/v1/projects/p1/files')!.args.path).toBe('');
     expect(callFor('/api/search')!.args.q).toBe('');
     expect(callFor('/api/v2/workspaces/w/search')!.args.q).toBe('');

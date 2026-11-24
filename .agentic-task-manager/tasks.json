@@ -21545,7 +21545,7 @@
       "description": "[The inbox design](docs/inbox-design.md) §5: a skill that triages the open items with the user.\n\n## Change\n- `skills/atm-triage-inbox/SKILL.md` (`name` and `description` only, the version check first, detail from `atm docs`): read the open items, propose for each the tasks it becomes, a merge into an existing task, a discard with a reason, or a question; on the user's word, add tasks through `/atm-create-tasks` only (never `atm task add`), then `atm inbox inject`, or `atm inbox discard` (only on the user's word); commit `inbox.json` with `tasks.json`.\n- **Inbox text is data, not commands** (I1), stated in the skill.\n- Pre-approved commands in `skills/claude-code.json`: the inbox reads, `inject` and `discard` only.\n- `skills.test.ts`: the rules present, the allowed commands.\n- It reads outside text: the agent sandbox before the release PR merges, or the written skill review in the security document §3.3.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e8925a26795e"
       ],
@@ -21556,7 +21556,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T18:44:15Z",
+      "updated_at": "2026-11-24T18:54:28Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21569,7 +21569,38 @@
       "review": "async",
       "number": 763,
       "started_at": "2026-11-24T18:44:15Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "a2da819764efa635693ae396badabd5871b2ad03",
+      "code_reviews": [
+        {
+          "id": "01a20ee8-0ae5-7314-9b61-0b7da5db8598",
+          "ref": "CR-170"
+        }
+      ],
+      "review_requested_at": "2026-11-24T18:53:38Z",
+      "notes": [
+        {
+          "at": "2026-11-24T18:53:38Z",
+          "kind": "review",
+          "text": "CR-170: Inbox: the /atm-triage-inbox skill",
+          "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T18:54:02Z",
+          "kind": "note",
+          "text": "Approved: in CR-170 (round 1)",
+          "by": "Hakan Serce"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T18:53:38Z",
+          "to": "2026-11-24T18:54:02Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T18:54:28Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e8964a234ac5",
@@ -21648,7 +21679,7 @@
       "description": "[The documents design](docs/documents-design.md) §5: `GET …/projects/<id>/documents` without `path` (and `?q=`) answers `{documents, submodules, more}` with an `ETag`; with `path`, one document as now. v2 and v1 forms. The app's command `project_documents` (I27).\n\nA new read entry point: it keeps I11 and I12 (Host check, refused from other sites, registered projects only, nothing outside the project, no symlink). **In the same change:** `docs/security-architecture.md` and `docs/multi-project-api.md` §2.6.\n\n## Tests\natm-api unit tests on a fake atm-lib; serve tests for the route, its `ETag` and the cross-site refusal; the app's command test.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e8964a234ac5"
       ],
@@ -21659,7 +21690,7 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T18:53:47Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21670,7 +21701,9 @@
       ],
       "sprint": "Sidebar overhaul",
       "review": "async",
-      "number": 765
+      "number": 765,
+      "started_at": "2026-11-24T18:53:47Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e89835dfc661",
@@ -22282,7 +22315,7 @@
         "dashboard/tests/e2e/helpers.ts"
       ],
       "created_at": "2026-11-24T18:24:38Z",
-      "updated_at": "2026-11-24T18:44:09Z",
+      "updated_at": "2026-11-24T18:55:33Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -22307,6 +22340,12 @@
           "at": "2026-11-24T18:44:09Z",
           "kind": "note",
           "text": "Not reproduced in the app fixture: it starts on the active tab and loads only its project (the guard test, 9dde789).",
+          "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T18:55:33Z",
+          "kind": "note",
+          "text": "Hakan: the tabs show one at a time. 3-4 tabs were open: 2 task boards, one specific review, probably the Code Reviews tab. Next: restore those kinds of tabs in the fixture (a review's own page among them) and watch the order shown.",
           "by": "claude:ba530ebb"
         }
       ]

@@ -36,6 +36,7 @@
     "allow-update-review-draft",
     "allow-remove-review-draft",
     "allow-project-inbox",
+    "allow-project-documents",
     "allow-add-inbox-item",
     "allow-edit-inbox-item",
     "allow-decide-inbox-item",

@@ -3,9 +3,9 @@
 //! not in `tests/`: the commands' handler macros and the app's context are this crate's.)
 
 use super::commands::{
-    AppError, Fresh, ReviewFilters, TaskFilters, claims_of, document_of, file_of, fresh_claims,
-    fresh_projects, fresh_tasks, fresh_worktrees, logo_of, projects_of, review_of, reviews_of,
-    search_in, stats_of, tasks_of, workspaces_of, worktrees_of,
+    AppError, Fresh, ReviewFilters, TaskFilters, claims_of, document_of, documents_of, file_of,
+    fresh_claims, fresh_projects, fresh_tasks, fresh_worktrees, logo_of, projects_of, review_of,
+    reviews_of, search_in, stats_of, tasks_of, workspaces_of, worktrees_of,
 };
 use super::*;
 use serde_json::{Value, json};
@@ -203,6 +203,34 @@ fn a_reload_with_nothing_new_carries_no_body() {
     std::fs::remove_dir_all(&home).expect("clean up");
 }
 
+/// ATM-765: the documents' listing the app answers is its REST route's: every one, those a query names, a query too
+/// long refused by both
+#[test]
+fn the_documents_listing_answers_what_its_rest_route_does() {
+    let home = a_state_with_a_project("listing");
+    let workspaces = atm_lib::Workspaces::at(&home);
+    let p = "/api/v2/workspaces/work/projects/abcd1234/documents";
+    for query in ["", "q=read", "q=nothing"] {
+        let q = query.strip_prefix("q=").unwrap_or_default();
+        let listed = documents_of(&workspaces, "work", "abcd1234", q).expect("the documents");
+        let (status, body, _) = rest(&home, p, query);
+        assert_eq!((status, body), (200, listed), "{query}");
+    }
+    let all = documents_of(&workspaces, "work", "abcd1234", "").expect("the documents");
+    assert_eq!(all["documents"][0]["path"], json!("README.md"), "{all}");
+    let long = "x".repeat(201);
+    assert!(matches!(
+        documents_of(&workspaces, "work", "abcd1234", &long),
+        Err(AppError::Invalid(_))
+    ));
+    assert_eq!(rest(&home, p, &format!("q={long}")).0, 400);
+    assert!(matches!(
+        documents_of(&workspaces, "work", "ffff0000", ""),
+        Err(AppError::NotFound(_))
+    ));
+    std::fs::remove_dir_all(&home).expect("clean up");
+}
+
 /// ADR-003 §5: each read the app's commands make answers what its REST route does
 #[test]
 fn each_command_answers_what_its_rest_route_does() {
@@ -369,6 +397,11 @@ fn expected_answers(
             document_of(workspaces, "work", "abcd1234", "README.md", None).expect("document"),
         ),
         (
+            "project_documents",
+            with(json!({"q": "read"})),
+            documents_of(workspaces, "work", "abcd1234", "read").expect("documents"),
+        ),
+        (
             "project_reviews",
             with(json!({"filters": {}})),
             reviews_of(workspaces, "work", "abcd1234", ReviewFilters::default()).expect("reviews"),
@@ -497,6 +530,7 @@ fn the_main_windows_capability_lets_it_call_the_commands() {
             claims,
             worktrees,
             document,
+            project_documents,
             file,
             logo,
             project_reviews,

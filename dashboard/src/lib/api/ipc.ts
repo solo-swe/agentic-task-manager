@@ -103,6 +103,9 @@ function projectCall(workspace: string, project: string, route: string[], query:
       };
     }
     case 'documents':
+      // No path (and no revision): the project's documents (ATM-765), as the route answers then
+      if (!query.get('path') && !query.get('at'))
+        return { command: 'project_documents', args: { ...at, q: query.get('q') || undefined } };
       return { command: 'document', args: { ...at, path: query.get('path') ?? '', at: query.get('at') || undefined } };
     case 'files':
       return {

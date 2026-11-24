@@ -47,6 +47,7 @@ fn main() {
         "update_review_draft",
         "remove_review_draft",
         "project_inbox",
+        "project_documents",
         "add_inbox_item",
         "edit_inbox_item",
         "decide_inbox_item",

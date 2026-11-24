@@ -860,7 +860,6 @@ describe('serve', () => {
       ['../outside.md', 400],
       ['/etc/passwd', 400],
       ['docs/../docs/x.md', 400],
-      ['', 400],
     ];
     for (const [file, status] of refusals) {
       const r = await get('documents', file);
@@ -868,9 +867,85 @@ describe('serve', () => {
       const answer = await r.json();
       assert.ok(answer.error && !answer.document, file);
     }
+    // No path: for documents the listing (ATM-765, the next test); for files a bad path
+    assert.equal((await get('files', '')).status, 400);
     assert.equal((await fetch(`http://localhost:${port}/api/v1/projects/nope/documents?path=docs/x.md`)).status, 404);
     // Read-only, like every route
     assert.equal((await fetch(`${base}/documents?path=docs/x.md`, { method: 'POST' })).status, 405);
+    atm(['service', 'stop'], root);
+  });
+
+  test("a project's documents' listing (ATM-765): its Markdown files git has, read-only, tagged, refused from other sites", async () => {
+    const atmHome = home();
+    const atm = atmIn(atmHome);
+    const root = project(
+      { meta: { id: 'list0001', project: 'Listing' }, tasks: [] },
+      {
+        'README.md': '# Read me\n',
+        'docs/design.md': '# The design\n\nBody.\n',
+        'docs/notes.markdown': 'No heading here.\n',
+        'src/app.ts': 'export const a = 1;\n',
+        '.gitignore': 'secrets/\n',
+        'secrets/hidden.md': '# Ignored\n',
+      },
+    );
+    git(['add', 'README.md', 'docs/design.md', '.gitignore'], root);
+    git(['commit', '-q', '-m', 'docs'], root);
+    // A folder that is a symlink to outside the project: nothing under it is listed
+    const elsewhere = tempDir('atm-elsewhere-');
+    cleanups.push(() => removeDir(elsewhere));
+    fs.writeFileSync(path.join(elsewhere, 'outside.md'), '# outside');
+    fs.symlinkSync(elsewhere, path.join(root, 'linked'));
+    assert.equal(atm(['workspace', 'add-project'], root).code, 0);
+    const port = ports();
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
+    const v1 = `http://localhost:${port}/api/v1/projects/list0001/documents`;
+    const v2 = `http://localhost:${port}/api/v2/workspaces/default/projects/list0001/documents`;
+
+    // The Markdown files git has, tracked or new; not the ignored one, nor one through the symlink, nor code
+    const first = await fetch(v1);
+    assert.equal(first.status, 200);
+    assert.match(first.headers.get('content-type'), /application\/json/);
+    const listing = await first.json();
+    const shown = Object.fromEntries(listing.documents.map((d) => [d.path, [d.title, d.tracked]]));
+    assert.deepEqual(shown, {
+      'README.md': ['Read me', true],
+      'docs/design.md': ['The design', true],
+      'docs/notes.markdown': [shown['docs/notes.markdown']?.[0] ?? null, false],
+    });
+    assert.deepEqual([listing.submodules, listing.more], [[], 0]);
+    // v2's route is the same listing
+    const fromV2 = await (await fetch(v2)).json();
+    assert.deepEqual(fromV2.documents, listing.documents);
+
+    // Unchanged: a 304; a new document: the listing again
+    const tag = first.headers.get('etag');
+    assert.ok(tag);
+    assert.equal((await fetch(v1, { headers: { 'If-None-Match': tag } })).status, 304);
+    fs.writeFileSync(path.join(root, 'docs/later.md'), '# Later\n');
+    const changed = await fetch(v1, { headers: { 'If-None-Match': tag } });
+    assert.equal(changed.status, 200);
+    assert.ok((await changed.json()).documents.some((d) => d.path === 'docs/later.md'));
+
+    // A query names some, by title or path; one too long is refused
+    const found = await (await fetch(`${v1}?q=design`)).json();
+    assert.deepEqual(
+      found.documents.map((d) => d.path),
+      ['docs/design.md'],
+    );
+    assert.equal((await fetch(`${v1}?q=${'x'.repeat(201)}`)).status, 400);
+
+    // ATM-671's rule: a read another site's page sends is refused; atm's own page's is not
+    for (const [headers, status] of [
+      [{ 'Sec-Fetch-Site': 'cross-site' }, 403],
+      [{ Origin: 'https://evil.example' }, 403],
+      [{ 'Sec-Fetch-Site': 'same-origin' }, 200],
+    ]) {
+      assert.equal((await fetch(v1, { headers })).status, status, JSON.stringify(headers));
+    }
+    // Registered projects only; read-only
+    assert.equal((await fetch(`http://localhost:${port}/api/v1/projects/nope/documents`)).status, 404);
+    assert.equal((await fetch(v1, { method: 'POST' })).status, 405);
     atm(['service', 'stop'], root);
   });
 
