@@ -5,10 +5,15 @@
   // shows only when there is such a project.
   import { BOARD_SCOPES, withoutActiveSprint } from '../allboard';
   import { ACTIVE_DAYS, isActive, orderProjects } from '../projects';
-  import { OVERVIEW_TABS, type OverviewTab } from '../routes';
+  import type { Item } from '../address';
+  import type { OverviewTab } from '../routes';
   import { dashboard } from '../state.svelte';
+  import { ALL_ITEM_VIEWS, itemOfOverviewTab } from '../tabs';
   import AllProjectsBoard from './AllProjectsBoard.svelte';
-  import Icon from '../ui/Icon.svelte';
+  import AllProjectsList from './AllProjectsList.svelte';
+  import Icon, { type IconName } from '../ui/Icon.svelte';
+  import ItemTabs from '../shell/ItemTabs.svelte';
+  import SubTabs from '../shell/SubTabs.svelte';
   import InfoTip from '../ui/InfoTip.svelte';
   import OverviewAgents from './OverviewAgents.svelte';
   import OverviewProgress from './OverviewProgress.svelte';
@@ -22,62 +27,55 @@
   const inactive = $derived(ordered.length - active.length);
   const tab = $derived(dashboard.overviewTab);
   const noSprint = $derived(withoutActiveSprint(shown, dashboard.boardScope));
+  // The page's items (ATM-752): Overview, Tasks, Code Reviews, Analysis; Tasks' and Analysis' views as sub-tabs
+  const item = $derived(itemOfOverviewTab(tab));
+  const items = Object.keys(ALL_ITEM_VIEWS) as Item[];
 
-  // The board tab is called Omniboard (T-266); its id stays "board", so #view=board links and the saved tab still work
+  // The board's id stays "board", so /board links and the saved tab still work (T-266: it was the Omniboard)
   const LABELS: Record<OverviewTab, string> = {
     projects: 'Projects',
-    board: 'Omniboard',
+    board: 'Board',
+    list: 'List',
     progress: 'Progress',
     agents: 'Agents',
-    reviews: 'Reviews',
+    reviews: 'Code Reviews',
   };
   const ICONS = {
     projects: 'folder',
     board: 'square-kanban',
+    list: 'list-todo',
     progress: 'trending-up',
     agents: 'bot',
-    reviews: 'message-square',
-  } as const;
-  const buttons: Partial<Record<OverviewTab, HTMLButtonElement>> = {};
-
-  function onTabKeydown(e: KeyboardEvent) {
-    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
-    if (!step) return;
-    e.preventDefault();
-    const i = OVERVIEW_TABS.indexOf(tab);
-    const next = OVERVIEW_TABS[(i + step + OVERVIEW_TABS.length) % OVERVIEW_TABS.length];
-    dashboard.selectOverviewTab(next);
-    buttons[next]?.focus();
-  }
+    reviews: 'file-diff',
+  } as const satisfies Record<OverviewTab, IconName>;
+  const subViews = $derived((ALL_ITEM_VIEWS[item] ?? []).map((id) => ({ id, label: LABELS[id], icon: ICONS[id] })));
+  const onTasks = $derived(tab === 'board' || tab === 'list');
+  const selectItem = (next: Item) => next !== item && dashboard.selectOverviewTab(ALL_ITEM_VIEWS[next]![0]);
 </script>
 
 <!-- On the board, the page doesn't scroll: the board takes the window's height and its columns scroll (T-265) -->
 <section class="projects-overview" class:on-board={tab === 'board'} id="projects-overview">
-  <div class="view-tabs overview-tabs" role="tablist" aria-label="Projects Overview">
-    {#each OVERVIEW_TABS as id (id)}
-      <button
-        bind:this={buttons[id]}
-        class="view-tab"
-        id="overview-tab-{id}"
-        role="tab"
-        aria-selected={tab === id}
-        aria-controls="overview-panel"
-        tabindex={tab === id ? 0 : -1}
-        onclick={() => dashboard.selectOverviewTab(id)}
-        onkeydown={onTabKeydown}><Icon name={ICONS[id]} size={15} />{LABELS[id]}</button
-      >
-    {/each}
-  </div>
+  <ItemTabs {items} current={item} onselect={selectItem} label="All projects" />
+  {#if subViews.length > 1}
+    <SubTabs
+      views={subViews}
+      current={tab}
+      onselect={(next) => dashboard.selectOverviewTab(next)}
+      idPrefix="overview-tab-"
+      panel={() => 'overview-panel'}
+      label={item === 'tasks' ? 'Tasks' : 'Analysis'}
+    />
+  {/if}
   <div class="projects-toolbar">
-    {#if tab === 'board'}
+    {#if onTasks}
       <!-- Over every project's tasks (T-261): ID, name, description, type, labels, notes and the project's name -->
       <label class="task-search board-search">
         <Icon name="search" size={14} />
         <input
           type="search"
           id="board-search"
-          placeholder="Search the Omniboard"
-          aria-label="Search the Omniboard's tasks by ID, name, description, type, label, note or project"
+          placeholder="Search all projects’ tasks"
+          aria-label="Search all projects' tasks by ID, name, description, type, label, note or project"
           value={dashboard.boardQuery}
           oninput={(e) => dashboard.setBoardQuery(e.currentTarget.value)}
         />
@@ -87,20 +85,21 @@
           >
         {/if}
       </label>
-      <InfoTip label="the Omniboard">
+      <InfoTip label="all projects' tasks">
         <p>
           What's happening now across your projects: the tasks <strong>to do</strong> (ready ones first),
           <strong>in progress</strong>,
-          <strong>waiting for a review</strong> or <strong>blocked</strong>, and those <strong>done</strong>. At most 30
-          cards per column; <em>+ N more</em> says how many a project has beyond them.
+          <strong>waiting for a review</strong> or <strong>blocked</strong>, and those <strong>done</strong>. On the
+          Board, at most 30 cards per column; <em>+ N more</em> says how many a project has beyond them. The List shows the
+          same tasks, a row each.
         </p>
         <p>
           <em>Active sprints</em> shows each project's active sprint, all of its tasks, done ones too;
           <em>All tasks</em>, every sprint and the backlog, with what was done in the last 24 hours.
         </p>
         <p>
-          A card opens its task's details here, over the board. Each project's full board is its own Kanban: the project
-          chip or <em>+ N more</em> opens the project.
+          A task opens its details here, over the page. Each project's full board is its own: the project chip or
+          <em>+ N more</em> opens the project.
         </p>
       </InfoTip>
       <!-- The active sprints' tasks (the default) or every task, as before (T-340) -->
@@ -117,14 +116,16 @@
           >
         {/each}
       </span>
-      <label class="projects-active-only"
-        ><input
-          type="checkbox"
-          id="board-group-by-project"
-          checked={dashboard.boardGroupByProject}
-          onchange={(e) => dashboard.setBoardGroupByProject(e.currentTarget.checked)}
-        /> Group by project</label
-      >
+      {#if tab === 'board'}
+        <label class="projects-active-only"
+          ><input
+            type="checkbox"
+            id="board-group-by-project"
+            checked={dashboard.boardGroupByProject}
+            onchange={(e) => dashboard.setBoardGroupByProject(e.currentTarget.checked)}
+          /> Group by project</label
+        >
+      {/if}
     {/if}
     {#if inactive}
       <label
@@ -139,16 +140,22 @@
         Hide inactive projects <span class="projects-hidden" id="projects-hidden">({inactive})</span></label
       >
     {/if}
-    {#if tab === 'board' && noSprint.length}
+    {#if onTasks && noSprint.length}
       <!-- So the board isn't empty without a word: these projects have nothing in the active sprints view -->
       <span class="projects-hidden" id="board-no-active-sprint" title={noSprint.map((p) => p.name).join(', ')}
         >{noSprint.length} project{noSprint.length === 1 ? ' has' : 's have'} no active sprint</span
       >
     {/if}
   </div>
-  <div id="overview-panel" role="tabpanel" aria-labelledby="overview-tab-{tab}">
+  <div
+    id="overview-panel"
+    role="tabpanel"
+    aria-labelledby={subViews.length > 1 ? `overview-tab-${tab}` : `item-${item}`}
+  >
     {#if tab === 'board'}
       <AllProjectsBoard projects={shown} />
+    {:else if tab === 'list'}
+      <AllProjectsList projects={shown} />
     {:else if tab === 'agents'}
       <OverviewAgents projects={shown} />
     {:else if tab === 'progress'}

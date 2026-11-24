@@ -1,6 +1,6 @@
 // The All projects page's Board tab (T-259, docs/all-projects-kanban-proposal.md §3, §4): every project's tasks in
 // one board, from the projects' board summaries.
-import { board, boardCard, expect, openDashboard, summary, test, type TasksServer } from './helpers';
+import { board, boardCard, expect, openDashboard, openView, summary, test, type TasksServer } from './helpers';
 import type { Page } from '@playwright/test';
 
 const NOW = new Date('2026-03-01T12:00:00Z');
@@ -53,7 +53,7 @@ async function openBoard(page: Page, tasksServer: TasksServer) {
   await page.clock.setFixedTime(NOW);
   addProjects(tasksServer);
   await openDashboard(page, tasksServer, 'standard');
-  await page.locator('#overview-tab-board').click();
+  await openView(page, 'board', { overview: true });
   await expect(page.locator('#all-board')).toBeVisible();
 }
 
@@ -65,7 +65,7 @@ async function openBusyBoard(page: Page, tasksServer: TasksServer) {
     tasksServer.addProject(name.toLowerCase(), 'minimal', name, summary({ board: board({ todo }) }));
   }
   await openDashboard(page, tasksServer, 'standard');
-  await page.locator('#overview-tab-board').click();
+  await openView(page, 'board', { overview: true });
   await expect(page.locator('#all-board .board-card')).toHaveCount(30);
 }
 
@@ -80,9 +80,9 @@ test.describe('All projects board', () => {
     await page.clock.setFixedTime(NOW);
     addProjects(tasksServer);
     await openDashboard(page, tasksServer, 'standard');
-    await expect(page.locator('#overview-tab-projects')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#item-overview')).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('#projects-grid')).toBeVisible();
-    await page.locator('#overview-tab-board').click();
+    await openView(page, 'board', { overview: true });
     await expect(page).toHaveURL(/\/board(\?|$)/);
     await expect(page.locator('#projects-grid')).toHaveCount(0);
 
@@ -173,7 +173,7 @@ test.describe('All projects board', () => {
     tasksServer,
   }) => {
     await openBoard(page, tasksServer);
-    await page.locator('#overview-tab-projects').click();
+    await page.locator('#item-overview').click();
     await expect(page.locator('#projects-grid')).toBeVisible();
     await page.goBack();
     await expect(page.locator('#all-board')).toBeVisible();
@@ -309,19 +309,53 @@ test.describe('All projects board', () => {
     expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThan(720);
   });
 
-  test('the tab is called Omniboard; its ⓘ says what it shows and where the details are (T-266)', async ({
+  test('Tasks’ Board and List (ATM-752); the ⓘ says what they show and where the details are (T-266)', async ({
     page,
     tasksServer,
   }) => {
     await openBoard(page, tasksServer);
-    await expect(page.locator('#overview-tab-board')).toHaveText('Omniboard');
+    await expect(page.locator('#item-tasks')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.sub-tab')).toHaveText(['Board', 'List']);
+    await expect(page.locator('#overview-tab-board')).toHaveAttribute('aria-selected', 'true');
     // The link keeps its name
     await expect(page).toHaveURL(/\/board(\?|$)/);
-    await page.getByRole('button', { name: 'About the Omniboard' }).click();
-    const about = page.getByRole('dialog', { name: 'About the Omniboard' });
+    await page.getByRole('button', { name: "About all projects' tasks" }).click();
+    const about = page.getByRole('dialog', { name: "About all projects' tasks" });
     await expect(about).toContainText('done in the last 24 hours');
-    await expect(about).toContainText("A card opens its task's details here, over the board");
-    await expect(about).toContainText("Each project's full board is its own Kanban");
+    await expect(about).toContainText('A task opens its details here, over the page');
+    await expect(about).toContainText('The List shows the same tasks, a row each');
+  });
+
+  test('All’s List (ATM-752): the board’s tasks a row each, by column, and what the summaries leave out; a row opens its details; Back returns to the Board', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openBoard(page, tasksServer);
+    await page.locator('#overview-tab-list').click();
+    await expect(page).toHaveURL(/\/list(\?|$)/);
+    await expect(page.locator('#all-board')).toHaveCount(0);
+    const list = page.locator('#all-list');
+    await expect(list.locator('.list-group-name')).toHaveText(['To Do', 'In progress', 'Blocked', 'Done']);
+    // Every card the summaries carry, in the board's order: To Do's 3 of its 13, and the 10 Shop's summary leaves out
+    const todo = list.locator('.list-group[data-group="todo"]');
+    await expect(todo.locator('.all-list-row .kanban-card-id')).toHaveText(['B-1', 'T-008', 'T-009']);
+    await expect(todo.locator('.all-list-row').first().locator('.board-project-name')).toHaveText('Blog');
+    await expect(todo.locator('.list-group-count')).toHaveText('13 tasks');
+    await expect(todo.locator('.board-more')).toHaveText(['+ 10 more in Shop']);
+    // The options are the board's: the search narrows it
+    await page.locator('#board-search').fill('transactional');
+    await expect(list.locator('.all-list-row')).toHaveCount(1);
+    await page.locator('.board-search .search-clear').click();
+    // A row opens its task's details over the list, which stays
+    const url = page.url();
+    await list.locator('.all-list-row[data-project="shop"][data-id="T-007"] .card-link').click();
+    await expect(page.locator('#detail-overlay.open #detail-panel h3')).toHaveText('T-007 Two-factor sign-in');
+    expect(page.url()).toBe(url);
+    await page.keyboard.press('Escape');
+    // A sub-tab is a step in the tab's history
+    await page.goBack();
+    await expect(page.locator('#all-board')).toBeVisible();
+    await expect(page.locator('#overview-tab-board')).toHaveAttribute('aria-selected', 'true');
   });
 
   test('Active only applies to the board too', async ({ page, tasksServer }) => {
@@ -335,7 +369,7 @@ test.describe('All projects board', () => {
     });
     tasksServer.addProject('idle', 'minimal', 'Idle', idle);
     await openDashboard(page, tasksServer, 'standard');
-    await page.locator('#overview-tab-board').click();
+    await openView(page, 'board', { overview: true });
     await expect(page.locator('#all-board .board-card')).toHaveCount(0);
     await page.locator('#active-projects-only').uncheck();
     await expect(page.locator('#all-board .board-card[data-id="I-1"]')).toHaveCount(1);
@@ -367,7 +401,7 @@ test.describe('All projects board', () => {
         }),
       );
     await openDashboard(page, tasksServer, 'standard');
-    await page.locator('#overview-tab-board').click();
+    await openView(page, 'board', { overview: true });
     const scope = (s: string) => page.locator(`#board-scope [data-scope="${s}"]`);
     await expect(scope('active')).toHaveAttribute('aria-pressed', 'true');
     await expect(ids(page, 'todo')).toHaveText(['S-1']);

@@ -1,6 +1,6 @@
 // The dashboard in the atm app (T-457): the same page, its data from the app's commands over Tauri's IPC (mocked here
 // as `@tauri-apps/api/mocks` does, backed by the fixture's data), never from HTTP.
-import { addressOf, expect, loadFixture, test } from './helpers';
+import { addressOf, expect, loadFixture, openView, test } from './helpers';
 
 test.describe('the dashboard in the atm app', () => {
   test('loads its projects and their tasks through the app’s commands, with no request to a server', async ({
@@ -164,7 +164,7 @@ test.describe('the dashboard in the atm app', () => {
       await expect(page.locator('#version-chip')).toHaveCount(0);
       await expect(page.locator('#window-buttons')).toHaveCount(0);
       await expect(page.locator('#app-menus')).toHaveCount(0);
-      await page.locator('#tab-list').click();
+      await openView(page, 'list');
       await expect.poll(() => addressOf(page)).toMatch(/\/list(\?|$)/);
       // A drag on the bar's free space moves the window; a double click maximizes it
       // The bar's free space: just past the +
@@ -917,7 +917,7 @@ test.describe('the dashboard in the atm app', () => {
     await tabs.nth(0).click();
     await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
     // A project opens on its Overview (ATM-751): to its board
-    await page.locator('#tab-kanban').click();
+    await openView(page, 'kanban');
     const card = page.locator('#kanban .kanban-card').first();
     const id = await card.getAttribute('data-id');
     await card.click({ modifiers: ['ControlOrMeta'] });

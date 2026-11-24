@@ -3132,13 +3132,48 @@ a.detail-dep-item {
   padding-left: var(--space-4);
   border-bottom: 1px solid var(--border);
 }
-/* Between the task views and the project views (T-251) */
-.view-tab-divider {
-  align-self: center;
-  width: 1px;
-  height: 18px;
-  margin: 0 var(--space-4);
-  background: var(--border);
+/* An item's views under the items (ATM-752): Board · List · Dependencies, Progress · Agents, as a segmented row */
+.sub-tabs {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-4) 0;
+}
+.sub-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-5);
+  font: inherit;
+  font-size: var(--text-md);
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.sub-tab:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+}
+.sub-tab[aria-selected='true'] {
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--border);
+}
+.sub-tab[aria-selected='true'] .icon {
+  color: var(--accent);
+}
+.sub-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+/* Inbox and Documents until their pages come (ATM-762, ATM-766) */
+.view-placeholder {
+  color: var(--text-muted);
+  padding: var(--space-6);
+  font-size: var(--text-lg);
 }
 .view-tab {
   display: inline-flex;
@@ -5541,9 +5576,13 @@ svg.graph-minimap.hidden {
   color: var(--text);
   cursor: pointer;
 }
-/* Projects | Omniboard (T-259), looking like a project's tabs (T-346) */
-.overview-tabs {
+/* All projects' items and sub-tabs (ATM-752), looking like a project's (T-346) */
+.projects-overview > .item-tabs,
+.projects-overview > .sub-tabs {
   margin-bottom: var(--space-6);
+}
+.projects-overview > .item-tabs:has(+ .sub-tabs) {
+  margin-bottom: 0;
 }
 /* The All projects board (AllProjectsBoard.svelte), like a project's Kanban (T-262, T-265): the page doesn't
    scroll; the board takes the height down to the status bar (basis 0) and each column scrolls inside it. Grouped by

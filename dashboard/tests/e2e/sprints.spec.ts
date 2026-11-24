@@ -6,6 +6,7 @@ import {
   loadFixture,
   openDashboard,
   openFilters,
+  openView,
   test,
   type TasksData,
 } from './helpers';
@@ -45,11 +46,11 @@ test.describe('scope bar (T-323)', () => {
       await expect(bar).toBeVisible();
     }
     for (const tab of ['progress', 'agents', 'project']) {
-      await page.locator(`#tab-${tab}`).click();
+      await openView(page, tab);
       await expect(bar).toHaveCount(0);
     }
     // The Progress tab shows every sprint whatever the board's scope
-    await page.locator('#tab-progress').click();
+    await openView(page, 'progress');
     await expect(page.locator('#sprint-table tbody tr')).toHaveCount(3);
   });
 

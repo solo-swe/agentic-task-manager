@@ -20365,7 +20365,7 @@
       "description": "Found in the 0.43.0 release (run 45266083639). ATM-661 added a step that compiles the app with no secrets (`app:bundle --target universal-apple-darwin --no-bundle`) before the signing step, so the signing step's `tauri build` would find nothing left to build (audit A1). It didn't: the signing step logged `Compiling atm-app v0.43.0` and took 2 m 43 s, with the Developer ID, notary and updater secrets in its environment. Only atm-app itself recompiled, no dependency, so no third-party build script ran with them; but atm-app's own `build.rs` and Tauri's macros in its compile did.\n\n## To find out\nWhat differs between `tauri build --no-bundle` and `tauri build` for `atm-app`: an environment variable a build script tracks (`rerun-if-env-changed`: the `APPLE_*`, `TAURI_SIGNING_*` or `TAURI_ENV_*` the bundling run sets), a feature Tauri adds when it bundles, or the config. Reproduce it locally (both commands in a row, `CARGO_LOG=cargo::core::compiler::fingerprint=info` says why a crate is dirty).\n\n## Then\nThe fix in `.github/workflows/release.yml` (or `app/src-tauri/build.rs`), and a check that would have caught it: the signing step fails if cargo compiles anything (its output says `Compiling`). A CI workflow change is Hakan's yes.\n\n## Tests\n`ci-workflow.test.ts`; the next release's log shows no `Compiling` in the signing step.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         ".github/workflows/release.yml",
@@ -20373,7 +20373,7 @@
         "dashboard/tests/unit/ci-workflow.test.ts"
       ],
       "created_at": "2026-11-23T22:20:58Z",
-      "updated_at": "2026-11-24T02:36:08Z",
+      "updated_at": "2026-11-24T03:27:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "review": "async",
@@ -20388,6 +20388,18 @@
           "kind": "note",
           "text": "Reproduced on the re-run of 45266083639: the no-secrets step compiled atm-app twice (once per architecture, 6 m 31 s and 5 m 14 s), then the signing step compiled it again (3 m 11 s) with the secrets present. Only atm-app each time, so its fingerprint differs between the two tauri build runs, not a dependency.",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-24T02:54:27Z",
+          "kind": "review",
+          "text": "CR-146: Release: the signing step compiles nothing",
+          "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T03:27:42Z",
+          "kind": "note",
+          "text": "Approved: in CR-146 (round 1)",
+          "by": "Hakan Serce"
         }
       ],
       "sprint_history": [
@@ -20398,7 +20410,24 @@
       ],
       "sprint": "Sidebar overhaul",
       "started_at": "2026-11-24T02:36:08Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "83a749ae522675cabb86ce777a69dac9fb0380c3",
+      "code_reviews": [
+        {
+          "id": "01a20b79-e44b-7202-85cb-490f74ae042a",
+          "ref": "CR-146"
+        }
+      ],
+      "review_requested_at": "2026-11-24T02:54:27Z",
+      "reviews": [
+        {
+          "from": "2026-11-24T02:54:27Z",
+          "to": "2026-11-24T03:27:42Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T03:27:56Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a20a91-76ac-710c-81db-f000bc9edfc9",
@@ -20545,7 +20574,7 @@
       "description": "[The sidebar overhaul](docs/sidebar-overhaul-design.md) §2.3 and §5: the seven view tabs become the items.\n\n## Change\n- **The webapp's tabs** are the items, in the sidebar's order: six for a project, four for All (Overview, Tasks, Code Reviews, Analysis). A tab click is in place.\n- **Sub-tabs** under the page header: Tasks has Board · List · Dependencies (Board · List for All), Analysis has Progress · Agents. Each is a step in the tab's history, as the view tabs are now.\n- **All's List:** the List view over every project's tasks (today All has only the Omniboard).\n- **In the app** the item row isn't shown (the sidebar does its job, ATM sidebar task), but the sub-tabs are.\n- Inbox and Documents show a placeholder page until their own tasks build them.\n\n## Tests\nComponent tests for the tabs per scope and the sub-tabs; e2e: the webapp's tabs and sub-tabs, Back across sub-tabs, All's List. Update the screenshots' expectations where the tab row changed (the release task regenerates them).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e889c1f825f3"
       ],
@@ -20554,7 +20583,7 @@
         "dashboard/src/lib/shell/Header.svelte"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T03:03:35Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -20565,7 +20594,9 @@
       ],
       "sprint": "Sidebar overhaul",
       "review": "async",
-      "number": 752
+      "number": 752,
+      "started_at": "2026-11-24T03:03:35Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e88bc947df5c",

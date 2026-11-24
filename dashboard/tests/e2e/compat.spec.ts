@@ -1,4 +1,4 @@
-import { expect, openDashboard, test } from './helpers';
+import { expect, openDashboard, openView, test } from './helpers';
 
 // NFR-5: tasks.json files from before 0.7.0 (no started_at/completed_at; some without timestamps or meta) must
 // render in every tab without errors, with sensible fallbacks.
@@ -8,16 +8,16 @@ for (const fixture of ['standard', 'minimal', 'no-meta', 'edge-cases', 'empty'])
     page.on('pageerror', (e) => errors.push(e.message));
     await openDashboard(page, tasksServer, fixture);
 
-    await page.locator('#tab-kanban').click();
+    await openView(page, 'kanban');
     await expect(page.locator('#kanban')).toBeVisible();
     await expect(page.locator('.kanban-column[data-status="todo"]')).toBeVisible();
 
-    await page.locator('#tab-progress').click();
+    await openView(page, 'progress');
     await expect(page.locator('#progress')).toBeVisible();
     if (fixture === 'empty') await expect(page.locator('#progress')).toContainText('No tasks match current filters');
     else await expect(page.locator('#sprint-table')).toBeVisible();
 
-    await page.locator('#tab-graph').click();
+    await openView(page, 'graph');
     await expect(page.locator('#dep-graph')).toBeVisible();
     expect(errors).toEqual([]);
   });
@@ -28,6 +28,6 @@ test('without start/complete times, estimates fall back to gaps between updated_
   tasksServer,
 }) => {
   await openDashboard(page, tasksServer, 'standard');
-  await page.locator('#tab-progress').click();
+  await openView(page, 'progress');
   await expect(page.locator('#progress-basis')).toContainText('last 4 tasks');
 });

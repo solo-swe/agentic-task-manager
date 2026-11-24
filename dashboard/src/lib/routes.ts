@@ -3,6 +3,7 @@
 // other parameters (the tab, a dialog, a document) are kept (lib/address.ts).
 import { addressParams, formatAddress, isOverviewTab, OVERVIEW_TABS, type OverviewTab } from './address';
 import type { ProjectEntry } from './load';
+import { VIEWS } from './tabs';
 
 export { isOverviewTab, OVERVIEW_TABS, type OverviewTab };
 
@@ -37,12 +38,20 @@ export function overviewTabOf(address: string): OverviewTab | null {
  * project. */
 export function withProject(address: string, id: string | null, overviewTab?: OverviewTab): string {
   const params = addressParams(address);
-  // Whose tab the view is: the page's the address names; on the landing page (neither named), by its value
+  // Whose tab the view is: the page's the address names. On the landing page (neither named) it is kept where it is
+  // one of the page's to go to: a project's `list` and All's are both "list" (ATM-752)
   const view = params.get('view');
-  const projectView = params.has('project') || (!params.has('overview') && !isOverviewTab(view));
+  const toProject = id !== null;
+  const keep = params.has('project')
+    ? toProject
+    : params.has('overview')
+      ? !toProject
+      : toProject
+        ? (VIEWS as readonly (string | null)[]).includes(view)
+        : isOverviewTab(view);
   params.delete('project');
   params.delete('overview');
-  if (view !== null && projectView !== (id !== null)) params.delete('view');
+  if (view !== null && !keep) params.delete('view');
   // A task's details are its project's, and so is a review open on its page (ATM-581: from a review, another project
   // opened its CR of the same number); that project opens at its Reviews list
   if (id !== projectOf(address)) {

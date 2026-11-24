@@ -15,17 +15,17 @@
 // part of the address it lives in. An old link (`#project=x&view=list`) has the same parameters in its hash: it is
 // read as such, and the page replaces it with its new address. The route files under `src/routes/` are these paths.
 
-/** The All projects page's tabs (T-259): the project cards, the board of every project's tasks, every project's
- * progress (T-329) or agents (T-333) */
-export const OVERVIEW_TABS = ['projects', 'board', 'progress', 'agents', 'reviews'] as const;
+/** The All projects page's tabs (T-259): the project cards, the board of every project's tasks and their list
+ * (ATM-752), every project's progress (T-329) or agents (T-333), and all reviews (ATM-575) */
+export const OVERVIEW_TABS = ['projects', 'board', 'list', 'progress', 'agents', 'reviews'] as const;
 export type OverviewTab = (typeof OVERVIEW_TABS)[number];
 
 export function isOverviewTab(value: unknown): value is OverviewTab {
   return OVERVIEW_TABS.includes(value as OverviewTab);
 }
 
-/** The All projects page's paths: its tabs, and All's List (ATM-751: the Tasks item's List; its page is ATM-752's) */
-export const OVERVIEW_PATHS = [...OVERVIEW_TABS, 'list'] as const;
+/** The All projects page's paths: its tabs */
+export const OVERVIEW_PATHS = OVERVIEW_TABS;
 type OverviewPath = (typeof OVERVIEW_PATHS)[number];
 const isOverviewPath = (value: unknown): value is OverviewPath => OVERVIEW_PATHS.includes(value as OverviewPath);
 

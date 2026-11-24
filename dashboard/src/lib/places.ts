@@ -10,14 +10,16 @@ const PROJECT_TABS: Record<string, string> = {
   graph: 'Dependencies',
   progress: 'Progress',
   agents: 'Agents',
-  project: 'Project',
+  project: 'Overview',
   reviews: 'Reviews',
+  inbox: 'Inbox',
+  documents: 'Documents',
 };
 
 /** The overview's pages (address.ts OVERVIEW_PATHS), as their buttons name them */
 const OVERVIEW_TABS: Record<string, string> = {
   projects: 'Projects',
-  board: 'Omniboard',
+  board: 'Board',
   list: 'List',
   progress: 'Progress',
   agents: 'Agents',

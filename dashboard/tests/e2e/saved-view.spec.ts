@@ -6,6 +6,7 @@ import {
   matchCount,
   openDashboard,
   openFilters,
+  openView,
   test,
 } from './helpers';
 
@@ -39,10 +40,10 @@ test.describe('saved view', () => {
     await expect(page.locator('.filter-chip')).toHaveText(['Sprint: Phase 1', 'Type: Feature']);
     await expect(page.locator('#task-search')).toHaveValue('user');
     await expect(matchCount(page)).toHaveText('1 of 12 tasks');
-    await expect(page.locator('#tab-project')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#item-overview')).toHaveAttribute('aria-selected', 'true');
     // The project's address, with the saved Sprint filter in it (?sprint=, T-323)
     await expect(page).toHaveURL(/\/projects\/p1\?sprint=Phase%201$/);
-    await page.locator('#tab-kanban').click();
+    await openView(page, 'kanban');
     await expect(page.locator('#kanban-show-skipped')).toBeChecked();
     await openFilters(page);
     await expect(filterButton(page, 'sprint', 'Phase 1')).toHaveClass(/\bactive\b/);
@@ -76,7 +77,7 @@ test.describe('saved view', () => {
     const data = loadFixture('progress');
     data.meta = { ...data.meta, id: 'prog' };
     await openDashboard(page, tasksServer, data);
-    await page.locator('#tab-progress').click();
+    await openView(page, 'progress');
     await page.locator('#sprint-table tbody tr').nth(1).click();
     const focused = await page.locator('#burndown-focus').textContent();
     expect(focused).toMatch(/^Phase \d+$/);
@@ -99,7 +100,7 @@ test.describe('saved view', () => {
 
   test('a #view= link wins over the saved tab', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, project('p1'));
-    await page.locator('#tab-progress').click();
+    await openView(page, 'progress');
     await page.goto('/?view=kanban');
     await page.reload();
     await expect(page.locator('#tab-kanban')).toHaveAttribute('aria-selected', 'true');
@@ -124,7 +125,7 @@ test.describe('saved view', () => {
     await filterButton(page, 'status', 'todo').click();
     await page.locator('#task-search').fill('editor');
     await closeFilters(page);
-    await page.locator('#tab-progress').click();
+    await openView(page, 'progress');
     // In the ⋯ settings menu, apart from Clear filters (T-323)
     await page.locator('#settings-btn').click();
     await page.locator('#reset-view').click();
@@ -132,7 +133,7 @@ test.describe('saved view', () => {
     await expect(page.locator('.filter-btn.active')).toHaveCount(0);
     await expect(page.locator('#task-search')).toHaveValue('');
     // The default tab: the Overview (ATM-751)
-    await expect(page.locator('#tab-project')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#item-overview')).toHaveAttribute('aria-selected', 'true');
     await page.goto('/');
     await expect(matchCount(page)).toHaveText('12 of 12 tasks');
   });

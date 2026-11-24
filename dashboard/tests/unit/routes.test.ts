@@ -33,6 +33,11 @@ describe('the project in the address (T-429)', () => {
 
   it('is set or replaced by the overview, keeping dialogs, and the view where the page has it', () => {
     expect(withProject('/?view=kanban', 'abc')).toBe('/projects/abc/kanban');
+    // The landing page's view is kept where the page gone to has it: `list` is a project's and All's (ATM-752)
+    expect(withProject('/?view=list', 'abc')).toBe('/projects/abc/list');
+    expect(withProject('/?view=list', null)).toBe('/list');
+    expect(withProject('/?view=kanban', null)).toBe('/projects');
+    expect(withProject('/?view=board', 'abc')).toBe('/projects/abc');
     expect(withProject('/projects/abc/list?about', 'def')).toBe('/projects/def/list?about');
     expect(withProject('/projects', 'a b')).toBe('/projects/a%20b');
     // A project's tab stays out of the overview, the overview's out of a project

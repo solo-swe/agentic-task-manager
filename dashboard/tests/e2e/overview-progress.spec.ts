@@ -1,4 +1,4 @@
-import { atmSummaryOf, expect, test } from './helpers';
+import { atmSummaryOf, expect, openView, test } from './helpers';
 
 // T-329: a Progress tab on the Projects Overview, every project's progress, from the projects' summaries (ATM-722:
 // atm's figures, so the overview loads no project's tasks for it)
@@ -10,7 +10,7 @@ test.describe('Projects Overview: the Progress tab', () => {
     tasksServer.use('agents').withAtmSummary();
     tasksServer.addProject('second', 'sprints', 'Second Project', atmSummaryOf('sprints'));
     await page.goto('/projects');
-    await page.locator('#overview-tab-progress').click();
+    await openView(page, 'progress', { overview: true });
     await expect(page).toHaveURL(/\/progress(\?|$)/);
     const rows = page.locator('#overview-progress .overview-progress-row');
     await expect(rows).toHaveCount(2);
@@ -37,7 +37,7 @@ test.describe('Projects Overview: the Progress tab', () => {
     tasksServer.use('agents');
     tasksServer.addProject('second', 'sprints', 'Second Project');
     await page.goto('/projects');
-    await page.locator('#overview-tab-board').click();
+    await openView(page, 'board', { overview: true });
     await page.goto('/projects/second/progress');
     await expect(page.locator('#progress')).toBeVisible();
     // The landing page: the overview on its last tab

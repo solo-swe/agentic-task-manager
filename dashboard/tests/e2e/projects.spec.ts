@@ -569,7 +569,7 @@ test.describe('projects', () => {
     await page.locator('#footer-about').click();
     await page.locator('#about-project-details').click();
     await expect(page.locator('#about-overlay.open')).toHaveCount(0);
-    await expect(page.locator('#tab-project')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#item-overview')).toHaveAttribute('aria-selected', 'true');
     // The project's Overview: its address without a tab, or with `project` (ATM-751)
     await expect(page).toHaveURL(/\/projects\/busy(\/project)?(\?|$)/);
   });

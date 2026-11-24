@@ -168,6 +168,14 @@ describe('the active sprints or all tasks (T-340)', () => {
     expect(withoutActiveSprint([a, b], 'all')).toEqual([]);
   });
 
+  it('without a cap (All’s List, ATM-752): every card the summaries carry, and “+ N more” what they leave out', () => {
+    const many = project('m', null, { todo: Array.from({ length: 40 }, (_, i) => card(`M-${i}`)) }, { todo: 45 });
+    const [todo] = allBoard([many], Infinity);
+    expect(todo.cards).toHaveLength(40);
+    expect(todo.more).toEqual([{ project: many, count: 5 }]);
+    expect(allBoard([many])[0].cards).toHaveLength(30);
+  });
+
   it('an older server without the active sprint’s board shows the whole board, and is not listed as without one', () => {
     const full = project('o', null, { todo: [card('O-1')] });
     const older = { ...full, summary: olderServer(full.summary!, 'board_active_sprint') };

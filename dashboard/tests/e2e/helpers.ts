@@ -1357,6 +1357,29 @@ export function addressOf(page: Page): string {
   return url.pathname + url.search;
 }
 
+/** A project's view, or one of All projects' (`overview: true`), as a user reaches it (ATM-752): its item, then its
+ * sub-tab where the item has several */
+const ITEM_OF_VIEW: Record<string, string> = {
+  project: 'overview',
+  projects: 'overview',
+  inbox: 'inbox',
+  kanban: 'tasks',
+  board: 'tasks',
+  list: 'tasks',
+  graph: 'tasks',
+  reviews: 'reviews',
+  documents: 'documents',
+  progress: 'analysis',
+  agents: 'analysis',
+};
+const WITH_SUB_TABS = new Set(['tasks', 'analysis']);
+
+export async function openView(page: Page, view: string, { overview = false } = {}) {
+  const item = ITEM_OF_VIEW[view];
+  await page.locator(`#item-${item}`).click();
+  if (WITH_SUB_TABS.has(item)) await page.locator(overview ? `#overview-tab-${view}` : `#tab-${view}`).click();
+}
+
 /** Open the filter panel (Phase, Type and Status buttons) under the search line, if it isn't open yet. */
 export async function openFilters(page: Page) {
   const toggle = page.locator('#filters-toggle');

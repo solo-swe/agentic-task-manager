@@ -17,7 +17,7 @@ describe('historyItems', () => {
 
   it('lists the entries after it, nearest first, with negative steps (forward)', () => {
     expect(historyItems({ entries, at: 1 }, 1, name)).toEqual([
-      { address: '/board', name: 'Omniboard', steps: -1 },
+      { address: '/board', name: 'Board', steps: -1 },
       { address: '/projects/api/reviews/CR-7', name: 'CR-7 — api', steps: -2 },
     ]);
   });

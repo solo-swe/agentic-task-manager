@@ -183,7 +183,7 @@ test.describe('the reviews tab', () => {
     tasksServer,
   }) => {
     await openReviews(page, tasksServer);
-    await expect(page.locator('#tab-reviews')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#item-reviews')).toHaveAttribute('aria-selected', 'true');
     const rows = page.locator('.review-row');
     await expect(rows).toHaveCount(2);
     await expect(rows.first()).toHaveAttribute('data-review', 'CR-2');
@@ -195,7 +195,7 @@ test.describe('the reviews tab', () => {
     await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('?q=names&status=open');
   });
 
-  test('what waits for you (ATM-606): a count on the Reviews tab, and a review answered since you wrote marked', async ({
+  test('what waits for you (ATM-606): a count on the Code Reviews item, and a review answered since you wrote marked', async ({
     page,
     tasksServer,
   }) => {
@@ -203,9 +203,11 @@ test.describe('the reviews tab', () => {
       summary({ needs_you: { review: 0, blocked_on_user: 0, together: 0, code_reviews: 2 }, needs_you_reviews: [] }),
     );
     await openReviews(page, tasksServer);
-    const tab = page.locator('#tab-reviews');
+    const tab = page.locator('#item-reviews');
     await expect(page.locator('#reviews-waiting')).toHaveText('2');
-    await expect(tab).toHaveAccessibleName('Reviews, 2 waiting for you');
+    await expect(tab).toHaveAccessibleName(
+      'Code Reviews, 2 waiting for you: a decision, a round, or an answer to read',
+    );
     // CR-1, decided by nobody yet: answered since you last wrote
     tasksServer.setReviews({
       reviews: [
@@ -231,7 +233,7 @@ test.describe('the reviews tab', () => {
     await page.reload();
     await expect(page.locator('.review-row')).toHaveCount(2);
     await expect(page.locator('#reviews-waiting')).toHaveCount(0);
-    await expect(tab).toHaveAccessibleName('Reviews');
+    await expect(tab).toHaveAccessibleName('Code Reviews');
   });
 
   // ATM-610: unfiltered, the reviews in groups, what waits for you first; a filter shows the plain list
@@ -568,12 +570,12 @@ test.describe('a review’s page', () => {
     await openReviews(page, tasksServer, 'CR-2');
     await expect(page.locator('#review-window #review-page')).toBeVisible();
     await expect(page).toHaveTitle(/^\S.* CR-2: Review 2$/);
-    await expect(page.locator('#tab-reviews')).toHaveCount(0);
+    await expect(page.locator('#item-reviews')).toHaveCount(0);
     await expect(page.locator('.review-project')).not.toBeEmpty();
     // Back to the list, in the dashboard again
     await page.getByRole('link', { name: 'Reviews', exact: true }).click();
     await expect(page.locator('#review-list')).toBeVisible();
-    await expect(page.locator('#tab-reviews')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#item-reviews')).toHaveAttribute('aria-selected', 'true');
   });
 
   // ATM-593: a task named in a review opens its details over the review, closed back to the review as it was

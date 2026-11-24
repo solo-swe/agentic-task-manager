@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, loadFixture, openDashboard, test } from './helpers';
+import { expect, loadFixture, openDashboard, openView, test } from './helpers';
 
 // NFR-2: with 500 tasks, switching tabs and refreshing data render within 200 ms. Measured inside the page from the
 // action until two animation frames later (so layout and paint are included). Shared CI runners are slower and
@@ -135,19 +135,20 @@ test.describe('performance with 500 tasks and a large archive', { tag: '@timed' 
   });
 
   test('the views that need history load it once, then switch within budget', async ({ page, tasksServer }) => {
-    // Graph, Kanban, List and Agents don't fetch it (unless "Include archived" is on)
+    // Graph, Kanban and List don't fetch it (unless "Include archived" is on)
     await timeAction(page, '#tab-kanban', "document.querySelector('#kanban .kanban-card')?.offsetParent");
-    await timeAction(page, '#tab-agents', "document.querySelector('#panel-agents .agents-grid')");
+    await timeAction(page, '#tab-graph', "document.querySelector('#panel-graph:not([hidden]) #dep-graph')");
     expect(tasksServer.archiveRequests).toBe(0);
-    // The first visit to Progress loads it (once); after that, switches are measured with it loaded
-    await page.locator('#tab-progress').click();
+    // The first visit to Progress (Analysis' first view, ATM-752) loads it (once); after that, switches are measured
+    // with it loaded
+    await page.locator('#item-analysis').click();
     await expect.poll(() => tasksServer.archiveRequests).toBe(1);
     await expect(page.locator('#sprint-table')).toBeVisible();
-    await page.locator('#tab-graph').click();
+    await page.locator('#item-tasks').click();
     const timings = {
-      progress: await timeAction(page, '#tab-progress', "document.querySelector('#burndown svg')?.isConnected"),
+      progress: await timeAction(page, '#item-analysis', "document.querySelector('#burndown svg')?.isConnected"),
       agents: await timeAction(page, '#tab-agents', "document.querySelector('#panel-agents .agents-grid')"),
-      kanban: await timeAction(page, '#tab-kanban', "document.querySelector('#kanban .kanban-card')?.offsetParent"),
+      kanban: await timeAction(page, '#item-tasks', "document.querySelector('#kanban .kanban-card')?.offsetParent"),
     };
     console.log(`tab switch with ${ARCHIVE_SIZE} archived (ms):`, JSON.stringify(timings));
     for (const [tab, ms] of Object.entries(timings)) expect(ms, tab).toBeLessThan(BUDGET_MS);
@@ -162,11 +163,9 @@ test.describe('performance with 500 tasks', { tag: '@timed' }, () => {
   });
 
   test('switching tabs', async ({ page }) => {
+    // Tasks' sub-tabs, then Analysis' (its item opens on Progress, ATM-752)
     const timings = {
       kanban: await timeAction(page, '#tab-kanban', "document.querySelector('#kanban .kanban-card')?.offsetParent"),
-      progress: await timeAction(page, '#tab-progress', "document.querySelector('#burndown svg')?.isConnected"),
-      // Mounted when selected: the timeline is built from scratch
-      agents: await timeAction(page, '#tab-agents', "document.querySelector('#panel-agents .agents-grid')"),
       // Drawn when selected (T-525): its nodes, as the List's rows; fitted, 500 tasks are at 10%, where a node's labels
       // are too small to read and aren't drawn (ATM-629: shaping their text was half of it)
       graph: await timeAction(
@@ -175,6 +174,9 @@ test.describe('performance with 500 tasks', { tag: '@timed' }, () => {
         "document.querySelector('#panel-graph:not([hidden]) #dep-graph .graph-node')",
       ),
       list: await timeAction(page, '#tab-list', "document.querySelector('#panel-list .task-card')?.offsetParent"),
+      progress: await timeAction(page, '#item-analysis', "document.querySelector('#burndown svg')?.isConnected"),
+      // Mounted when selected: the timeline is built from scratch
+      agents: await timeAction(page, '#tab-agents', "document.querySelector('#panel-agents .agents-grid')"),
     };
     console.log('tab switch (ms):', JSON.stringify(timings));
     for (const [tab, ms] of Object.entries(timings)) expect(ms, tab).toBeLessThan(BUDGET_MS);
@@ -207,7 +209,7 @@ test.describe('performance with 500 tasks', { tag: '@timed' }, () => {
       `document.querySelector('#kanban .kanban-column[data-status="${status}"] .kanban-card[data-id="T-301"]')`;
     const timings: Record<string, number> = {};
     for (const tab of ['graph', 'kanban', 'progress']) {
-      await page.locator(`#tab-${tab}`).click();
+      await openView(page, tab);
       // Alternate the data so every reload really changes something
       const status = tab === 'kanban' ? 'in_progress' : 'blocked';
       data.tasks.find((t) => t.id === 'T-301')!.status = status;

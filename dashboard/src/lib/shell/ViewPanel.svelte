@@ -1,66 +1,56 @@
 <script lang="ts">
-  import { adjacentView, GROUP_END, VIEW_ICONS, VIEW_LABELS, VIEWS, type ViewId } from '../tabs';
+  // A project's page (ATM-752, docs/sidebar-overhaul-design.md §5): its items as tabs, and the views of the item shown
+  // as sub-tabs under them where it has more than one (Tasks: Board · List · Dependencies; Analysis: Progress · Agents)
+  import { ITEMS, type Item } from '../address';
+  import { itemOfView, PROJECT_ITEM_VIEWS, VIEW_ICONS, VIEW_LABELS, type ViewId } from '../tabs';
   import { reviewsWaiting } from '../projects';
   import { dashboard } from '../state.svelte';
   import AgentsTab from '../agents/AgentsTab.svelte';
   import DepGraph from '../graph/DepGraph.svelte';
-  import Icon from '../ui/Icon.svelte';
+  import ItemTabs from './ItemTabs.svelte';
   import KanbanBoard from '../kanban/KanbanBoard.svelte';
   import ProgressTab from '../progress/ProgressTab.svelte';
   import ProjectTab from './ProjectTab.svelte';
   import ReviewsTab from './ReviewsTab.svelte';
   import ScopeBar from './ScopeBar.svelte';
+  import SubTabs from './SubTabs.svelte';
   import TaskGrid from '../tasks/TaskGrid.svelte';
 
   const view = $derived(dashboard.tab);
-  /** The project's code reviews waiting on the user (ATM-606), from its summary: the Reviews tab's badge */
+  const item = $derived(itemOfView(view));
+  const subViews = $derived(
+    PROJECT_ITEM_VIEWS[item].map((id) => ({ id, label: VIEW_LABELS[id], icon: VIEW_ICONS[id] })),
+  );
+  /** The project's code reviews waiting on the user (ATM-606), from its summary: the Code Reviews item's badge */
   const reviewsForYou = $derived(reviewsWaiting(dashboard.projects.find((p) => p.id === dashboard.projectId)));
-  // The tab buttons, for moving the focus with the arrow keys. `$state`, as `bind:this` into an object's property
-  // needs (Svelte's binding_property_non_reactive); elements aren't proxied, only the object holding them
-  const tabs: Partial<Record<ViewId, HTMLButtonElement>> = $state({});
+  const badges = $derived({
+    reviews: {
+      count: reviewsForYou,
+      says: 'waiting for you: a decision, a round, or an answer to read',
+      id: 'reviews-waiting',
+    },
+  });
 
   // The address is the source of truth (FR-2.2): selecting a tab writes it, back/forward and links read it
-  // (state.svelte.ts onNavigate).
-  function select(next: ViewId, focus = false) {
-    dashboard.selectTab(next);
-    if (focus) tabs[next]?.focus();
-  }
-
-  function onTabKeydown(e: KeyboardEvent) {
-    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
-    if (!step) return;
-    e.preventDefault();
-    select(adjacentView(view, step), true);
-  }
+  // (state.svelte.ts onNavigate). An item opens on its first view
+  const selectItem = (next: Item) => next !== item && dashboard.selectTab(PROJECT_ITEM_VIEWS[next][0]);
+  const selectView = (next: ViewId) => dashboard.selectTab(next);
 </script>
 
 <div class="graph-section" id="graph-section">
   <div class="view-header">
-    <div class="view-tabs" role="tablist" aria-label="Views">
-      {#each VIEWS as id (id)}
-        <button
-          bind:this={tabs[id]}
-          class="view-tab"
-          id="tab-{id}"
-          role="tab"
-          aria-selected={view === id}
-          aria-controls="panel-{id}"
-          tabindex={view === id ? 0 : -1}
-          onclick={() => select(id)}
-          aria-label={id === 'reviews' && reviewsForYou
-            ? `${VIEW_LABELS[id]}, ${reviewsForYou} waiting for you`
-            : undefined}
-          onkeydown={onTabKeydown}
-          ><Icon name={VIEW_ICONS[id]} size={15} />{VIEW_LABELS[id]}{#if id === 'reviews' && reviewsForYou}<span
-              class="view-tab-badge"
-              id="reviews-waiting"
-              title="{reviewsForYou} waiting for you: a decision, a round, or an answer to read">{reviewsForYou}</span
-            >{/if}</button
-        >
-        {#if id === GROUP_END}<span class="view-tab-divider" aria-hidden="true"></span>{/if}
-      {/each}
-    </div>
+    <ItemTabs items={ITEMS} current={item} onselect={selectItem} {badges} label="Project" />
   </div>
+  {#if subViews.length > 1}
+    <SubTabs
+      views={subViews}
+      current={view}
+      onselect={selectView}
+      idPrefix="tab-"
+      panel={(id) => `panel-${id}`}
+      label={item === 'tasks' ? 'Tasks' : 'Analysis'}
+    />
+  {/if}
   <div class="view-panels">
     {#if view === 'kanban' || view === 'list' || view === 'graph'}<ScopeBar />{/if}
     <!-- Inactive panels stay mounted (hidden) so each view keeps its state, e.g. the graph's pan/zoom (FR-2.4) -->
@@ -93,7 +83,7 @@
       class="view-panel"
       id="panel-project"
       role="tabpanel"
-      aria-labelledby="tab-project"
+      aria-labelledby="item-overview"
       hidden={view !== 'project'}
     >
       <!-- Mounted only while selected, like the Agents tab: it counts the whole history -->
@@ -103,11 +93,23 @@
       class="view-panel"
       id="panel-reviews"
       role="tabpanel"
-      aria-labelledby="tab-reviews"
+      aria-labelledby="item-reviews"
       hidden={view !== 'reviews'}
     >
       <!-- Mounted only while selected: it asks the server for the reviews, and again now and then -->
       {#if view === 'reviews'}<ReviewsTab />{/if}
     </div>
+    <!-- The Inbox (docs/inbox-design.md) and Documents (docs/documents-design.md) pages come with their own tasks -->
+    {#each ['inbox', 'documents'] as const as id (id)}
+      <div class="view-panel" id="panel-{id}" role="tabpanel" aria-labelledby="item-{id}" hidden={view !== id}>
+        {#if view === id}
+          <p class="view-placeholder" id="{id}-placeholder">
+            {id === 'inbox'
+              ? 'The Inbox is coming: what you note for later, for an agent to make tasks of.'
+              : 'Documents are coming: the project’s documents, listed and searchable, to open in the viewer.'}
+          </p>
+        {/if}
+      </div>
+    {/each}
   </div>
 </div>

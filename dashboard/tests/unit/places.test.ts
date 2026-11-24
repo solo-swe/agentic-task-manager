@@ -5,23 +5,25 @@ import { placeName } from '../../src/lib/places';
 
 describe('placeName', () => {
   it.each([
-    // A project without a tab is on its Overview, the Project tab (ATM-751); the Kanban is the Board, the graph
-    // Dependencies
-    ['/projects/abc', 'Project'],
+    // A project without a tab is on its Overview (ATM-751, ATM-752: the Project tab is the Overview item); the Kanban
+    // is the Board, the graph Dependencies, and All's board the Board too
+    ['/projects/abc', 'Overview'],
     ['/projects/abc/kanban', 'Board'],
     ['/projects/abc/list', 'List'],
     ['/projects/abc/graph', 'Dependencies'],
     ['/projects/abc/progress', 'Progress'],
     ['/projects/abc/agents', 'Agents'],
-    ['/projects/abc/project', 'Project'],
+    ['/projects/abc/project', 'Overview'],
     ['/projects/abc/reviews', 'Reviews'],
+    ['/projects/abc/inbox', 'Inbox'],
+    ['/projects/abc/documents', 'Documents'],
     ['/projects', 'Projects'],
-    ['/board', 'Omniboard'],
+    ['/board', 'Board'],
     ['/list', 'List'],
     ['/reviews', 'All reviews'],
     ['/progress', 'Progress'],
     ['/agents', 'Agents'],
-    ['/w/work/board', 'Omniboard'],
+    ['/w/work/board', 'Board'],
     ['/', 'Projects'],
   ])('a page: %s is %s', (address, name) => {
     expect(placeName(address)).toBe(name);

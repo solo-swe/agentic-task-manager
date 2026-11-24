@@ -31,7 +31,7 @@ test.describe('Projects Overview: the Reviews tab', () => {
     tasksServer.setReviews({ reviews: [entry(1, 'Ours', { updated: '2026-11-18T10:00:00Z' })], you: 'Ana' });
     tasksServer.setProjectReviews('second', { reviews: [entry(1, 'Theirs')], you: 'Ana' });
     await page.goto('/projects');
-    await page.locator('#overview-tab-reviews').click();
+    await page.locator('#item-reviews').click();
     await expect(page).toHaveURL(/\/reviews(\?|$)/);
     const rows = page.locator('#overview-reviews .review-row');
     await expect(rows).toHaveCount(2);

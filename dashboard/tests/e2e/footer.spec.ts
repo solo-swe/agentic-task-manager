@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { CARGO_TOML, workspacePackage } from '../../build/workspace';
-import { expect, openDashboard, test } from './helpers';
+import { expect, openDashboard, openView, test } from './helpers';
 
 const { repository } = workspacePackage(readFileSync(CARGO_TOML, 'utf8'));
 
@@ -12,7 +12,7 @@ test.describe('Footer', () => {
   test('shows the logo and name, the copyright, the version and a GitHub link on every view', async ({ page }) => {
     const footer = page.locator('#site-footer');
     for (const view of ['graph', 'kanban', 'list', 'agents', 'progress']) {
-      await page.locator(`#tab-${view}`).click();
+      await openView(page, view);
       await expect(footer).toBeVisible();
       // The ATM logo and name come first, before the copyright
       await expect(footer.locator('#footer-brand')).toHaveText('Agentic Task Manager (atm)');
@@ -30,7 +30,7 @@ test.describe('Footer', () => {
 
   test('stays at the bottom of the window while the page scrolls', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, 'large-90');
-    await page.locator('#tab-list').click();
+    await openView(page, 'list');
     const viewport = page.viewportSize()!;
     expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThan(viewport.height);
     for (const y of [0, 600, 100_000]) {

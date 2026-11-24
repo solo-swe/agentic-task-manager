@@ -6,8 +6,18 @@
 // tests/unit/address.test.ts checks them against.
 import type { ParamMatcher } from '@sveltejs/kit/params';
 
-export const PROJECT_TABS = ['kanban', 'list', 'graph', 'progress', 'agents', 'project', 'reviews'];
-export const OVERVIEW_PATHS = ['board', 'progress', 'agents', 'reviews', 'list'];
+export const PROJECT_TABS = [
+  'project',
+  'inbox',
+  'kanban',
+  'list',
+  'graph',
+  'reviews',
+  'documents',
+  'progress',
+  'agents',
+];
+export const OVERVIEW_PATHS = ['board', 'list', 'progress', 'agents', 'reviews'];
 /** A review page's sub-tabs after its path (ATM-697: /projects/<id>/reviews/<CR>/[section=section]); the Overview is
  * the review's own path (lib/address.ts REVIEW_SECTIONS) */
 export const REVIEW_SECTION_PATHS = ['diffs', 'comments'];

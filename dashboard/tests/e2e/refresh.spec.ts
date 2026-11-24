@@ -1,5 +1,15 @@
 import type { Page } from '@playwright/test';
-import { expect, filterButton, loadFixture, matchCount, openDashboard, openFilters, openMenu, test } from './helpers';
+import {
+  expect,
+  filterButton,
+  loadFixture,
+  matchCount,
+  openDashboard,
+  openFilters,
+  openMenu,
+  openView,
+  test,
+} from './helpers';
 
 /** standard.json with T-005 marked done. */
 function standardWithT005Done() {
@@ -90,7 +100,7 @@ test.describe('auto-refresh', () => {
   }) => {
     // A marker on a rendered card survives only if the card isn't rendered again
     await page.keyboard.press('Escape'); // the settings menu
-    await page.getByRole('tab', { name: 'Task List' }).click();
+    await openView(page, 'list');
     await page.locator('.task-card[data-id="T-005"]').evaluate((el) => el.setAttribute('data-marker', '1'));
     await page.clock.runFor(10_000);
     await requests(tasksServer).toBe(3);
