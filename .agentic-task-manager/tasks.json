@@ -19618,11 +19618,11 @@
       "description": "In the diff view, while the user is writing a comment or a reply, a comment or response arriving from an agent re-renders the view and the text being edited is lost. The editor, its text and its cursor must survive updates to the review. Test with a comment and a reply in progress while new comments arrive.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T00:24:30Z",
+      "updated_at": "2026-11-24T00:33:02Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -19635,7 +19635,24 @@
       "review": "async",
       "number": 732,
       "started_at": "2026-11-24T00:24:30Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "45c7026fb80792f6f1281a4a70662c98f7d4203a",
+      "code_reviews": [
+        {
+          "id": "01a20af8-6a9f-72ff-a072-74633da86c16",
+          "ref": "CR-139"
+        }
+      ],
+      "review_requested_at": "2026-11-24T00:33:02Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-24T00:33:02Z",
+          "kind": "review",
+          "text": "CR-139: Keep an unsent comment or reply when the review updates",
+          "by": "claude:ba530ebb"
+        }
+      ]
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d982704f90ae",

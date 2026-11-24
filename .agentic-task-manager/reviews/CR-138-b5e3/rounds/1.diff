@@ -1,0 +1,266 @@
+diff --git a/dashboard/src/lib/reviews/ReviewPage.svelte b/dashboard/src/lib/reviews/ReviewPage.svelte
+index 7a55b318..4135a1db 100644
+--- a/dashboard/src/lib/reviews/ReviewPage.svelte
++++ b/dashboard/src/lib/reviews/ReviewPage.svelte
+@@ -189,14 +189,42 @@
+   let tab = $state<ReviewSection>(untrack(() => sectionOf(section)));
+   $effect.pre(() => {
+     const next = sectionOf(section);
+-    untrack(() => (tab = next));
++    untrack(() => {
++      if (next !== tab && next === 'diffs') backToDiffs = true;
++      tab = next;
++    });
+   });
+   function chooseTab(next: ReviewSection) {
+     if (next === tab) return;
++    if (next === 'diffs') backToDiffs = true;
+     tab = next;
+     onsection?.(next);
+   }
+ 
++  // Each sub-tab keeps its place (ATM-730): a tab's pane is made again when it is shown, so where it was scrolled is
++  // kept here as it scrolls, and put back when it comes back (the tab's Back and Forward too). The Overview, the
++  // Comments and the tree by their scroll; the diffs by the first card in view and how far up it is scrolled, as
++  // their cards are made again at an estimate's height until drawn (the card is held there while they settle, as a
++  // file gone to is)
++  type Place = { path: string; top: number };
++  const places: { overview: number; comments: number; tree: number; diffs: Place | null } = {
++    overview: 0,
++    comments: 0,
++    tree: 0,
++    diffs: null,
++  };
++  /** The diffs come back on their place: unless a file is gone to (`showFile`) or a change or comment (`jump`) */
++  let backToDiffs = false;
++  /** A pane that keeps its scroll in `places[key]`, put back when the pane is made */
++  function keepsPlace(key: 'overview' | 'comments' | 'tree') {
++    return (el: HTMLElement) => {
++      el.scrollTop = places[key];
++      const save = () => (places[key] = el.scrollTop);
++      el.addEventListener('scroll', save, { passive: true });
++      return () => el.removeEventListener('scroll', save);
++    };
++  }
++
+   // The comment in view (ATM-697): once its tab has drawn it, scrolled to the middle and marked; each comment once
+   let commentShown: string | null = null;
+   $effect(() => {
+@@ -327,14 +355,18 @@
+   // anchoring, anchored inside a card a live update drew again, moved the pane by the card's height (1,033 px). Its
+   // pane has the browser's anchoring off (`.live`), and the first card in view is kept where it is when a card above
+   // it changes size (the cards' ResizeObserver, below); a card that grows below the place read moves nothing anyway
+-  let reading: { path: string; top: number } | null = null;
+-  /** The first card in view, and how far its top is from the pane's: what a live update keeps in place */
+-  function remember() {
++  let reading: Place | null = null;
++  /** The first card in view, and how far its top is from the pane's */
++  function firstInView(): Place | null {
+     const el = list;
+-    if (!el) return;
++    if (!el?.isConnected) return null;
+     const top = el.getBoundingClientRect().top;
+     const card = cards().find((c) => c.getBoundingClientRect().bottom > top + 1);
+-    reading = card?.dataset.file ? { path: card.dataset.file, top: card.getBoundingClientRect().top - top } : null;
++    return card?.dataset.file ? { path: card.dataset.file, top: card.getBoundingClientRect().top - top } : null;
++  }
++  /** What a live update keeps in place */
++  function remember() {
++    reading = firstInView();
+   }
+   /** That card back where it was, the list scrolled by the difference */
+   function keepReading() {
+@@ -351,6 +383,9 @@
+     scrolling = requestAnimationFrame(() => {
+       scrolling = 0;
+       findTop();
++      // The diffs' place for the way back to them (a pane already gone keeps the last one)
++      const place = firstInView();
++      if (place) places.diffs = place;
+     });
+   }
+ 
+@@ -380,20 +415,23 @@
+   let wanted = $state<string | null>(null);
+   const cardOf = (path: string) =>
+     list?.querySelector<HTMLElement>(`.review-file-card[data-file="${CSS.escape(path)}"]`) ?? null;
+-  /** `card` at the list's top, as near as it scrolls: the list scrolled by the difference, and nothing else (ATM-656:
+-   * `scrollIntoView` also scrolls what holds the list, and in WebKit landed a few px off one time in two) */
+-  function toTop(card: HTMLElement | null) {
++  /** `card` at the list's top (or `at` px below it, a negative `at` scrolled into it), as near as it scrolls: the list
++   * scrolled by the difference, and nothing else (ATM-656: `scrollIntoView` also scrolls what holds the list, and in
++   * WebKit landed a few px off one time in two) */
++  function toTop(card: HTMLElement | null, at = 0) {
+     const el = list;
+     if (!el || !card) return;
+-    const off = card.getBoundingClientRect().top - el.getBoundingClientRect().top;
++    const off = card.getBoundingClientRect().top - el.getBoundingClientRect().top - at;
+     if (Math.abs(off) >= 1) el.scrollTop += off;
+   }
+   /** Go to file `path` on the Diffs tab; with `address`, the address follows (the sub-tab and file, and the comment gone
+    * to from the Comments tab) */
+   async function showFile(path: string, address = true, comment: string | null = null) {
+     tab = 'diffs';
++    backToDiffs = false;
+     holdNearCards();
+     wanted = path;
++    pinOffset = 0;
+     await tick();
+     toTop(cardOf(path));
+     atFile = chosen = pinned = path;
+@@ -410,6 +448,8 @@
+   // put it back (19 px for a few frames, 1 jump in 8); and the observer's own correction, when a card above changed
+   // size, came a frame late in WebKit (96 px off for that frame). Once the reader moves, both are back
+   let pinned = $state<string | null>(null);
++  /** How far below the pane's top the held card stands (negative: scrolled into it, the diffs' place kept, ATM-730) */
++  let pinOffset = 0;
+   const pinnedAt = $derived(pinned === null ? -1 : files.findIndex((f) => f.path === pinned));
+   /** The hold ended: the cards above take their own heights again, in the same update the pane's anchoring comes back,
+    * so no anchor has seen them change; the file held stays where it was, the pane scrolled by what they changed */
+@@ -432,7 +472,7 @@
+       if (pinned) release();
+     };
+     const settle = new ResizeObserver(() => {
+-      if (pinned) toTop(cardOf(pinned));
++      if (pinned) toTop(cardOf(pinned), pinOffset);
+       else if (live) keepReading();
+     });
+     for (const card of el.querySelectorAll('.review-file-card')) settle.observe(card);
+@@ -450,6 +490,26 @@
+     opened = true;
+     void showFile(file, false);
+   });
++  // Back on the Diffs tab: the list where it was left (ATM-730), its first card in view held at the same height while
++  // the cards around it are made; a file the round no longer has leaves the list at its top
++  $effect(() => {
++    if (!list || !backToDiffs) return;
++    backToDiffs = false;
++    const place = places.diffs;
++    if (!place || !files.some((f) => f.path === place.path)) return;
++    untrack(() => void backTo(place));
++  });
++  async function backTo(place: Place) {
++    holdNearCards();
++    wanted = place.path;
++    await tick();
++    const card = cardOf(place.path);
++    if (!card) return;
++    pinOffset = place.top;
++    toTop(card, pinOffset);
++    pinned = place.path;
++    findTop();
++  }
+ 
+   function stepFile(by: number) {
+     const i = files.findIndex((f) => f.path === (atFile ?? files[0]?.path));
+@@ -479,6 +539,7 @@
+   }
+   async function jump(back: boolean, kind: keyof typeof TARGETS = 'change') {
+     chooseTab('diffs');
++    backToDiffs = false;
+     holdNearCards();
+     if (pinned) release();
+     await tick();
+@@ -950,7 +1011,7 @@
+   {#if problem}<p class="review-problem" role="alert">{problem}</p>{/if}
+ 
+   {#if tab === 'overview'}
+-    <div class="review-overview" role="tabpanel" aria-labelledby="review-tab-overview">
++    <div class="review-overview" role="tabpanel" aria-labelledby="review-tab-overview" {@attach keepsPlace('overview')}>
+       <dl class="review-facts">
+         <div class="review-fact">
+           <dt><Icon name="user" size={13} /> Author</dt>
+@@ -1081,7 +1142,7 @@
+       bind:this={split}
+       style:--tree="{width}px"
+     >
+-      <nav class="review-files" aria-label="Files">
++      <nav class="review-files" aria-label="Files" {@attach keepsPlace('tree')}>
+         <div class="review-files-head">
+           <span>Files</span>
+           <span class="review-files-total"
+@@ -1206,7 +1267,7 @@
+       </div>
+     </div>
+   {:else}
+-    <div class="review-comments" role="tabpanel" aria-labelledby="review-tab-comments">
++    <div class="review-comments" role="tabpanel" aria-labelledby="review-tab-comments" {@attach keepsPlace('comments')}>
+       <div class="review-segmented review-filter" role="group" aria-label="Show">
+         {#each [['all', 'All'], ['open', 'Open'], ['resolved', 'Resolved']] as const as [id, label] (id)}
+           <button aria-pressed={filter === id} data-filter={id} onclick={() => (filter = id)}
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index fdbaf5ba..2f836ed2 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -1504,6 +1504,71 @@ test.describe('a review’s page', () => {
+     await expect(rows).toHaveCount(5);
+   });
+ 
++  // ATM-730 (Hakan): switching a review's sub-tabs lost the diffs' place; each tab keeps its own, both ways
++  test(
++    'the diffs keep their place across a switch to Overview or Comments and back, and through Back',
++    WEBKIT_TOO,
++    async ({ page, tasksServer }) => {
++      // 30 files, each changing line 21 of 40 (so each card is a few runs tall)
++      const code = { kind: 'code', language: 'rust', line_offset: 1 } as const;
++      const files = Array.from({ length: 30 }, (_, i) => {
++        const path = `src/f${String(i).padStart(2, '0')}.rs`;
++        const patch = `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -18,7 +18,7 @@\n line 18\n line 19\n line 20\n-line 21\n+line 21 changed\n line 22\n line 23\n line 24\n`;
++        tasksServer.setRevisionDocument('base1', projectDocument(path, lines(40), code)).setRevisionDocument(
++          'head3',
++          projectDocument(
++            path,
++            lines(40, (n) => (n === 21 ? 'line 21 changed' : null)),
++            code,
++          ),
++        );
++        return file(path, patch);
++      });
++      await openReviews(page, tasksServer);
++      tasksServer.setReview('CR-2', reviewPage({ chains: [], view: { round: 3, against: null, files } }));
++      await page.goto(reviewPath(tasksServer, '/CR-2'));
++      await page.getByRole('tab', { name: /^Diffs/ }).click();
++      await expect(diffOf(page, 'src/f00.rs').locator('.diff-line').first()).toBeVisible();
++      const pane = page.locator('.review-diffs');
++      // Scrolled part way into a card far down, its diffs drawn
++      await pane.evaluate((el) => (el.scrollTop = el.scrollHeight / 2));
++      await expect(page.locator('.review-file.current')).toBeVisible();
++      await expect.poll(() => page.locator('.diff-view').count()).toBeGreaterThan(2);
++      const place = () =>
++        pane.evaluate((el) => {
++          const top = el.getBoundingClientRect().top;
++          const card = [...el.querySelectorAll<HTMLElement>('.review-file-card')].find(
++            (c) => c.getBoundingClientRect().bottom > top + 1,
++          );
++          return { file: card?.dataset.file, top: Math.round(card!.getBoundingClientRect().top - top) };
++        });
++      await page.waitForTimeout(100);
++      const before = await place();
++      expect(before.file).not.toBe('src/f00.rs');
++      const near = async () => {
++        const now = await place();
++        return now.file === before.file && Math.abs(now.top - before.top) <= 2;
++      };
++      for (const other of [/^Comments/, /^Overview/]) {
++        await page.getByRole('tab', { name: other }).click();
++        await expect(pane).toHaveCount(0);
++        await page.getByRole('tab', { name: /^Diffs/ }).click();
++        await expect.poll(near).toBe(true);
++      }
++      // Back from the Diffs goes to Overview; Forward comes back to the same place
++      await page.goBack();
++      await expect(page.getByRole('tab', { name: /^Overview/ })).toHaveAttribute('aria-selected', 'true');
++      await page.goForward();
++      await expect(page.getByRole('tab', { name: /^Diffs/ })).toHaveAttribute('aria-selected', 'true');
++      await expect.poll(near).toBe(true);
++      // Going to a file still goes to that file, not back to the place kept
++      await page.getByRole('tab', { name: /^Comments/ }).click();
++      await page.getByRole('tab', { name: /^Diffs/ }).click();
++      await page.locator('.review-file-name[data-file="src/f02.rs"]').click();
++      await expect.poll(async () => (await place()).file).toBe('src/f02.rs');
++    },
++  );
++
+   test('the file gone to, the round and the round against are the address’s, and are asked of the server', async ({
+     page,
+     tasksServer,

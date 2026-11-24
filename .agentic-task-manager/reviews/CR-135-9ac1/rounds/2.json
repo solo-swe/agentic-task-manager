@@ -1,0 +1,15 @@
+{
+  "number": 2,
+  "kind": {
+    "kind": "files"
+  },
+  "files": [
+    {
+      "path": "docs/sidebar-overhaul-design.md",
+      "status": "added",
+      "binary": false
+    }
+  ],
+  "by": "claude:ba530ebb",
+  "at": "2026-11-23T22:51:52Z"
+}

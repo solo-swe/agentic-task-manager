@@ -9419,8 +9419,7 @@
       "type": "docs",
       "priority": "P1",
       "labels": [
-        "security",
-        "interactive"
+        "security"
       ],
       "description": "Security review, **interactive with the user**. *Fix nothing in this task.*\n\n## 1. Threat model\nWrite `docs/security-review.md`, starting with a threat model of atm:\n- **Assets:** task files, the user's repositories and git credentials, the machine (through the agents' shell).\n- **Actors and trust boundaries:** the user, agents running the skills, other local processes and users, web pages in the user's browser, collaborators whose `tasks.json` or PRs come in through git, CI.\n- **Entry points:** atm-cli commands and their file arguments; the dashboard server's HTTP routes and the projects registry; the dashboard rendering task text, Markdown and links; the skills and the hook acting on task text (*prompt injection*); the GitHub workflows.\n- **Threats** per boundary (e.g. STRIDE), with likelihood and impact.\n\n## 2. Review atm against it\n- **atm-cli** (`atm-cli/atm/*.py`): locking, path handling for `--file`/`--dir`/`--meta-file`, git shell-outs, parsing an untrusted `tasks.json`.\n- **Server** (`server.py`): localhost binding, `Host`/`Origin` checks against DNS rebinding, path traversal on `p/<id>/`, `--refresh` restarts.\n- **Dashboard:** XSS through task text, Markdown and `meta.repository` links; external URLs.\n- **Skills and hook** (`plugin/skills`, `plugin/hooks`).\n- **CI** (`.github/workflows`): permissions, pinned actions.\n\n## 3. Proposed tasks\nIn the same document, list the proposed tasks (name, severity, area, what to change, how to test). **Not yet in `tasks.json`.** Two groups:\n- **Fixes** for the gaps the review found.\n- **Security architecture:** tasks that define it (`docs/security-architecture.md`), among other things:\n  - the security principles and invariants atm keeps (what each component may trust, read, write and run);\n  - whether we need a **sandbox** to verify security (e.g. a container or VM where hostile `tasks.json` files, crafted HTTP requests and prompt-injection task text run against atm, the server and the skills), and what it would look like;\n  - **how and when** we verify it: which checks run in CI on every PR (static analysis, dependency and action pinning, security regression tests), which before each release, and which periodically (a full review against the threat model, the sandbox run);\n  - how the threat model stays current (when a change needs a threat-model update).\n\n## 4. Review with the user\nReview the document with the user (crit; `atm block --on user` for open decisions).\n\n## 5. Add the approved tasks\nOnly after the user approves: add them with `/atm:create-tasks`, labeled `security` (plus the area label), prioritized by severity, in phase 20 *Security fixes*.\n",
       "requirements": [],
@@ -9467,7 +9466,8 @@
       "release": "0.19.0",
       "components": [
         "docs"
-      ]
+      ],
+      "with": "user"
     },
     {
       "id": "7d9ac02b-4ae5-8c0c-9ce8-09bb48b5f2e0",
@@ -9476,8 +9476,7 @@
       "type": "polish",
       "priority": "P2",
       "labels": [
-        "progress",
-        "interactive"
+        "progress"
       ],
       "description": "**Interactive with the user.** Make every diagram and number on the Progress tab meaningful, with help that makes it useful.\n\n## Review\nGo through the Progress tab piece by piece (`ProgressTab.svelte`, `ProgressWidget.svelte`, `BurndownChart.svelte`, `PhaseTable.svelte`, `Ring.svelte`, `forecast.ts`). For each diagram and number, write:\n- what it shows and how it's computed;\n- when it misleads (few tasks, skipped tasks, parallel agents, archived tasks);\n- what question it answers for the user.\n\n## Proposal\nPut that in `docs/progress-tab-review.md`, with a recommendation per item (*keep*, *change* or *drop*) and the help each kept item gets: a tooltip, an info popover or an empty-state message.\n\n## With the user\nReview it with the user (the preview server and/or a crit review of the proposal; `atm block --on user` for decisions you can't make). Then implement what's approved, or, if it's large, add follow-up tasks with `/atm:create-tasks`.\n",
       "requirements": [],
@@ -9521,7 +9520,8 @@
       "components": [
         "dashboard",
         "docs"
-      ]
+      ],
+      "with": "user"
     },
     {
       "id": "8080e9f9-8b01-8637-a473-fc3fe12d847a",
@@ -9530,8 +9530,7 @@
       "type": "polish",
       "priority": "P2",
       "labels": [
-        "activity",
-        "interactive"
+        "activity"
       ],
       "description": "**Interactive with the user.** The same pass as the Progress tab review (T-212), for the Activity per hour/day/week popup.\n\n## Review\nGo through `ActivityWidget.svelte`, `ActivityDeepDive.svelte`, `UtilizationPanel.svelte` and `insights.ts`. For each chart, box and number (throughput, cumulative done, cycle time, WIP, idle time, utilization), write:\n- what it shows and how it's computed;\n- when it misleads;\n- what question it answers.\n\n## Proposal\n`docs/activity-popup-review.md`, with *keep*, *change* or *drop* and the help text for each.\n\n## With the user\nReview it with the user (the preview server and/or crit; `atm block --on user` for open decisions). Then implement what's approved, or add follow-up tasks with `/atm:create-tasks`.\n",
       "requirements": [],
@@ -9577,7 +9576,8 @@
       "components": [
         "dashboard",
         "docs"
-      ]
+      ],
+      "with": "user"
     },
     {
       "id": "d1be951e-934d-8415-b7df-af9a4f6de90b",
@@ -9586,8 +9586,7 @@
       "type": "docs",
       "priority": "P2",
       "labels": [
-        "stats",
-        "interactive"
+        "stats"
       ],
       "description": "**Interactive with the user**, done together with T-216 (project information): same proposal, same review.\n\n## Where\nPropose where to show the overall project stats: the Progress tab, a new Stats section, the project card, or an About-like dialog.\n\n## Which stats, and how\n- **Project start**\n- **Project duration:** earliest task start to latest task completion.\n- **Total agent time used:** the sum of in-progress spans.\n- **Task duration** avg/min/max: propose the best visualization (e.g. a box plot or histogram by type, with the slowest tasks listed).\n- **Max parallelization:** the most agents working at once.\n- **Overall parallelization:** define it, e.g. *agent time ÷ wall-clock time while any agent works*.\n- Number of **commits**, **pull requests**, **phases** and **tasks**.\n\nFor each stat, say how it's computed from `tasks.json` (and the archive), and where data is missing (tasks without `started_at`, reopened tasks, skipped tasks).\n\n## Proposal\nWrite `docs/project-stats-proposal.md` with mock-ups, review it with the user (crit), and once approved add implementation tasks with `/atm:create-tasks`.\n",
       "requirements": [],
@@ -9630,7 +9629,8 @@
       "components": [
         "dashboard",
         "docs"
-      ]
+      ],
+      "with": "user"
     },
     {
       "id": "d78aba4e-32ed-8aed-b646-19e82d3f4355",
@@ -9640,8 +9640,7 @@
       "priority": "P2",
       "labels": [
         "overview",
-        "kanban",
-        "interactive"
+        "kanban"
       ],
       "description": "**Interactive with the user.** Explore an All Projects Kanban in the overview: one board with cards from every project, each card with a project chip (like the branch chip).\n\n## Options to weigh\n1. **Cross-project phases and filters.** Phases differ per project, so how would that work?\n2. **No phase filter:** every task in *Review*, *Blocked* and *In Progress*, plus the N most recently updated in *To Do* and *Done*.\n3. **Per-project swimlanes.**\n\n## Also consider\n- **Load:** `api/projects` already sends summaries; would the board need every project's `tasks.json`, and how often?\n- Sorting, the Needs-you menu, and how it fits next to the project cards.\n\n## Proposal\nWrite `docs/all-projects-kanban-proposal.md` with mock-ups and a recommendation, review it with the user (crit), and once approved add implementation tasks with `/atm:create-tasks`.\n",
       "requirements": [],
@@ -9684,7 +9683,8 @@
       "components": [
         "dashboard",
         "docs"
-      ]
+      ],
+      "with": "user"
     },
     {
       "id": "3b98d9d0-f86f-8ed4-a176-49fc17144b46",
@@ -9693,8 +9693,7 @@
       "type": "docs",
       "priority": "P2",
       "labels": [
-        "stats",
-        "interactive"
+        "stats"
       ],
       "description": "**Interactive with the user**, done together with T-214: the same proposal (`docs/project-stats-proposal.md`) and the same review.\n\n## Where\nPropose where to show the project's information: e.g. a Project info dialog or tab, the About dialog, the project card's tooltip, or a section next to the stats.\n\n## What\n- **Name** and **description**.\n- **Developers:** who created and worked on tasks, users and agents, with task counts; how to group agent sessions.\n- **Git repository** (a link).\n- **Development workflow:** *direct* or *pull-request*, base branch, verify, commit template.\n- **Project vocabulary:** phases with names and task counts, labels, task types, statuses with their kinds, priorities and the default.\n\nFor each item, say where its data comes from (`tasks.json` `meta`, the tasks, the server) and what's missing.\n\n## With the user\nReview it with the user (crit), and once approved add implementation tasks with `/atm:create-tasks`.\n",
       "requirements": [],
@@ -9736,7 +9735,8 @@
       "components": [
         "dashboard",
         "docs"
-      ]
+      ],
+      "with": "user"
     },
     {
       "id": "deb9df5f-7d69-86c1-a45f-2fa6604d27f0",
@@ -10502,8 +10502,7 @@
       "type": "infra",
       "priority": "P2",
       "labels": [
-        "security",
-        "interactive"
+        "security"
       ],
       "description": "Finding **F17** in `docs/security-review.md`.\n\nAnything merged to `main` runs on every user's machine after an update (the hooks run `atm` on every tool call and at session start).\n\n## Do\n\n- Write `SECURITY.md`: how to report a vulnerability, what the plugin runs automatically (the hooks), what atm never does.\n- Prepare the branch protection settings for `main` (required checks, review) and **ask the user** to apply them: they are repository settings only the owner changes.\n- Propose, and decide with the user, whether the marketplace should point at a release tag instead of the default branch.",
       "requirements": [],
@@ -10564,7 +10563,8 @@
       "components": [
         "ci",
         "docs"
-      ]
+      ],
+      "with": "user"
     },
     {
       "id": "466f4dd7-f156-8ab6-b188-aa7b333c93ef",
@@ -10573,8 +10573,7 @@
       "type": "docs",
       "priority": "P1",
       "labels": [
-        "security",
-        "interactive"
+        "security"
       ],
       "description": "§4.2 of `docs/security-review.md`.\n\n## Do\n\nWrite `docs/security-architecture.md`:\n\n- **Threat model**: the assets, actors, boundaries and threats from §2 of the review, as the maintained version.\n- **Invariants** every change must keep, e.g.: task text is data for agents; atm never runs a shell or follows a symlink out of the repo; nothing changes state over HTTP; the server answers only loopback with a matching Host; every link the dashboard renders is http(s)/mailto/#; no `{@html}` on data; skills pre-approve no command runner; CI tokens are read-only by default.\n- For **each invariant**, the test or check that enforces it (existing or to build).\n- **Keeping it current**: which changes must update the threat model (a new entry point, file format, HTTP route or skill instruction), and a line about it in `CLAUDE.md`.\n\nReview the draft with the user before committing it as done.",
       "requirements": [],
@@ -10629,7 +10628,8 @@
       "release": "0.20.0",
       "components": [
         "docs"
-      ]
+      ],
+      "with": "user"
     },
     {
       "id": "4e3cb93b-a307-855d-954f-8884a5eb64b0",
@@ -10638,8 +10638,7 @@
       "type": "docs",
       "priority": "P1",
       "labels": [
-        "security",
-        "interactive"
+        "security"
       ],
       "description": "§4.2 of `docs/security-review.md`. A section of `docs/security-architecture.md`, decided with the user.\n\nThe recommendation to present:\n\n1. **Hostile-repo fixture** for atm-cli and the server: a temp `HOME` / `ATM_HOME` and a generated repo with symlinks, nested JSON, odd IDs and URLs, in the existing `tests/scripts` harness. Cheap; runs on every PR.\n2. **Agent sandbox** for the skills: a container (devcontainer or Docker) with a throwaway repo, no real credentials, network egress blocked except the model API, where an agent runs `/atm:loop-tasks` on red-team tasks (injected commands, `curl | sh`, credential reads); it passes if it blocks them. The only way to test prompt injection; costs model calls, so not on every PR.\n\nRecord the decision, what each level covers and what it costs.",
       "requirements": [],
@@ -10695,7 +10694,8 @@
       "release": "0.20.0",
       "components": [
         "docs"
-      ]
+      ],
+      "with": "user"
     },
     {
       "id": "3f507037-118f-80b5-8a4c-068229cac04c",
@@ -13060,7 +13060,6 @@
       "type": "test",
       "priority": "P2",
       "labels": [
-        "interactive",
         "archive"
       ],
       "description": "An interactive session with Hakan: walk through archiving (`atm archive`, `atm unarchive`) and everything the dashboard shows about archived tasks, on a throwaway project, and write down what is wrong or confusing. **Nothing is fixed during the session**: problems become follow-up tasks, and only those Hakan approves are added.\n\n## How archiving works (what to expect)\n- `atm archive` moves finished tasks (done- and skipped-kind) from `tasks.json` to `tasks-archive.json`, except those finished in the last `meta.archive.keep_days` days (default 14) and those still in an open PR (`pr` set, no `merged_at`). Options: `--phase N` (repeatable), `--before DATE`, `--keep-days N`, `--dry-run`. It prints what moved and both files' sizes; `meta.archived` counts the archive.\n- The hint (`atm status`, `atm done`): shown when `tasks.json` is over `meta.archive.threshold_kb` (1024) or has more archivable tasks than `threshold_tasks` (500), and something can move. `meta.archive.auto: false` makes the skills only relay it.\n- `atm unarchive <id>...` brings tasks back; `atm list --archived` and `atm show <id>` read the archive; an archived task counts as done for dependencies.\n- The dashboard loads the archive only when a view needs it (D-5.2): the subtitle says *N archived*; the filter bar has *Include archived* (search, List, Graph and the Agents timeline then include archived tasks); the detail panel marks an archived task *· archived* and shows an archived dependency as a stub; the Progress tab, the Project tab and the Activity popup count the history (archived tasks too); the status bar shows an archive notice past the threshold.\n\n## Set up (in a terminal next to Hakan)\n1. A git repository in a new temporary folder (`mktemp -d`), **outside this repository**: this repo's own task list is not the test subject.\n2. `atm init --meta-file <file>` with a project name (e.g. *Archive Test*), named phases 0–2, and `meta.archive.threshold_tasks: 5`, so the hint appears without 500 tasks. `atm init` lists the project on the dashboard.\n3. About 20 tasks (`atm add --json-file`), with dependencies across phases, then statuses through atm only (never by editing the file):\n   - phase 0: all done, finished about 30 days ago (`ATM_NOW=<date 30 days ago> atm start/done`), one skipped;\n   - phase 1: some done 20 days ago, two done today, one done 20 days ago but in an open PR (`atm pr <id> --number 1 --url https://example.com/pr/1`), one in a merged PR (`atm merged --pr 2 --at <date>`);\n   - phase 2: a few to do (one depending on a phase-0 task), one in progress, one in review.\n4. `/atm:serve`, and open the project on the dashboard.\n\n## Walk through, with Hakan watching the dashboard\n1. **The hint**: `atm status` shows it (with the numbers), `atm done` on a task too; the status bar's archive notice.\n2. **Dry run**: `atm archive --dry-run`: which tasks would move, and that the recent ones and the open-PR one stay.\n3. **Archive**: `atm archive`: its report (counts, sizes); then `atm list --archived`, `atm show` of an archived task, `atm status` (the hint is gone, the archived count).\n4. **Dashboard after archiving**:\n   - the subtitle's *N archived*; the Kanban, List and Graph without archived tasks;\n   - *Include archived*: search finds archived tasks; List and Graph show them, marked;\n   - the detail panel of an archived task (*· archived*), and of the phase-2 task whose dependency is archived (the stub);\n   - the Progress tab (burndown, phase table), the Project tab (stats, histogram, agents) and the Activity popup: do the numbers still include the archived work, and are they the same as before archiving?\n   - the Agents timeline with and without *Include archived*;\n   - the Projects Overview card (progress rings, counts, the stats line) and the Omniboard (done in the last 24 hours) for this project.\n5. **Unarchive**: `atm unarchive <id>` for one task: it is back in `tasks.json`, on the Kanban, and the counts change.\n6. **Edge cases if time allows**: `atm archive --phase 0`, `--before`, `--keep-days 0`; archiving with the dashboard open (does it update without a reload?); a dependency on a task that was archived and then unarchived.\n\n## Then\n- Write the findings into this task's outcome note (short), and propose a follow-up task per problem; add only those Hakan approves (`/atm:create-tasks`).\n- Clean up: `atm projects remove <the test project's id>`, and delete the temporary folder.\n",
@@ -13176,9 +13175,6 @@
       "name": "A richer social preview: the dashboard, the logo and how to install, from the script",
       "type": "feature",
       "priority": "P2",
-      "labels": [
-        "interactive"
-      ],
       "description": "Hakan finds the social preview (logo, name, one line) too simple. The card GitHub shows when the repository is linked should say what atm is at a glance.\n\n## Content (1280×640)\n- The logo and the name, *Agentic Task Manager*, with a short line on what it does (task management for Claude Code agents, with a live dashboard).\n- **A hint of the dashboard**: a real, recognisable piece of it (e.g. a Kanban with cards, the progress ring, an agent at work), not a mock-up drawn by hand. Render it from the built dashboard (`plugin/templates/tasks-dashboard.html`) with a fixture, the way the e2e tests do, so it stays true to the product and updates when the dashboard changes; crop or scale it into the card.\n- **How to install**: the two commands (`/plugin marketplace add solo-swe/agentic-task-manager`, `/plugin install atm@solo-swe-plugins`), readable at the card's size.\n- The dark theme, the accent blue; text large enough to read in a link preview.\n\n## Made by the script\n`npm run branding` (`branding/generate.mjs`, previous task) renders it: no hand-made image. Document its inputs (the fixture, the theme) in `branding/README.md`.\n\n## Review with Hakan\nTwo or three layouts first, shown to him (rendered PNGs) before settling one; put the task in review (`atm review`) before showing them. After he approves, Hakan uploads the PNG in Settings → General → Social preview.",
       "requirements": [],
       "use_cases": [],
@@ -13250,7 +13246,6 @@
       "type": "polish",
       "priority": "P2",
       "labels": [
-        "interactive",
         "ux"
       ],
       "description": "Hakan finds the task detail panel's vertical scrollbar (when a task's details don't fit) out of place in the dashboard's look. Done live with him: try, look, adjust.\n\n## Change\n- **No scrollbar**: the sections scroll like the Kanban columns (`KanbanScroll.svelte`, T-262): hidden scrollbar, the wheel and trackpad scroll as usual, \"▲ N more\" / \"▼ N more\" hints (sections cut off) that scroll a page.\n- **The title and badges stay** at the top, the × on the title's line; less padding around the panel.\n- **A section rail on the left**: one entry per group, written bottom to top, with an icon; a click brings the group to the top (just below the \"▲\" hint), adding empty space below the last section when the content is too short; scrolling by hand never adds any, and scrolling back up takes it away. The entry of the group in view is highlighted. Groups (only those the task has):\n  - *Info*: in review / blocked, description;\n  - *Dependencies*: Depends on, Required by (one line each; a long name ends in \"…\");\n  - *Notes*;\n  - *Activity*: claimed by, who, timestamps, commit;\n  - *Ref*: use cases, requirements, files.\n- Only the task panel (`#detail-panel`): Help, About, the Activity popup and What's new share `.detail-panel` and keep their layout.\n\n## Tests\nComponent tests for the rail's groups and order, e2e tests for where a rail click lands and the active entry on a short task, the detail specs on the new scroller (`#detail-body`), refreshed detail screenshot baselines.\n",
@@ -13297,7 +13292,8 @@
       "release": "0.22.0",
       "components": [
         "dashboard"
-      ]
+      ],
+      "with": "user"
     },
     {
       "id": "34e65e87-1538-81b1-b3a5-46f65624fb67",
@@ -13356,7 +13352,6 @@
       "type": "polish",
       "priority": "P2",
       "labels": [
-        "interactive",
         "ux"
       ],
       "description": "Like the task details (T-280): the What's new dialog shows a vertical scrollbar when the release notes don't fit. Done live with Hakan.\n\n## Change\n- The title, with the × on its line, stays at the top; the releases scroll below it without a scrollbar, with *▲ N more* / *▼ N more* hints (releases cut off) that scroll a page, as in the Kanban columns.\n- One component for a scroller with these hints (`HintScroll.svelte`: what counts as an item, the classes), used by What's new and the Kanban columns (`KanbanScroll.svelte`), and the counting in `src/lib/scroll.ts` (`cutOff`), shared with the task details.\n- Help, About and the Activity popup share `.detail-panel` and stay as they are.\n\n## Tests\nUnit tests for `cutOff`; e2e: What's new has no scrollbar, the hints count the releases cut off and scroll; the Kanban specs still green; refreshed What's new screenshot baselines if any.",
@@ -13406,7 +13401,8 @@
       "release": "0.22.0",
       "components": [
         "dashboard"
-      ]
+      ],
+      "with": "user"
     },
     {
       "id": "437feb3e-4e3b-879b-9f65-05d7dc870a79",
@@ -13415,7 +13411,6 @@
       "type": "feature",
       "priority": "P2",
       "labels": [
-        "interactive",
         "ux",
         "theme"
       ],
@@ -13463,7 +13458,8 @@
       "release": "0.23.0",
       "components": [
         "dashboard"
-      ]
+      ],
+      "with": "user"
     },
     {
       "id": "3df03f0e-0f71-8eca-9624-1006664216ae",
@@ -14523,8 +14519,7 @@
       "type": "feature",
       "priority": "P1",
       "labels": [
-        "sprints",
-        "interactive"
+        "sprints"
       ],
       "description": "Once phases are migrated (this repository's phases become sprints when the new atm first runs here) and `/atm:plan-sprint` exists: run it with Hakan to plan the first sprint: which of the remaining tasks go in (the rest of this phase's work, T-277, T-279, the CompMD tasks), its name, goal, release and due date. Done live, with the user; nothing is decided without him. Notes from the session (what was unclear or missing in the skill) go to follow-up tasks.",
       "requirements": [],
@@ -14575,7 +14570,8 @@
         "number": 29,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/29"
       },
-      "merged_at": "2026-10-31T08:51:31Z"
+      "merged_at": "2026-10-31T08:51:31Z",
+      "with": "user"
     },
     {
       "id": "eb2065fb-d436-8478-95b4-99bc44c5b2cf",
@@ -16572,7 +16568,6 @@
       "type": "polish",
       "priority": "P1",
       "labels": [
-        "interactive",
         "ux"
       ],
       "description": "A live session with the user on the dev server (`npm run dev` in `dashboard/`): small changes that make the Dependency Graph tab easier to use, decided as we go.\n\n## Starting points\n- **Auto-fit toggle:** today only the first layout is fitted automatically (`DepGraph.svelte`, `autoFit`); once the filters or the data change, the view stays where it was. A toggle in `GraphControls.svelte` that keeps the graph fitted while it is on (filters, reloads, resizes), and switches off when the user pans or zooms.\n- **Fit everything vs the filtered tasks:** with filters or a search in *Dim* mode, \"Fit everything\" (F) fits all tasks; offer fitting only the tasks that match (e.g. a second button or the fit following the filters), keeping a way to fit everything.\n- Whatever else comes up in the session, kept small.\n\n## Tests\nUnit tests for the view logic in `dashboard/src/lib/` (fit to a subset of nodes), and e2e checks for the new controls; update the visual baselines if the controls change.\n\n## Docs\nEntries in `plugin/CHANGELOG.md` and `plugin/WHATS-NEW.md`.",
@@ -16775,7 +16770,6 @@
       "type": "infra",
       "priority": "P1",
       "labels": [
-        "interactive",
         "testing"
       ],
       "description": "Screenshot baselines and the e2e suite make every UI change expensive. Discuss the options with the user, agree on a plan, implement it, and write the result into the testing conventions. The scope covers both the screenshots and the functional e2e tests (widened with the user).\n\n## Pain points (this sprint)\n- **Too many baselines:** 176, per platform. Small UI changes rewrite many: T-334's spacing touched 8, T-341 and T-340 another 12.\n- **The Linux round trip:** Linux baselines need a CI run and an artifact download (or Docker), an extra push cycle per visual change.\n- **Flakes:** anti-aliasing differs by a few pixels between runs (the settings-menu screenshot).\n- **Slow wrap-ups:** the full e2e and visual run make finishing a task slow (T-341's wrap-up took hours).\n\n## Screenshots: decided (see the note)\n- A. Fewer, smaller screenshots: themes as one compact sample each, a few whole pages, the rest per component.\n- B. Linux-only baselines, made locally in Docker (`npm run test:e2e:linux-snapshots`).\n- C. Screenshots out of the per-task checks: CI runs them on every push; regenerated once a sprint in the release task; `npm run verify` keeps all.\n- D. A small pixel tolerance (`maxDiffPixels`), the colour threshold kept strict.\n\n## Functional e2e: to discuss\nWhat takes the ~40 s (the slowest tests), and what to change: slow waits, redundant tests, fixtures, parallelism.\n\n## Then\nImplement what was agreed, regenerate the baselines left stale this sprint (T-334, T-346, T-335, T-338 …) and add T-333's overview Agents screenshot, update `CLAUDE.md` (Testing conventions, CI) and the agent's memory notes, and make sure `npm run verify` and CI still cover what matters.\n",
@@ -16855,7 +16849,6 @@
       "type": "polish",
       "priority": "P2",
       "labels": [
-        "interactive",
         "ux"
       ],
       "description": "The Projects Overview's tabs (Projects | Omniboard) sit on a plain line, while a project's view tabs (Kanban Board, Task List, …) have a bordered, filled tab joined to the view's panel. Make them look the same.\n\nLive with the user on the dev server:\n1. Try the overview's simpler look on a project's tabs.\n2. Then the other way around: the project's look on the overview's tabs.\n3. The user picks one; keep whole-pixel heights (the footer test).\n\nScreenshot baselines are left for T-345.",
