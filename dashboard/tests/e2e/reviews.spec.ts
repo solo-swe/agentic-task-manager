@@ -1504,6 +1504,71 @@ test.describe('a review’s page', () => {
     await expect(rows).toHaveCount(5);
   });
 
+  // ATM-730 (Hakan): switching a review's sub-tabs lost the diffs' place; each tab keeps its own, both ways
+  test(
+    'the diffs keep their place across a switch to Overview or Comments and back, and through Back',
+    WEBKIT_TOO,
+    async ({ page, tasksServer }) => {
+      // 30 files, each changing line 21 of 40 (so each card is a few runs tall)
+      const code = { kind: 'code', language: 'rust', line_offset: 1 } as const;
+      const files = Array.from({ length: 30 }, (_, i) => {
+        const path = `src/f${String(i).padStart(2, '0')}.rs`;
+        const patch = `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -18,7 +18,7 @@\n line 18\n line 19\n line 20\n-line 21\n+line 21 changed\n line 22\n line 23\n line 24\n`;
+        tasksServer.setRevisionDocument('base1', projectDocument(path, lines(40), code)).setRevisionDocument(
+          'head3',
+          projectDocument(
+            path,
+            lines(40, (n) => (n === 21 ? 'line 21 changed' : null)),
+            code,
+          ),
+        );
+        return file(path, patch);
+      });
+      await openReviews(page, tasksServer);
+      tasksServer.setReview('CR-2', reviewPage({ chains: [], view: { round: 3, against: null, files } }));
+      await page.goto(reviewPath(tasksServer, '/CR-2'));
+      await page.getByRole('tab', { name: /^Diffs/ }).click();
+      await expect(diffOf(page, 'src/f00.rs').locator('.diff-line').first()).toBeVisible();
+      const pane = page.locator('.review-diffs');
+      // Scrolled part way into a card far down, its diffs drawn
+      await pane.evaluate((el) => (el.scrollTop = el.scrollHeight / 2));
+      await expect(page.locator('.review-file.current')).toBeVisible();
+      await expect.poll(() => page.locator('.diff-view').count()).toBeGreaterThan(2);
+      const place = () =>
+        pane.evaluate((el) => {
+          const top = el.getBoundingClientRect().top;
+          const card = [...el.querySelectorAll<HTMLElement>('.review-file-card')].find(
+            (c) => c.getBoundingClientRect().bottom > top + 1,
+          );
+          return { file: card?.dataset.file, top: Math.round(card!.getBoundingClientRect().top - top) };
+        });
+      await page.waitForTimeout(100);
+      const before = await place();
+      expect(before.file).not.toBe('src/f00.rs');
+      const near = async () => {
+        const now = await place();
+        return now.file === before.file && Math.abs(now.top - before.top) <= 2;
+      };
+      for (const other of [/^Comments/, /^Overview/]) {
+        await page.getByRole('tab', { name: other }).click();
+        await expect(pane).toHaveCount(0);
+        await page.getByRole('tab', { name: /^Diffs/ }).click();
+        await expect.poll(near).toBe(true);
+      }
+      // Back from the Diffs goes to Overview; Forward comes back to the same place
+      await page.goBack();
+      await expect(page.getByRole('tab', { name: /^Overview/ })).toHaveAttribute('aria-selected', 'true');
+      await page.goForward();
+      await expect(page.getByRole('tab', { name: /^Diffs/ })).toHaveAttribute('aria-selected', 'true');
+      await expect.poll(near).toBe(true);
+      // Going to a file still goes to that file, not back to the place kept
+      await page.getByRole('tab', { name: /^Comments/ }).click();
+      await page.getByRole('tab', { name: /^Diffs/ }).click();
+      await page.locator('.review-file-name[data-file="src/f02.rs"]').click();
+      await expect.poll(async () => (await place()).file).toBe('src/f02.rs');
+    },
+  );
+
   test('the file gone to, the round and the round against are the address’s, and are asked of the server', async ({
     page,
     tasksServer,
