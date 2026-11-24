@@ -1,6 +1,43 @@
 // The dashboard in the atm app (T-457): the same page, its data from the app's commands over Tauri's IPC (mocked here
 // as `@tauri-apps/api/mocks` does, backed by the fixture's data), never from HTTP.
+import type { Page } from '@playwright/test';
 import { addressOf, expect, loadFixture, openView, test } from './helpers';
+import { PREFS_KEY } from '../../src/lib/prefs';
+
+/** Where the sidebar's open scope list is: under its button, whole in the window, on top where it is */
+async function scopesPlaced(page: Page) {
+  return page.evaluate(() => {
+    const button = document.querySelector('#app-sidebar-scope')!.getBoundingClientRect();
+    const sidebar = document.querySelector('#app-sidebar')!;
+    const list = document.querySelector('#app-sidebar-scopes')!.getBoundingClientRect();
+    const at = (x: number, y: number) => !!document.elementFromPoint(x, y)?.closest('#app-sidebar-scopes');
+    const nameShown = [...document.querySelectorAll('#app-sidebar-scopes .app-sidebar-name')].every(
+      (n) => n.scrollWidth <= n.clientWidth + 1,
+    );
+    return {
+      underButton: list.top - button.bottom >= 0 && list.top - button.bottom < 16,
+      alignedLeft: Math.abs(list.left - button.left) < 16,
+      inWindow: list.left >= 0 && list.right <= window.innerWidth && list.bottom <= window.innerHeight,
+      outsideSidebar: !sidebar.contains(document.querySelector('#app-sidebar-scopes')),
+      sidebarScrolled: sidebar.scrollTop,
+      // On top at its corners and middle: over the sidebar's edge too when it is wider than the sidebar
+      onTop: at(list.left + 4, list.top + 4) && at(list.right - 4, list.bottom - 4) && at(list.right - 4, list.top + 4),
+      wide: list.width >= 240,
+      nameShown,
+    };
+  });
+}
+
+const SCOPES_PLACED = {
+  underButton: true,
+  alignedLeft: true,
+  inWindow: true,
+  outsideSidebar: true,
+  sidebarScrolled: 0,
+  onTop: true,
+  wide: true,
+  nameShown: true,
+};
 
 test.describe('the dashboard in the atm app', () => {
   test('loads its projects and their tasks through the app’s commands, with no request to a server', async ({
@@ -914,22 +951,9 @@ test.describe('the dashboard in the atm app', () => {
     const menu = page.locator('#app-sidebar-scopes');
     await expect(menu.locator('[data-scope]')).toHaveCount(3);
     await expect(menu.locator('.app-sidebar-bar')).toHaveCount(2);
-    // It opens just under its button, in the window, over the items: not under the sidebar's whole height, out of
-    // sight (where a click still scrolled to it)
-    const placed = await page.evaluate(() => {
-      const button = document.querySelector('#app-sidebar-scope')!.getBoundingClientRect();
-      const list = document.querySelector('#app-sidebar-scopes')!.getBoundingClientRect();
-      const top = document.elementFromPoint(list.left + list.width / 2, list.top + 8);
-      return {
-        gap: list.top - button.bottom,
-        inWindow: list.bottom <= window.innerHeight,
-        sidebarScrolled: document.querySelector('#app-sidebar')!.scrollTop,
-        onTop: !!top?.closest('#app-sidebar-scopes'),
-      };
-    });
-    expect(placed.gap).toBeGreaterThanOrEqual(0);
-    expect(placed.gap).toBeLessThan(16);
-    expect(placed).toMatchObject({ inWindow: true, sidebarScrolled: 0, onTop: true });
+    // It floats just under its button, in the window, over the items: never inside the sidebar, clipped by it or
+    // scrolled to (ATM-774)
+    expect(await scopesPlaced(page)).toMatchObject(SCOPES_PLACED);
     const colours = await page.evaluate(() => ({
       sidebar: getComputedStyle(document.querySelector('#app-sidebar')!).backgroundColor,
       tracks: [...document.querySelectorAll('#app-sidebar-scopes .app-sidebar-bar')].map(
@@ -991,6 +1015,31 @@ test.describe('the dashboard in the atm app', () => {
     await tasksServer.chooseMenu({ kind: 'toggle_sidebar' });
     await expect(sidebar).toBeVisible();
   });
+
+  test(
+    'the scope list floats over the sidebar’s edge at its own width when the sidebar is at its narrowest (ATM-774)',
+    { tag: '@webkit' },
+    async ({ page, tasksServer }) => {
+      await page.addInitScript((key) => localStorage.setItem(key, JSON.stringify({ sidebarWidth: 180 })), PREFS_KEY);
+      await tasksServer.asApp();
+      tasksServer.addProject('second', 'minimal', 'A project with a rather long name');
+      tasksServer.use('standard');
+      await page.goto('/');
+      const sidebar = page.locator('#app-sidebar');
+      await expect(sidebar).toBeVisible();
+      expect((await sidebar.boundingBox())!.width).toBeLessThanOrEqual(181);
+      await page.locator('#app-sidebar-scope').click();
+      await expect(page.locator('#app-sidebar-scopes [data-scope]')).toHaveCount(3);
+      expect(await scopesPlaced(page)).toMatchObject(SCOPES_PLACED);
+      // Wider than the sidebar: over its edge, onto the page
+      const list = (await page.locator('#app-sidebar-scopes').boundingBox())!;
+      expect(list.x + list.width).toBeGreaterThan((await sidebar.boundingBox())!.width);
+      // A choice still works, and closes it
+      await page.locator('#app-sidebar-scopes [data-scope="second"]').click();
+      await expect(page.locator('#app-sidebar-scope')).toHaveAttribute('data-scope', 'second');
+      await expect(page.locator('#app-sidebar-scopes')).toHaveCount(0);
+    },
+  );
 
   test('the sidebar is the window’s full height and the title bar only right of it, its tabs from its edge; closed, the bar the whole width (T-535)', async ({
     page,

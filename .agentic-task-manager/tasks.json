@@ -22141,14 +22141,14 @@
       "description": "From Hakan: a click on the sidebar's scope chevron shows nothing.\n\n## Cause\nThe list is a `.menu`, which `app.css` places at `top: calc(100% + 6px)` of its positioned parent. In the sidebar that parent is the sidebar itself (fixed, the window's full height), so the list opens below the window's bottom. A click in the tests still reached it: Playwright scrolled the sidebar.\n\n## Change\nThe chooser in a `.menu-anchor` of its own, so its list opens just under its button, the sidebar's width, over the items.\n\n## Tests\n`app.spec.ts`'s sidebar test: the list is just under the button, inside the window, on top at its point, with the sidebar not scrolled.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/shell/Sidebar.svelte",
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-24T17:35:36Z",
-      "updated_at": "2026-11-24T17:55:51Z",
+      "updated_at": "2026-11-24T17:56:09Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -22162,7 +22162,23 @@
       "number": 774,
       "started_at": "2026-11-24T17:35:44Z",
       "started_by": "claude:ba530ebb",
-      "commit": "9cc701b4da46e8e29cd7a85db6fb5aed79dfb2f5"
+      "commit": "9cc701b4da46e8e29cd7a85db6fb5aed79dfb2f5",
+      "code_reviews": [
+        {
+          "id": "01a20eb3-6a56-77a1-bada-f5b2f72ab73e",
+          "ref": "CR-168"
+        }
+      ],
+      "review_requested_at": "2026-11-24T17:56:09Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-24T17:56:09Z",
+          "kind": "review",
+          "text": "CR-168: App sidebar: the scope chooser opens under its button",
+          "by": "claude:ba530ebb"
+        }
+      ]
     },
     {
       "id": "01a20ea3-39a1-7679-9b4b-441ae7c5c873",
@@ -22176,13 +22192,13 @@
       "description": "From Hakan: tabs load slowly; the Code Reviews list takes 5 to 10 seconds to show.\n\n## Cause\n`list_reviews` (atm-lib `review_pages/list.rs`) reads each listed review with `whole`, which opens its working copy's store (a `git rev-parse` each) and asks it for the review. `FileStore::get_review` finds it by reading every review in the folder (`read_all`), so a list of n reviews reads n² of them: 166 here, about 27,000 reads. `atm review list --search` (the same reads) takes 1.7 s on this repo; the page asks per project, and All projects asks for each.\n\n## Change\nEach working copy's reviews read once, whole (`FileStore::reviews`), and looked up by ID; one not found there falls back to the main store, as now.\n\n## Tests\natm-lib's list tests as they are (the answer doesn't change), plus one with reviews in two working copies. Measure the listing before and after.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/review_pages/list.rs"
       ],
       "created_at": "2026-11-24T17:38:27Z",
-      "updated_at": "2026-11-24T17:38:41Z",
+      "updated_at": "2026-11-24T18:12:04Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -22195,7 +22211,38 @@
       "review": "async",
       "number": 775,
       "started_at": "2026-11-24T17:38:41Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "5c441be1a223c35e85ce9f61862e0fafd09e61cb",
+      "code_reviews": [
+        {
+          "id": "01a20eb3-6daf-747d-8d1c-fc8e270bc417",
+          "ref": "CR-169"
+        }
+      ],
+      "review_requested_at": "2026-11-24T17:56:09Z",
+      "notes": [
+        {
+          "at": "2026-11-24T17:56:09Z",
+          "kind": "review",
+          "text": "CR-169: Reviews: the list reads each review once",
+          "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T18:11:49Z",
+          "kind": "note",
+          "text": "Approved: in CR-169 (round 1)",
+          "by": "Hakan Serce"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T17:56:09Z",
+          "to": "2026-11-24T18:11:49Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T18:12:04Z",
+      "completed_by": "claude:ba530ebb"
     }
   ]
 }

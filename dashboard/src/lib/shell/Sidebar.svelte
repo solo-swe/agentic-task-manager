@@ -196,58 +196,67 @@
       <SidebarToggle />
     </div>
     <!-- The scope (§2.1): All projects, then the workspace's projects; missing ones dimmed and not chosen. Its list
-         is placed under the button (`.menu` is placed under its positioned parent: without this one, the sidebar's
-         whole height, below the window) -->
-    <div class="menu-anchor app-sidebar-scope-anchor">
-      <DropdownMenu.Root bind:open={menuOpen}>
-        <DropdownMenu.Trigger>
-          {#snippet child({ props })}
-            <button
-              {...props}
-              class="app-sidebar-item app-sidebar-scope"
-              id="app-sidebar-scope"
-              data-scope={scope ?? ''}
-              aria-label="Scope: {scope === null ? 'All projects' : (scoped?.name ?? scope)}; choose another"
-              >{@render scopeLabel(scope === null ? null : scoped, false)}<span class="app-sidebar-chevron"
-                ><Icon name="chevron-down" size={14} /></span
-              ></button
-            >
-          {/snippet}
-        </DropdownMenu.Trigger>
-        <DropdownMenu.ContentStatic preventScroll={false} aria-label="Scopes">
-          {#snippet child({ props })}
-            <span {...props} class="menu app-sidebar-scopes" id="app-sidebar-scopes">
-              <DropdownMenu.Item onSelect={() => choose(null)}>
-                {#snippet child({ props })}
-                  <button
-                    {...props}
-                    class="app-sidebar-item"
-                    class:current={scope === null}
-                    aria-current={scope === null ? 'true' : undefined}
-                    data-scope="">{@render scopeLabel(null, true)}</button
-                  >
-                {/snippet}
-              </DropdownMenu.Item>
-              {#each dashboard.projects as project (project.id)}
-                <DropdownMenu.Item disabled={project.missing} onSelect={() => choose(project.id)}>
+         floats over the window under the button (Bits UI's portal, ATM-774): never clipped by the sidebar or its
+         width, over its edge when the sidebar is narrow -->
+    <DropdownMenu.Root bind:open={menuOpen}>
+      <DropdownMenu.Trigger>
+        {#snippet child({ props })}
+          <button
+            {...props}
+            class="app-sidebar-item app-sidebar-scope"
+            id="app-sidebar-scope"
+            data-scope={scope ?? ''}
+            aria-label="Scope: {scope === null ? 'All projects' : (scoped?.name ?? scope)}; choose another"
+            >{@render scopeLabel(scope === null ? null : scoped, false)}<span class="app-sidebar-chevron"
+              ><Icon name="chevron-down" size={14} /></span
+            ></button
+          >
+        {/snippet}
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          side="bottom"
+          align="start"
+          sideOffset={4}
+          collisionPadding={8}
+          preventScroll={false}
+          aria-label="Scopes"
+        >
+          {#snippet child({ props, wrapperProps })}
+            <div {...wrapperProps}>
+              <div {...props} class="app-sidebar-scopes" id="app-sidebar-scopes">
+                <DropdownMenu.Item onSelect={() => choose(null)}>
                   {#snippet child({ props })}
                     <button
                       {...props}
                       class="app-sidebar-item"
-                      class:current={scope === project.id}
-                      class:missing={project.missing}
-                      aria-current={scope === project.id ? 'true' : undefined}
-                      title={project.missing ? `${project.path}: not found` : project.path}
-                      data-scope={project.id}>{@render scopeLabel(project, true)}</button
+                      class:current={scope === null}
+                      aria-current={scope === null ? 'true' : undefined}
+                      data-scope="">{@render scopeLabel(null, true)}</button
                     >
                   {/snippet}
                 </DropdownMenu.Item>
-              {/each}
-            </span>
+                {#each dashboard.projects as project (project.id)}
+                  <DropdownMenu.Item disabled={project.missing} onSelect={() => choose(project.id)}>
+                    {#snippet child({ props })}
+                      <button
+                        {...props}
+                        class="app-sidebar-item"
+                        class:current={scope === project.id}
+                        class:missing={project.missing}
+                        aria-current={scope === project.id ? 'true' : undefined}
+                        title={project.missing ? `${project.path}: not found` : project.path}
+                        data-scope={project.id}>{@render scopeLabel(project, true)}</button
+                      >
+                    {/snippet}
+                  </DropdownMenu.Item>
+                {/each}
+              </div>
+            </div>
           {/snippet}
-        </DropdownMenu.ContentStatic>
-      </DropdownMenu.Root>
-    </div>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
     <!-- The scope's items (§2.2): each a link to its page, opened in a new tab -->
     <ul class="app-sidebar-list" aria-label="{scope === null ? 'All projects' : (scoped?.name ?? scope)}: pages">
       {#each itemsOf(scope) as item (item)}
@@ -360,18 +369,22 @@
     grid-column: -2;
     grid-row: 1;
   }
-  /* Above the list of items it opens over */
-  .app-sidebar-scope-anchor {
-    z-index: 2;
-  }
+  /* The scope's list, floating over the window as the other menus do (app.css .menu's look): its own width whatever
+     the sidebar's, at least the button's; Bits UI's wrapper places it */
   .app-sidebar-scopes {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--overlay) 60%, transparent);
     display: flex;
-    left: 0;
-    right: 0;
     flex-direction: column;
     gap: var(--space-1);
-    min-width: 220px;
+    max-height: 70vh;
+    max-width: 360px;
+    min-width: max(240px, var(--bits-dropdown-menu-anchor-width, 0px));
+    overflow-y: auto;
     padding: var(--space-2);
+    z-index: 50;
   }
   .app-sidebar-icon {
     color: var(--text-muted);
