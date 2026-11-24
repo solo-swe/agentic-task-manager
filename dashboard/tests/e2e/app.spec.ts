@@ -1507,6 +1507,30 @@ test.describe('the dashboard in the atm app', () => {
     ).toEqual([]);
   });
 
+  test('a switch to a project not shown before shows its board without waiting for the project list (ATM-777)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.addProject('second', 'minimal', 'Second Project');
+    tasksServer.use('standard');
+    tasksServer.restoredTabs = {
+      addresses: [`/projects/${tasksServer.projectId}/kanban`, '/projects/second/kanban'],
+      active: 0,
+    };
+    await page.goto('/');
+    await expect(page.locator('#kanban .kanban-card').first()).toBeVisible();
+    // The list held: the other project's board comes from its own data, the list it has deciding the page
+    let answer = () => {};
+    tasksServer.listProjectsHeld = new Promise<void>((resolve) => (answer = resolve));
+    await page.locator('.title-bar-tab [role="tab"]').nth(1).click();
+    await expect(page.locator('#dashboard-title')).toHaveText(/^(Second|Minimal) Project - Tasks/);
+    // Its own board: the minimal project's one task
+    await expect(page.locator('#kanban .kanban-card')).toHaveCount(1);
+    await expect.poll(() => tasksServer.commands.filter((c) => c.project === 'second').length).toBeGreaterThan(0);
+    answer();
+  });
+
   test('Reload (ATM-584) loads the window again through the app, back at its tabs and the one it showed', async ({
     page,
     tasksServer,

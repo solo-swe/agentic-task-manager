@@ -22188,7 +22188,7 @@
       "description": "From Hakan: an agent working in one project can leave a note in another project's inbox, for that project's user to triage, as a person would.\n\n**No new API.** The dashboard's routes, the app's commands and `atm inbox` already call one atm-lib function per operation (`inbox::add`, `inbox::list`, `inbox::show`, `inbox::decide`). This task makes `inbox::add` reachable for another project. The only new thing is how the project is found: `--project` opens it through the workspaces, as atm-api's routes open a project (`Workspace::project(id)` → `Member`). There is no second add, no new route, and no new command.\n\n## Change\n- `atm inbox add --project <key or ID> --text-file F` (or `'<text>'`): the same `inbox::add`, on the project the workspaces find. The project must be registered (the workspaces' projects, as [ADR-007 §7](docs/adr/ADR-007-cross-project-references.md) finds another project's task). One that isn't is refused, naming the registered ones.\n- **Who:** `inbox::add`'s rule, the one place it is decided. An agent may add to **another** project's inbox. Adding to its own stays a person's (the inbox is the user's input there, [the design §3](docs/inbox-design.md#3-states-and-who-moves-them)).\n- **Its origin:** `created_by` is the agent, as now. `inbox::add` also records `from_project` (the adding project's key, else its ID) when it comes from another project. Because it is in the item, the dashboard's answer, its page and `atm inbox show` all have it; the page shows *from <project>*.\n- **Nothing else changes for the target:** the item is `created`. Edit, discard, restore and inject stay as they are (its user's, its triage skill's). The text's limits are the same (20,000 characters, not empty).\n- `--json` answers the item with its project, so the agent can ask about it later (ATM-773).\n\n## Security\nA new write across projects by an agent:\n- The item's text is data (I1): the target's triage never runs anything an item says, as now.\n- Only registered projects. The target's own files only, through its store (its lock), never a path the agent names.\n- Update `docs/security-architecture.md` (the entry points and I1's note) and the inbox design's §3 table (who may add).\n- Update `docs/agent/commands.md`: the option, and what it is for. It carries a finding for another project's user, never instructions for its agents.\n\n## Tests\n- atm-lib unit tests of `inbox::add`'s rule and origin: an agent adding to another project (origin recorded), to its own (refused), a person as now, the text limits.\n- A test that `--project` opens the project through the workspaces (registered, unregistered, missing).\n- CLI suite scenarios in `tests/scripts/scenarios/inbox.json` with two registered projects.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e8925a26795e"
       ],
@@ -22201,7 +22201,7 @@
         "tests/scripts/scenarios/inbox.json"
       ],
       "created_at": "2026-11-24T17:07:34Z",
-      "updated_at": "2026-11-24T23:03:59Z",
+      "updated_at": "2026-11-24T23:05:33Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:33cba067",
       "sprint_history": [
@@ -22230,10 +22230,25 @@
           "at": "2026-11-24T22:55:19Z",
           "kind": "failure",
           "text": "lease expired (claude:ba530ebb)"
+        },
+        {
+          "at": "2026-11-24T23:05:33Z",
+          "kind": "review",
+          "text": "CR-178: Inbox: an agent adds an item to another project's inbox",
+          "by": "claude:33cba067"
         }
       ],
       "started_at": "2026-11-24T23:03:59Z",
-      "started_by": "claude:33cba067"
+      "started_by": "claude:33cba067",
+      "commit": "c93cfefabe74d800909dcb651400e76b5b5a8696",
+      "code_reviews": [
+        {
+          "id": "01a20fce-af30-7290-8e4d-ec481a5d143e",
+          "ref": "CR-178"
+        }
+      ],
+      "review_requested_at": "2026-11-24T23:05:33Z",
+      "review_state": "waiting"
     },
     {
       "id": "01a20e86-f20a-70b2-9d4a-35d0eac05318",
@@ -22589,16 +22604,16 @@
       "description": "The timed test *a click on a tab, and Next Tab round them all* (`performance.spec.ts`, T-525) fails about one run in two locally: its first click into the second project's tab takes 107 to 329 ms against the 200 ms budget, while every other switch, that tab by Next Tab included, takes 30 to 130 ms. It fails the same way before ATM-771 (170, 139, 266 ms over three runs alone, `--project timed --no-deps --repeat-each 3`), so it isn't that change's.\n\n## Look into\nWhat the first show of a project not shown before does that the next doesn't (its load, its parse, its first render of the board; `--trace on` on a failing run). Never raise the budget (AGENTS.md, Performance budgets): a real fix.\n\n## Tests\nThe timed test passing on repeated runs alone (`--repeat-each 5`), and in the full suite.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
-        "dashboard/tests/e2e/performance.spec.ts",
-        "dashboard/src/lib/state.svelte.ts"
+        "dashboard/src/lib/state.svelte.ts",
+        "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-24T19:30:52Z",
-      "updated_at": "2026-11-24T19:30:52Z",
+      "updated_at": "2026-11-24T23:11:46Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -22607,7 +22622,9 @@
       ],
       "sprint": "Sidebar overhaul",
       "review": "async",
-      "number": 777
+      "number": 777,
+      "started_at": "2026-11-24T23:05:36Z",
+      "started_by": "claude:33cba067"
     },
     {
       "id": "01a20fc4-92be-7263-87d6-894ac379109d",

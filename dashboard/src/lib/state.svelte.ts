@@ -534,13 +534,15 @@ export class DashboardState {
     return this.showRoute();
   }
 
-  /** The app's first load (ATM-776): the workspace's projects as kept at the last start, if any, shown at once, the page
-   * decided from them as from a fresh list; its tag asked with the fresh list, so an unchanged one costs atm nothing.
-   * The project to load, at once, beside the fresh list; null for a page without one; undefined when nothing was kept */
-  private showKeptProjects(): string | null | undefined {
-    if (!inApp || this.projectsLoaded) return undefined;
+  /** The page decided from the projects the page knows, before the fresh list (ATM-776, ATM-777): those listed already
+   * (a switch to another project's tab, a reload), else at the app's first load those kept at its last start, its tag
+   * asked with the fresh list so an unchanged one costs atm nothing. The project to load at once, before the fresh
+   * list; null for a page without one; undefined when the page knows no projects of this workspace yet */
+  private showKnownProjects(): string | null | undefined {
     const workspace = workspaceOf(currentAddress());
     if (workspace !== apiWorkspace()) return undefined;
+    if (this.projectsLoaded) return this.workspace === workspace ? this.showRoute() : undefined;
+    if (!inApp) return undefined;
     const kept = keptProjects(workspace);
     if (!kept) return undefined;
     this.workspace = workspace;
@@ -832,10 +834,13 @@ export class DashboardState {
     if (this.projectsLoaded) void this.refreshWorkspaces();
     else await this.refreshWorkspaces();
     if (!ticket.current()) return;
-    // The app's start (ATM-776): from the projects kept at the last one, the page at once, and its project's data first,
-    // shown as soon as it is in; the fresh list after it, not before (asked together, they slowed each other down)
-    const early = this.showKeptProjects();
-    const shownEarly = early ? await this.loadProjectData(early, ticket) : false;
+    // From the projects the page knows (listed already, or kept at the app's last start: ATM-776, ATM-777), the page at
+    // once, and its project's data first, shown as soon as it is in; the fresh list after it, not before (waiting on it
+    // first, a switch to another project's tab showed the last project's board; asked together, they slowed each other
+    // down). A list out of date (a project gone) only means it wasn't shown early: the path below loads it, and says why
+    // it can't
+    const early = this.showKnownProjects();
+    const shownEarly = early ? await this.loadProjectData(early, ticket).catch(() => false) : false;
     if (shownEarly) this.showProjectData();
     if (!ticket.current()) return;
     const project = await this.refreshProjects(ticket);
