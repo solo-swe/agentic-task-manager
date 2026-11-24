@@ -110,7 +110,14 @@ const isProject = (p: unknown): p is ProjectEntry =>
   !!p && typeof p === 'object' && typeof (p as ProjectEntry).id === 'string' && !!(p as ProjectEntry).id;
 
 export type ProjectsResult =
-  { unchanged: true } | { unchanged: false; projects: ProjectEntry[]; validators: Validators };
+  | { unchanged: true }
+  | {
+      unchanged: false;
+      projects: ProjectEntry[];
+      validators: Validators;
+      /** The list as the answer gave it, before `projectsFrom`: what the app keeps for its next start (ATM-776) */
+      listed: unknown;
+    };
 
 /**
  * Fetches api/projects, conditionally when `since` is given. Entries without an id are left out; a missing name falls
@@ -119,8 +126,14 @@ export type ProjectsResult =
 export async function loadProjects(fetchFn: Fetch = browserFetch, since?: Validators): Promise<ProjectsResult> {
   const file = await fetchFile(projectsUrl(), fetchFn, since);
   if (file.unchanged) return file;
-  const list = (file.data as { projects?: unknown } | null)?.projects;
-  const projects = (Array.isArray(list) ? list : []).filter(isProject).map((p) => ({
+  const listed = (file.data as { projects?: unknown } | null)?.projects;
+  return { unchanged: false, projects: projectsFrom(listed), validators: file.validators, listed };
+}
+
+/** The projects of api/projects' list, as the page uses them: entries without an id left out, a missing name the id,
+ * only the server's own logo route kept. Anything else is no project: an empty list */
+export function projectsFrom(list: unknown): ProjectEntry[] {
+  return (Array.isArray(list) ? list : []).filter(isProject).map((p) => ({
     id: p.id,
     name: typeof p.name === 'string' && p.name ? p.name : p.id,
     path: typeof p.path === 'string' ? p.path : '',
@@ -134,7 +147,6 @@ export async function loadProjects(fetchFn: Fetch = browserFetch, since?: Valida
     // Only the server's own route: never an address elsewhere (the dashboard makes no outside requests)
     logo: typeof p.logo === 'string' && LOGO_URL.test(p.logo) ? `/${p.logo}` : null,
   }));
-  return { unchanged: false, projects, validators: file.validators };
 }
 
 /** The `default` workspace's search (another workspace's: api/http.ts searchUrl) */

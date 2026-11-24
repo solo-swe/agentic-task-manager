@@ -984,6 +984,9 @@ export class TasksServer {
   updateInstallHeld: Promise<unknown> = Promise.resolve();
   /** The update commands the page called, in order */
   updateCalls: string[] = [];
+  /** `list_projects` answers once this settles: a test holds it to look at the page before atm has listed the
+   * projects (ATM-776) */
+  listProjectsHeld: Promise<unknown> = Promise.resolve();
 
   /** The app's agent commands the page called, in order (`agents_status`, `connect_agents <harness>`) */
   agentCalls: string[] = [];
@@ -1049,9 +1052,13 @@ export class TasksServer {
       const { pathname } = new URL(r.url());
       if (/^\/(api|p)\//.test(pathname)) this.httpRequests.push(pathname);
     });
-    await this.page.exposeFunction('__atmInvoke', (command: string, args: Record<string, unknown>) =>
-      command === 'install_update' ? this.answerInstall(args) : this.reload(command, args),
-    );
+    await this.page.exposeFunction('__atmInvoke', async (command: string, args: Record<string, unknown>) => {
+      // As the page asks, before any answer is held
+      this.commands.push({ command, project: typeof args.project === 'string' ? args.project : null });
+      if (command === 'install_update') return this.answerInstall(args);
+      if (command === 'list_projects') await this.listProjectsHeld;
+      return this.reload(command, args);
+    });
     await this.page.addInitScript((version) => {
       const w = window as unknown as Record<string, unknown> & {
         __atmInvoke: (command: string, args: unknown) => Promise<{ ok?: unknown; error?: unknown }>;
@@ -1142,7 +1149,6 @@ export class TasksServer {
   /** A command's answer, a reload command's as the app's `Fresh` (ATM-768): its tag (a hash of the answer and what
    * asked for it) and its body, or none when the page's `known` tag is still it */
   private reload(command: string, args: Record<string, unknown>): { ok?: unknown; error?: unknown } {
-    this.commands.push({ command, project: typeof args.project === 'string' ? args.project : null });
     const answer = this.answerCommand(command, args);
     if (!['list_projects', 'project_tasks', 'claims', 'worktrees'].includes(command) || !('ok' in answer))
       return answer;

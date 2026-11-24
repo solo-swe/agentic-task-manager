@@ -22418,18 +22418,26 @@
       "description": "From Hakan: when atm opens, there is some weird per-tab opening and latency. It should open instantly and load nothing for the tabs that aren't visible.\n\n## Look into\nAs the app starts, the page first shows the window's own address (the app's root), and only once `restored_tabs` answers does it go to the tab that was active (`+layout.svelte`'s `onMount`, `appTabs.start`). Record in the app fixture every command the page asks from start until the active tab shows, with several restored tabs (projects, a review, All projects), and find what is loaded for a tab not shown, and what is shown before the active tab.\n\n## Change\n- The active restored tab is the first page shown: nothing of the root (or another tab) is loaded or drawn before it.\n- A tab not shown loads nothing until it is switched to (its title comes from what the page has: the project list).\n\n## Tests\nAn app e2e test: with restored tabs, the commands asked until the active tab shows are only the project list and the active tab's own; no other tab's page was shown in between.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/routes/+layout.svelte",
         "dashboard/src/lib/app-tabs.svelte.ts",
         "dashboard/tests/e2e/app.spec.ts",
-        "dashboard/tests/e2e/helpers.ts"
+        "dashboard/tests/e2e/helpers.ts",
+        "dashboard/src/App.svelte",
+        "dashboard/src/lib/state.svelte.ts",
+        "dashboard/src/lib/load.ts",
+        "dashboard/src/lib/kept-projects.ts",
+        "dashboard/tests/unit/kept-projects.test.ts",
+        "dashboard/tests/unit/load.test.ts",
+        "crates/atm-lib/src/workspaces.rs",
+        "Cargo.toml"
       ],
       "created_at": "2026-11-24T18:24:38Z",
-      "updated_at": "2026-11-24T22:21:09Z",
+      "updated_at": "2026-11-24T22:57:11Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -22488,6 +22496,12 @@
           "kind": "note",
           "text": "Approved: in CR-174 (round 1)",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-24T22:57:11Z",
+          "kind": "note",
+          "text": "Profiled the real start (`ATM_PROFILE`, removed after): the page drew at ~0.5 s before it knew anything (tabs by ID, the empty Project tab), waiting on `list_projects` (1.5 s debug, 0.47 s release: every project’s stamp and summary, one by one), with the project’s reads only after it. Fix: draw only once the route is known, from the list kept at the last start; the project’s data first; atm-lib lists projects side by side; debug builds optimize dependencies.",
+          "by": "claude:33cba067"
         }
       ],
       "blocks": [
@@ -22514,17 +22528,21 @@
           "by": "claude:ba530ebb"
         }
       ],
-      "started_at": "2026-11-24T20:20:52Z",
-      "started_by": "claude:ba530ebb",
+      "started_at": "2026-11-24T22:56:59Z",
+      "started_by": "claude:33cba067",
       "code_reviews": [
         {
           "id": "01a20f40-d805-7731-acfc-4165503b7a0a",
           "ref": "CR-174"
         }
       ],
-      "review_requested_at": "2026-11-24T20:30:37Z",
-      "review_state": "approved",
-      "reviewed_at": "2026-11-24T22:21:09Z"
+      "reviews": [
+        {
+          "from": "2026-11-24T20:30:37Z",
+          "to": "2026-11-24T22:21:09Z",
+          "outcome": "approved"
+        }
+      ]
     },
     {
       "id": "01a20f0a-2258-70ca-bca7-b29b7753d0eb",
@@ -22571,7 +22589,7 @@
       "description": "From Hakan: in the app the page still showed the full row of item tabs (Overview, Inbox, Tasks, …) whenever the sidebar was hidden; the design has them in the webapp only ([the sidebar design](docs/sidebar-overhaul-design.md) §2.3, §5).\n\n## Cause\n`ViewPanel.svelte` and `ProjectsOverview.svelte` showed the item row when `!inApp || !dashboard.sidebarOpen`: a stopgap from ATM-753, \"until ATM-755\" (the new tab's chooser). ATM-755 and the hidden sidebar's rail (ATM-771) have landed since.\n\n## Change\nThe item row is the webapp's only; in the app a page shows only its sub-tabs (Tasks: Board · List · Dependencies; Analysis: Progress · Agents), the others none.\n\n## Tests\n`app.spec.ts`'s rail test: with the sidebar hidden, no `.item-tabs`, Tasks' sub-tabs still there.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/shell/ViewPanel.svelte",
@@ -22579,7 +22597,7 @@
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-24T22:54:30Z",
-      "updated_at": "2026-11-24T22:56:24Z",
+      "updated_at": "2026-11-24T22:56:40Z",
       "created_by": "claude:33cba067",
       "updated_by": "claude:33cba067",
       "sprint_history": [
@@ -22592,7 +22610,24 @@
       "review": "async",
       "number": 778,
       "started_at": "2026-11-24T22:56:24Z",
-      "started_by": "claude:33cba067"
+      "started_by": "claude:33cba067",
+      "commit": "f4216fe0b9a90f2f6c089c5454130e30b943f0aa",
+      "code_reviews": [
+        {
+          "id": "01a20fc6-8f23-7511-9276-f526de3b6968",
+          "ref": "CR-175"
+        }
+      ],
+      "review_requested_at": "2026-11-24T22:56:40Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-24T22:56:40Z",
+          "kind": "review",
+          "text": "CR-175: App: the page shows no item row",
+          "by": "claude:33cba067"
+        }
+      ]
     },
     {
       "id": "01a20fc4-92be-7263-87d6-894b4ee7a434",

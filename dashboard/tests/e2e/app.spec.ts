@@ -1379,6 +1379,133 @@ test.describe('the dashboard in the atm app', () => {
     await expect(page.locator('.title-bar-tab').nth(3)).toContainText('Standard Project');
   });
 
+  test('the app starts on a review tab at once: no project page is drawn before it, and the list is asked once (ATM-776)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.addProject('second', 'minimal', 'Second Project');
+    tasksServer.use('standard');
+    const header = {
+      id: 'r2',
+      reference: 'CR-2',
+      number: 2,
+      title: 'Trim the names',
+      status: 'waiting',
+      tasks: [],
+      author: 'claude:a',
+      reviewers: [],
+      created: '2026-11-17T10:00:00Z',
+      updated: '2026-11-17T10:00:00Z',
+    };
+    tasksServer
+      .setReviews({ reviews: [{ review: header, branch: null, chains: 0, open: 0, needs_you: true }], you: 'Ana' })
+      .setReview('CR-2', {
+        review: header,
+        summary: '',
+        branch: null,
+        rounds: [{ number: 1, kind: { kind: 'files' }, files: [], by: 'claude:a', at: '' }],
+        chains: [],
+        view: { round: 1, against: null, files: [] },
+        needs_you: true,
+        you: 'Ana',
+      });
+    tasksServer.restoredTabs = {
+      addresses: [
+        `/projects/${tasksServer.projectId}/kanban`,
+        '/board',
+        `/projects/${tasksServer.projectId}/reviews/CR-2`,
+      ],
+      active: 2,
+    };
+    // Every page drawn, from the first frame: a project's views, All projects', the landing page, the review
+    await page.addInitScript(() => {
+      const w = window as unknown as { __drawn: string[] };
+      w.__drawn = [];
+      const pages = ['#graph-section', '#projects-overview', '#landing', '#review-page'];
+      new MutationObserver(() => {
+        for (const p of pages) if (document.querySelector(p) && !w.__drawn.includes(p)) w.__drawn.push(p);
+      }).observe(document, { subtree: true, childList: true });
+    });
+    await page.goto('/');
+    await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+    await page.waitForTimeout(300);
+    expect(await page.evaluate(() => (window as unknown as { __drawn: string[] }).__drawn)).toEqual(['#review-page']);
+    // One load, at the review's address: not one of the root and another for the review
+    expect(tasksServer.commands.filter((c) => c.command === 'list_projects')).toHaveLength(1);
+  });
+
+  test('the app’s first start draws nothing until atm has listed the projects: no tab named by an ID, no page guessed (ATM-776)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.addProject('second', 'minimal', 'Second Project');
+    tasksServer.use('standard');
+    tasksServer.restoredTabs = {
+      addresses: ['/projects/second/list', `/projects/${tasksServer.projectId}/kanban`],
+      active: 1,
+    };
+    let answer = () => {};
+    tasksServer.listProjectsHeld = new Promise<void>((resolve) => (answer = resolve));
+    await page.goto('/');
+    await expect.poll(() => tasksServer.commands.some((c) => c.command === 'list_projects')).toBe(true);
+    await page.waitForTimeout(300);
+    // Nothing to show yet that would be right: nothing at all
+    await expect(page.locator('#app-titlebar')).toHaveCount(0);
+    await expect(page.locator('#app-main')).toHaveCount(0);
+    answer();
+    await expect(page.locator('#panel-kanban')).toBeVisible();
+    await expect(page.locator('.title-bar-tab').nth(0)).toContainText('Second Project - Tasks');
+  });
+
+  test('the app starts from the projects it kept: the right tabs and page at once, its tasks asked before the list (ATM-776)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.addProject('second', 'minimal', 'Second Project');
+    tasksServer.use('standard');
+    const tabs = { addresses: ['/projects/second/list', `/projects/${tasksServer.projectId}/kanban`], active: 1 };
+    // A first start, which keeps the list
+    tasksServer.restoredTabs = tabs;
+    await page.goto('/');
+    await expect(page.locator('#panel-kanban .kanban-card').first()).toBeVisible();
+
+    // The next start, with atm still listing the projects: from what was kept
+    tasksServer.restoredTabs = tabs;
+    tasksServer.commands = [];
+    tasksServer.reloads = [];
+    let answer = () => {};
+    tasksServer.listProjectsHeld = new Promise<void>((resolve) => (answer = resolve));
+    await page.addInitScript(() => {
+      const w = window as unknown as { __titles: string[] };
+      w.__titles = [];
+      new MutationObserver(() => {
+        for (const t of document.querySelectorAll('.title-bar-tab'))
+          if (t.textContent && !w.__titles.includes(t.textContent.trim())) w.__titles.push(t.textContent.trim());
+      }).observe(document, { subtree: true, childList: true, characterData: true });
+    });
+    await page.goto('/');
+    await expect(page.locator('#panel-kanban .kanban-card').first()).toBeVisible();
+    const tabTitles = page.locator('.title-bar-tab');
+    await expect(tabTitles.nth(0)).toContainText('Second Project - Tasks');
+    await expect(tabTitles.nth(1)).toContainText('Standard Project - Tasks');
+    // The project's tasks first; the list asked once they were in, its answer still held
+    const asked = tasksServer.commands.map((c) => c.command);
+    expect(asked.indexOf('project_tasks')).toBeGreaterThanOrEqual(0);
+    expect(asked.indexOf('project_tasks')).toBeLessThan(asked.indexOf('list_projects'));
+    // With the tag it was kept with: an unchanged list costs atm nothing
+    answer();
+    await expect.poll(() => tasksServer.reloads.find((r) => r.command === 'list_projects')?.body).toBe(false);
+    // No tab was ever named by a project's ID
+    const titles = await page.evaluate(() => (window as unknown as { __titles: string[] }).__titles);
+    expect(
+      titles.filter((t) => /\bsecond - |\bfixture - /.test(t)),
+      titles.join(' | '),
+    ).toEqual([]);
+  });
+
   test('Reload (ATM-584) loads the window again through the app, back at its tabs and the one it showed', async ({
     page,
     tasksServer,

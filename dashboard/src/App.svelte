@@ -41,8 +41,8 @@
     reloadedAt: dashboard.live ? dashboard.loadedAt : 0,
   });
 
+  // The first load is the layout's (routes/+layout.svelte): in the app, once the address of the tab it starts on is in
   onMount(() => {
-    dashboard.load();
     // "System" mode follows the OS setting while the page is open
     const query = matchMedia('(prefers-color-scheme: light)');
     const onChange = () => (dashboard.systemPrefersLight = query.matches);

@@ -265,14 +265,18 @@ impl Listing<'_> {
     /// dashboard, when it has one).
     #[must_use]
     pub fn projects(&self) -> Vec<Value> {
+        // The summaries side by side (ATM-776): a cold start works out every project's, the slowest alone the wait
+        let indices: Vec<usize> = (0..self.entries.len()).collect();
+        let summaries = par_map(&indices, |&i| {
+            self.stamps[i]
+                .as_ref()
+                .map_or(Value::Null, |s| self.workspace.summary(&self.entries[i], s))
+        });
         self.entries
             .iter()
-            .zip(&self.stamps)
+            .zip(summaries)
             .zip(self.trees.iter().zip(&self.logos))
-            .map(|((entry, stamp), (tree, logo))| {
-                let summary = stamp
-                    .as_ref()
-                    .map_or(Value::Null, |s| self.workspace.summary(entry, s));
+            .map(|((entry, summary), (tree, logo))| {
                 let shown = !summary.is_null();
                 json!({
                     "id": entry.get("id"),
@@ -288,6 +292,27 @@ impl Listing<'_> {
             })
             .collect()
     }
+}
+
+/// `f` of each of `items`, in their order, worked out on as many threads as the machine runs at once (ATM-776: a
+/// workspace's projects are read side by side, not one after another). One item, or one core: on this thread.
+pub(crate) fn par_map<T: Sync, U: Send>(items: &[T], f: impl Fn(&T) -> U + Sync) -> Vec<U> {
+    let threads = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+    if items.len() < 2 || threads < 2 {
+        return items.iter().map(f).collect();
+    }
+    let size = items.len().div_ceil(threads);
+    let f = &f;
+    std::thread::scope(|scope| {
+        let parts: Vec<_> = items
+            .chunks(size)
+            .map(|part| scope.spawn(move || part.iter().map(f).collect::<Vec<U>>()))
+            .collect();
+        parts
+            .into_iter()
+            .flat_map(|part| part.join().unwrap_or_else(|e| std::panic::resume_unwind(e)))
+            .collect()
+    })
 }
 
 /// A full git object ID: 40 hex digits (SHA-1) or 64 (SHA-256), in lower case as git writes them. Anything shorter
@@ -683,15 +708,19 @@ impl Workspace {
 
     fn summary(&self, entry: &Value, stamp: &Value) -> Value {
         let key = entry["path"].as_str().unwrap_or_default().to_string();
-        let mut cache = self
-            .summaries
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(cached) = cache.get(&key)
-            && cached.stamp == *stamp
-            && foreign::version(&cached.others) == cached.version
+        // The cache is held only to look and to keep, never while a summary is worked out: the projects' summaries are
+        // worked out side by side (ATM-776, Listing::projects)
         {
-            return cached.summary.clone();
+            let cache = self
+                .summaries
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some(cached) = cache.get(&key)
+                && cached.stamp == *stamp
+                && foreign::version(&cached.others) == cached.version
+            {
+                return cached.summary.clone();
+            }
         }
         // An unreadable tasks.json or an unusable vocabulary: listed as missing
         let project = Self::project(entry);
@@ -704,15 +733,18 @@ impl Workspace {
         let summary = project
             .and_then(|p| project_summary(&p))
             .unwrap_or(Value::Null);
-        cache.insert(
-            key,
-            Summarized {
-                stamp: stamp.clone(),
-                others,
-                version,
-                summary: summary.clone(),
-            },
-        );
+        self.summaries
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(
+                key,
+                Summarized {
+                    stamp: stamp.clone(),
+                    others,
+                    version,
+                    summary: summary.clone(),
+                },
+            );
         summary
     }
 
@@ -720,41 +752,39 @@ impl Workspace {
     #[must_use]
     pub fn listing(&self) -> Listing<'_> {
         let entries = self.entries();
-        let stamps: Vec<Option<Value>> = entries
-            .iter()
-            .map(|e| Self::data_stamp(e).map(|s| summary_stamp(&s)))
-            .collect();
-        let trees: Vec<Value> = entries
-            .iter()
-            .zip(&stamps)
-            .map(|(e, s)| {
-                let list = s
-                    .as_ref()
-                    .and_then(|_| Self::project(e).ok())
-                    .map(|p| working_copies(&p))
-                    .unwrap_or_default();
-                Value::Array(list)
-            })
-            .collect();
-        let logos: Vec<Option<(PathBuf, &'static str)>> = entries
-            .iter()
-            .zip(&stamps)
-            .map(|(e, s)| s.as_ref().and_then(|_| Self::logo(e)))
-            .collect();
-        let logo_stamps: Vec<Value> = logos
-            .iter()
-            .map(|l| l.as_ref().map_or(Value::Null, |(file, _)| file_stamp(file)))
-            .collect();
-        // The other projects each one's tasks name: their summaries (waiting, next) show them
-        let others: Vec<Value> = entries
-            .iter()
-            .zip(&stamps)
-            .map(|(e, s)| {
-                s.as_ref()
-                    .and_then(|_| Self::project(e).ok())
-                    .map_or(Value::Null, |p| foreign::named_version(&p))
-            })
-            .collect();
+        // Each project's parts read side by side (ATM-776): its stamp and, when it has data, its working copies, its
+        // logo and the other projects its tasks name (their summaries, waiting and next, show them)
+        let read = par_map(&entries, |e| {
+            let Some(stamp) = Self::data_stamp(e).map(|s| summary_stamp(&s)) else {
+                return (
+                    None,
+                    Value::Array(Vec::new()),
+                    None,
+                    Value::Null,
+                    Value::Null,
+                );
+            };
+            let project = Self::project(e).ok();
+            let tree = Value::Array(project.as_ref().map(working_copies).unwrap_or_default());
+            let logo = Self::logo(e);
+            let logo_stamp = logo
+                .as_ref()
+                .map_or(Value::Null, |(file, _)| file_stamp(file));
+            let other = project.as_ref().map_or(Value::Null, foreign::named_version);
+            (Some(stamp), tree, logo, logo_stamp, other)
+        });
+        let mut stamps = Vec::with_capacity(read.len());
+        let mut trees = Vec::with_capacity(read.len());
+        let mut logos = Vec::with_capacity(read.len());
+        let mut logo_stamps = Vec::with_capacity(read.len());
+        let mut others = Vec::with_capacity(read.len());
+        for (stamp, tree, logo, logo_stamp, other) in read {
+            stamps.push(stamp);
+            trees.push(tree);
+            logos.push(logo);
+            logo_stamps.push(logo_stamp);
+            others.push(other);
+        }
         let stamp = json!([self.stamp(), stamps, trees, logo_stamps, others]);
         Listing {
             workspace: self,
@@ -938,6 +968,86 @@ mod tests {
         assert_eq!(projects[0]["worktrees"], json!([]));
         assert!(workspace.search("anything").is_empty());
         assert!(workspace.find("gone").is_some() && workspace.find("x").is_none());
+        std::fs::remove_dir_all(&home).unwrap();
+    }
+
+    #[test]
+    fn par_map_keeps_the_order_for_none_one_and_more_than_the_threads() {
+        let threads = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+        for n in [0, 1, 2, threads, threads * 3 + 1] {
+            let items: Vec<usize> = (0..n).collect();
+            let doubled = par_map(&items, |i| i * 2);
+            assert_eq!(
+                doubled,
+                (0..n).map(|i| i * 2).collect::<Vec<_>>(),
+                "{n} items"
+            );
+        }
+    }
+
+    #[test]
+    fn par_map_passes_a_panic_on_to_its_caller() {
+        let items: Vec<usize> = (0..8).collect();
+        let result = std::panic::catch_unwind(|| {
+            par_map(&items, |&i| {
+                assert!(i != 5, "item five");
+                i
+            })
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn a_listing_of_several_projects_read_side_by_side_keeps_each_ones_parts_with_it() {
+        let home = state("several");
+        let mut entries = Vec::new();
+        // Project i has i + 1 tasks; the third is missing
+        for i in 0..5usize {
+            let folder = home.join(format!("p{i}"));
+            if i != 2 {
+                let tasks: Vec<Value> = (0..=i)
+                    .map(|t| json!({"id": format!("T-{}", t + 1), "name": format!("Task {t}")}))
+                    .collect();
+                let file = folder.join(atm_common::TASK_DIR).join("tasks.json");
+                std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+                std::fs::write(
+                    &file,
+                    json!({"meta": {"id": format!("p{i}")}, "tasks": tasks}).to_string(),
+                )
+                .unwrap();
+            }
+            entries.push(json!({"id": format!("p{i}"), "name": format!("P{i}"), "path": folder.to_string_lossy()}));
+        }
+        std::fs::create_dir_all(home.join("workspaces")).unwrap();
+        std::fs::write(
+            home.join("workspaces/default.json"),
+            json!({"version": 1, "projects": entries}).to_string(),
+        )
+        .unwrap();
+        let workspace = Workspaces::at(&home).default_workspace();
+        let projects = workspace.listing().projects();
+        let seen: Vec<(Value, Value, Value)> = projects
+            .iter()
+            .map(|p| {
+                (
+                    p["id"].clone(),
+                    p["missing"].clone(),
+                    p["summary"]["total"].clone(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            seen,
+            vec![
+                (json!("p0"), json!(false), json!(1)),
+                (json!("p1"), json!(false), json!(2)),
+                (json!("p2"), json!(true), Value::Null),
+                (json!("p3"), json!(false), json!(4)),
+                (json!("p4"), json!(false), json!(5)),
+            ]
+        );
+        // Asked again with nothing changed: the same list, from the summaries kept
+        assert_eq!(workspace.listing().projects(), projects);
         std::fs::remove_dir_all(&home).unwrap();
     }
 

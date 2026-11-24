@@ -1,4 +1,5 @@
 import { browserFetch, inApp } from './api/http';
+import { keepProjects, keptProjects } from './kept-projects';
 import {
   checkAppUpdate,
   installAppUpdate,
@@ -528,7 +529,28 @@ export class DashboardState {
     if (!result.unchanged) {
       this.#projectsValidators = result.validators;
       this.projects = result.projects;
+      if (inApp) keepProjects(workspace, result.listed, result.validators);
     }
+    return this.showRoute();
+  }
+
+  /** The app's first load (ATM-776): the workspace's projects as kept at the last start, if any, shown at once, the page
+   * decided from them as from a fresh list; its tag asked with the fresh list, so an unchanged one costs atm nothing.
+   * The project to load, at once, beside the fresh list; null for a page without one; undefined when nothing was kept */
+  private showKeptProjects(): string | null | undefined {
+    if (!inApp || this.projectsLoaded) return undefined;
+    const workspace = workspaceOf(currentAddress());
+    if (workspace !== apiWorkspace()) return undefined;
+    const kept = keptProjects(workspace);
+    if (!kept) return undefined;
+    this.workspace = workspace;
+    this.projects = kept.projects;
+    this.#projectsValidators = kept.validators;
+    return this.showRoute();
+  }
+
+  /** The page the address names, with the projects listed now: the project to load, or null for a page without one */
+  private showRoute(): string | null {
     this.projectsLoaded = true;
     this.route = routeFor(this.projects, currentAddress());
     if (this.route.page !== 'project') {
@@ -810,6 +832,12 @@ export class DashboardState {
     if (this.projectsLoaded) void this.refreshWorkspaces();
     else await this.refreshWorkspaces();
     if (!ticket.current()) return;
+    // The app's start (ATM-776): from the projects kept at the last one, the page at once, and its project's data first,
+    // shown as soon as it is in; the fresh list after it, not before (asked together, they slowed each other down)
+    const early = this.showKeptProjects();
+    const shownEarly = early ? await this.loadProjectData(early, ticket) : false;
+    if (shownEarly) this.showProjectData();
+    if (!ticket.current()) return;
     const project = await this.refreshProjects(ticket);
     // A newer load was asked for meanwhile: its answers are the page's
     if (project === undefined) return;
@@ -822,8 +850,15 @@ export class DashboardState {
       if (ticket.current()) this.loadedAt = Date.now();
       return;
     }
+    // The kept list's project, when the fresh list names the same page: shown already
+    if (shownEarly && project === early) return;
     // Another project by now, or a newer load: that load shows it
     if (!(await this.loadProjectData(project, ticket))) return;
+    this.showProjectData();
+  }
+
+  /** The project's data is in: its page shown, with its saved view the first time */
+  private showProjectData() {
     const first = !this.loaded;
     if (first) this.restoreView();
     if (this.#pendingNeedsYou) {
@@ -1031,8 +1066,10 @@ export class DashboardState {
   }
 
   /** The address of task `task`'s details over this page (ATM-698): a card's and a row's link, for Copy Link and a new
-   * tab; reads the page's tab so a card's link follows it */
+   * tab; reads the page's address and tab so a card's link follows them (a Sprint filter written after the card was
+   * drawn, ATM-776) */
   taskAddress(task: Task): string {
+    void this.address;
     void this.tab;
     void this.projectId;
     return withTask(currentAddress(), taskLabel(task));
