@@ -17,7 +17,7 @@ export type Fetch = typeof fetch;
 export const inApp = typeof window !== 'undefined' && isTauri();
 
 /** The transport: the browser's fetch to atm serve, or in the app the IPC one */
-export const browserFetch: Fetch = (input, init) => (inApp ? ipcFetch(input) : fetch(input, init));
+export const browserFetch: Fetch = (input, init) => (inApp ? ipcFetch(input, init) : fetch(input, init));
 
 /** What atm serve computes for a project under p/<id>/ (the task files themselves come only through the v1 route) */
 export type ProjectFile = 'claims.json' | 'worktrees.json';

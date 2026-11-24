@@ -110,7 +110,10 @@ describe('the IPC transport (T-457)', () => {
   it('answers with the command’s JSON, an image’s bytes, or the error as its HTTP status', async () => {
     mockIPC((command, args) => {
       if (command === 'list_projects')
-        return { projects: [{ id: 'p1', workspace: (args as { workspace: string }).workspace }] };
+        return {
+          tag: '"l1"',
+          body: { projects: [{ id: 'p1', workspace: (args as { workspace: string }).workspace }] },
+        };
       if (command === 'logo') return { content_type: 'image/png', data: [137, 80, 78, 71] };
       if (command === 'claims') throw { kind: 'not_found', message: 'unknown workspace' };
       return null;
@@ -128,7 +131,7 @@ describe('the IPC transport (T-457)', () => {
 
   it('hands a command’s answer through as it is, never turned back into text (ATM-769)', async () => {
     const answer = { tasks: [{ task: { id: 'T-1' } }], bytes: 10 };
-    mockIPC(() => answer);
+    mockIPC(() => ({ tag: '"t1"', body: answer }));
     const resp = await ipcFetch('/api/v1/projects/p1/tasks');
     expect([resp.ok, resp.status, resp.headers.get('Content-Type')]).toEqual([true, 200, 'application/json']);
     expect(await resp.json()).toBe(answer);
@@ -248,12 +251,71 @@ describe('the IPC transport (T-457)', () => {
     mockIPC(() => null);
     const logo = await ipcFetch('/api/v1/projects/p1/logo');
     expect([logo.status, await logo.json()]).toEqual([404, { error: 'no logo' }]);
-    const claims = await ipcFetch('/api/v1/projects/p1/claims');
-    expect([claims.status, claims.headers.get('Content-Type'), await claims.json()]).toEqual([
+    const stats = await ipcFetch('/api/v1/projects/p1/stats');
+    expect([stats.status, stats.headers.get('Content-Type'), await stats.json()]).toEqual([
       200,
       'application/json',
       null,
     ]);
+  });
+
+  describe('a reload (ATM-768)', () => {
+    const reloads = [
+      '/api/v2/workspaces/w/projects',
+      '/api/projects',
+      '/api/v1/projects/p1/tasks?status=todo',
+      '/api/v1/projects/p1/claims',
+      '/p/p1/worktrees.json',
+    ];
+
+    it('gives its command the page’s If-None-Match as `known`, or none', async () => {
+      const known: unknown[] = [];
+      mockIPC((_command, args) => {
+        known.push((args as { known?: string }).known);
+        return { tag: '"t1"', body: {} };
+      });
+      for (const url of reloads) {
+        await ipcFetch(url, { headers: { 'If-None-Match': '"t0"' } });
+        await ipcFetch(url, { headers: new Headers({ 'If-None-Match': '"t0"' }) });
+        await ipcFetch(url);
+      }
+      expect(known).toEqual(reloads.flatMap(() => ['"t0"', '"t0"', undefined]));
+    });
+
+    it('answers its tag as the ETag, and no body as a 304', async () => {
+      let body: unknown = { claims: [] };
+      mockIPC(() => ({ tag: '"c1"', body }));
+      const first = await ipcFetch('/api/v1/projects/p1/claims');
+      expect([first.status, first.headers.get('ETag'), await first.json()]).toEqual([200, '"c1"', { claims: [] }]);
+      body = null;
+      const again = await ipcFetch('/api/v1/projects/p1/claims', { headers: { 'If-None-Match': '"c1"' } });
+      expect([again.ok, again.status, again.headers.get('ETag')]).toEqual([false, 304, '"c1"']);
+    });
+
+    it('through the client: the tag kept as its validator, then unchanged', async () => {
+      const asked: unknown[] = [];
+      mockIPC((_command, args) => {
+        const known = (args as { known?: string }).known;
+        asked.push(known);
+        return known === '"t1"' ? { tag: '"t1"', body: null } : { tag: '"t1"', body: { tasks: [] } };
+      });
+      const first = await fetchFile('/api/v1/projects/p1/tasks', ipcFetch as Fetch);
+      expect(first).toEqual({ unchanged: false, data: { tasks: [] }, validators: { etag: '"t1"' } });
+      const again = await fetchFile('/api/v1/projects/p1/tasks', ipcFetch as Fetch, { etag: '"t1"' });
+      expect(again).toEqual({ unchanged: true });
+      expect(asked).toEqual([undefined, '"t1"']);
+    });
+
+    it('the other commands are asked as they were, without `known`', async () => {
+      const args: unknown[] = [];
+      mockIPC((_command, given) => {
+        args.push(given);
+        return {};
+      });
+      await ipcFetch('/api/v1/projects/p1/documents?path=a.md', { headers: { 'If-None-Match': '"d0"' } });
+      await ipcFetch('/api/v2/workspaces', { headers: { 'If-None-Match': '"w0"' } });
+      expect(args).toEqual([{ workspace: 'default', project: 'p1', path: 'a.md', at: undefined }, {}]);
+    });
   });
 
   it('takes its URL as a string, a URL or a Request', async () => {

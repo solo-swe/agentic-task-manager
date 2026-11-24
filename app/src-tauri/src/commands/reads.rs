@@ -4,12 +4,13 @@
 use std::sync::Arc;
 
 use atm_lib::Workspaces;
-use atm_lib::workspaces::{Member, Workspace};
+use atm_lib::query::Filters;
+use atm_lib::workspaces::{Member, Workspace, too_large};
 use serde_json::{Value, json};
 use tauri::State;
 
 use super::reviews::review_ref;
-use super::state::{AppError, AppState, FileData, Json, ReviewFilters, TaskFilters};
+use super::state::{AppError, AppState, FileData, Fresh, Json, ReviewFilters, TaskFilters};
 
 pub(super) fn workspace(workspaces: &Workspaces, id: &str) -> Result<Arc<Workspace>, AppError> {
     workspaces
@@ -45,6 +46,83 @@ pub fn projects_of(workspaces: &Workspaces, w: &str) -> Result<Value, AppError> 
     let found = workspace(workspaces, w)?;
     let _ = workspaces.opened(w);
     Ok(json!({"projects": found.listing().projects()}))
+}
+
+/// [`projects_of`] for a reload (ATM-768): none when `known` is still the tag of what the list depends on (the
+/// listing's stamp, as the route's `ETag`), and then the list isn't worked out.
+///
+/// # Errors
+/// No such workspace.
+pub fn fresh_projects(
+    workspaces: &Workspaces,
+    w: &str,
+    known: Option<&str>,
+) -> Result<Fresh, AppError> {
+    let found = workspace(workspaces, w)?;
+    let _ = workspaces.opened(w);
+    let listing = found.listing();
+    Fresh::of(known, &listing.stamp, || {
+        Ok(json!({"projects": listing.projects()}))
+    })
+}
+
+/// [`tasks_of`] for a reload: none when its task data, its archive, the filters and the other projects its tasks
+/// name are as they were (the tasks route's `ETag`). Task data too large is refused before anything else.
+///
+/// # Errors
+/// As [`tasks_of`].
+pub fn fresh_tasks(
+    workspaces: &Workspaces,
+    w: &str,
+    p: &str,
+    filters: TaskFilters,
+    known: Option<&str>,
+) -> Result<Fresh, AppError> {
+    let member = member(workspaces, w, p)?;
+    if too_large(&member.stamp) {
+        member.tasks(&Filters::default())?;
+    }
+    let parts = json!([
+        member.stamp["tasks"],
+        member.stamp["archive"],
+        filters,
+        member.others_version()
+    ]);
+    Fresh::of(known, &parts, || Ok(member.tasks(&filters.into())?))
+}
+
+/// [`claims_of`] for a reload: none when the claims store and the claims held now are as they were (an expired lease
+/// is left out without the store changing).
+///
+/// # Errors
+/// As [`claims_of`].
+pub fn fresh_claims(
+    workspaces: &Workspaces,
+    w: &str,
+    p: &str,
+    known: Option<&str>,
+) -> Result<Fresh, AppError> {
+    let member = member(workspaces, w, p)?;
+    let held = member.claims();
+    let parts = json!(["claims", member.stamp["claims"], held]);
+    Fresh::of(known, &parts, || Ok(json!({"claims": held})))
+}
+
+/// [`worktrees_of`] for a reload: none when the working copies and the claims are as they were.
+///
+/// # Errors
+/// As [`worktrees_of`].
+pub fn fresh_worktrees(
+    workspaces: &Workspaces,
+    w: &str,
+    p: &str,
+    known: Option<&str>,
+) -> Result<Fresh, AppError> {
+    let member = member(workspaces, w, p)?;
+    let parts = json!(["worktrees", member.stamp["copies"], member.stamp["claims"]]);
+    Fresh::of(known, &parts, || {
+        Ok(json!({"worktrees": member.worktrees()}))
+    })
 }
 
 /// `GET /api/v2/workspaces/<w>/search?q=`.
@@ -214,7 +292,8 @@ pub async fn list_workspaces(state: State<'_, AppState>) -> Result<Json, AppErro
     Ok(Json(workspaces_of(&state.workspaces)))
 }
 
-/// A workspace's projects, with their summaries; it becomes the last opened.
+/// A workspace's projects, with their summaries; it becomes the last opened. `known`: the tag the page last got, so
+/// an unchanged list comes back without its body (ATM-768).
 ///
 /// # Errors
 /// No such workspace.
@@ -223,8 +302,9 @@ pub async fn list_workspaces(state: State<'_, AppState>) -> Result<Json, AppErro
 pub async fn list_projects(
     state: State<'_, AppState>,
     workspace: String,
-) -> Result<Json, AppError> {
-    projects_of(&state.workspaces, &workspace).map(Json)
+    known: Option<String>,
+) -> Result<Fresh, AppError> {
+    fresh_projects(&state.workspaces, &workspace, known.as_deref())
 }
 
 /// Search a workspace's projects' tasks.
@@ -241,7 +321,7 @@ pub async fn search(
     search_in(&state.workspaces, &workspace, &q).map(Json)
 }
 
-/// A project's tasks, with what atm derives for them.
+/// A project's tasks, with what atm derives for them; without them when `known` is still their tag.
 ///
 /// # Errors
 /// As [`tasks_of`].
@@ -252,8 +332,15 @@ pub async fn project_tasks(
     workspace: String,
     project: String,
     filters: TaskFilters,
-) -> Result<Json, AppError> {
-    tasks_of(&state.workspaces, &workspace, &project, filters).map(Json)
+    known: Option<String>,
+) -> Result<Fresh, AppError> {
+    fresh_tasks(
+        &state.workspaces,
+        &workspace,
+        &project,
+        filters,
+        known.as_deref(),
+    )
 }
 
 /// A project's stats, progress and forecast for a slice of its tasks and a period (ATM-722).
@@ -273,7 +360,7 @@ pub async fn project_stats(
     stats_of(&state.workspaces, &workspace, &project, tasks, from, to).map(Json)
 }
 
-/// A project's live claims.
+/// A project's live claims; none when `known` is still their tag.
 ///
 /// # Errors
 /// As [`claims_of`].
@@ -283,11 +370,12 @@ pub async fn claims(
     state: State<'_, AppState>,
     workspace: String,
     project: String,
-) -> Result<Json, AppError> {
-    claims_of(&state.workspaces, &workspace, &project).map(Json)
+    known: Option<String>,
+) -> Result<Fresh, AppError> {
+    fresh_claims(&state.workspaces, &workspace, &project, known.as_deref())
 }
 
-/// A project's working copies.
+/// A project's working copies; none when `known` is still their tag.
 ///
 /// # Errors
 /// As [`worktrees_of`].
@@ -297,8 +385,9 @@ pub async fn worktrees(
     state: State<'_, AppState>,
     workspace: String,
     project: String,
-) -> Result<Json, AppError> {
-    worktrees_of(&state.workspaces, &workspace, &project).map(Json)
+    known: Option<String>,
+) -> Result<Fresh, AppError> {
+    fresh_worktrees(&state.workspaces, &workspace, &project, known.as_deref())
 }
 
 /// A document of a project, as the viewer shows it: from the working copy, or `at` a commit or tree.

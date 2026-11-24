@@ -3,8 +3,9 @@
 //! not in `tests/`: the commands' handler macros and the app's context are this crate's.)
 
 use super::commands::{
-    AppError, ReviewFilters, TaskFilters, claims_of, document_of, file_of, logo_of, projects_of,
-    review_of, reviews_of, search_in, stats_of, tasks_of, workspaces_of, worktrees_of,
+    AppError, Fresh, ReviewFilters, TaskFilters, claims_of, document_of, file_of, fresh_claims,
+    fresh_projects, fresh_tasks, fresh_worktrees, logo_of, projects_of, review_of, reviews_of,
+    search_in, stats_of, tasks_of, workspaces_of, worktrees_of,
 };
 use super::*;
 use serde_json::{Value, json};
@@ -114,6 +115,92 @@ fn rest(home: &Path, path: &str, query: &str) -> (u16, Value, Vec<u8>) {
         map.remove("generated_at");
     }
     (status, body, bytes)
+}
+
+/// ATM-768: a reload's answer is the read's, with a tag; given that tag back with nothing new, it carries no body; a
+/// stale tag, or a change to what it depends on, gets the body again
+#[test]
+fn a_reload_with_nothing_new_carries_no_body() {
+    let home = a_state_with_a_project("fresh");
+    let workspaces = atm_lib::Workspaces::at(&home);
+    let todo = || TaskFilters {
+        status: vec!["todo".into()],
+        ..TaskFilters::default()
+    };
+    let reads = |known: Option<&str>| -> Vec<Fresh> {
+        vec![
+            fresh_projects(&workspaces, "work", known).expect("the projects"),
+            fresh_tasks(&workspaces, "work", "abcd1234", todo(), known).expect("the tasks"),
+            fresh_claims(&workspaces, "work", "abcd1234", known).expect("the claims"),
+            fresh_worktrees(&workspaces, "work", "abcd1234", known).expect("the worktrees"),
+        ]
+    };
+    // None given: each answers what its plain read does
+    let first = reads(None);
+    let plain = [
+        projects_of(&workspaces, "work").expect("the projects"),
+        tasks_of(&workspaces, "work", "abcd1234", todo()).expect("the tasks"),
+        claims_of(&workspaces, "work", "abcd1234").expect("the claims"),
+        worktrees_of(&workspaces, "work", "abcd1234").expect("the worktrees"),
+    ];
+    for (answer, plain) in first.iter().zip(&plain) {
+        assert_eq!(answer.body.as_ref().map(|b| &b.0), Some(plain));
+        assert!(
+            answer.tag.starts_with('"') && answer.tag.len() == 18,
+            "{}",
+            answer.tag
+        );
+    }
+    // Each its own tag, given back: no body, the same tag
+    for (i, answer) in first.iter().enumerate() {
+        let again = &reads(Some(&answer.tag))[i];
+        assert_eq!(again.body, None, "read {i}");
+        assert_eq!(again.tag, answer.tag, "read {i}");
+    }
+    // A stale tag: the body
+    assert!(
+        reads(Some("\"0000000000000000\""))
+            .iter()
+            .all(|a| a.body.is_some())
+    );
+    // Other filters are another answer: another tag
+    let all = fresh_tasks(
+        &workspaces,
+        "work",
+        "abcd1234",
+        TaskFilters::default(),
+        None,
+    )
+    .expect("all the tasks");
+    assert_ne!(all.tag, first[1].tag);
+    // A task added: the tasks and the project list (its summary) change, with their tags
+    let file = home.join("project/.agentic-task-manager/tasks.json");
+    let mut data: Value =
+        serde_json::from_str(&std::fs::read_to_string(&file).expect("tasks.json")).expect("json");
+    data["tasks"].as_array_mut().expect("tasks").push(json!({
+        "id": "T-2", "name": "Another", "status": "todo",
+        "created_at": "2026-11-08T11:00:00Z", "updated_at": "2026-11-08T11:00:00Z"}));
+    std::fs::write(&file, data.to_string()).expect("tasks.json");
+    let tasks = fresh_tasks(&workspaces, "work", "abcd1234", todo(), Some(&first[1].tag))
+        .expect("the tasks");
+    assert_ne!(tasks.tag, first[1].tag);
+    assert_eq!(
+        tasks.body.expect("the new tasks").0["tasks"]
+            .as_array()
+            .map(Vec::len),
+        Some(2)
+    );
+    let projects = fresh_projects(&workspaces, "work", Some(&first[0].tag)).expect("the projects");
+    assert!(
+        projects.body.is_some(),
+        "the list changed with the task data"
+    );
+    // An error is the read's, whatever was known
+    assert!(matches!(
+        fresh_tasks(&workspaces, "work", "ffff0000", todo(), Some(&first[1].tag)),
+        Err(AppError::NotFound(_))
+    ));
+    std::fs::remove_dir_all(&home).expect("clean up");
 }
 
 /// ADR-003 §5: each read the app's commands make answers what its REST route does
@@ -242,7 +329,7 @@ fn expected_answers(
         (
             "project_tasks",
             with(json!({"filters": {"status": ["todo"]}})),
-            tasks_of(
+            fresh(fresh_tasks(
                 workspaces,
                 "work",
                 "abcd1234",
@@ -250,8 +337,8 @@ fn expected_answers(
                     status: vec!["todo".into()],
                     ..TaskFilters::default()
                 },
-            )
-            .expect("tasks"),
+                None,
+            )),
         ),
         (
             "project_stats",
@@ -269,12 +356,12 @@ fn expected_answers(
         (
             "claims",
             at.clone(),
-            claims_of(workspaces, "work", "abcd1234").expect("claims"),
+            fresh(fresh_claims(workspaces, "work", "abcd1234", None)),
         ),
         (
             "worktrees",
             at.clone(),
-            worktrees_of(workspaces, "work", "abcd1234").expect("worktrees"),
+            fresh(fresh_worktrees(workspaces, "work", "abcd1234", None)),
         ),
         (
             "document",
@@ -313,9 +400,14 @@ fn expected_answers(
         (
             "list_projects",
             json!({"workspace": "work"}),
-            projects_of(workspaces, "work").expect("projects"),
+            fresh(fresh_projects(workspaces, "work", None)),
         ),
     ]
+}
+
+/// A reload's answer as JSON
+fn fresh(answer: Result<Fresh, AppError>) -> Value {
+    serde_json::to_value(answer.expect("a reload's answer")).expect("json")
 }
 
 /// Pages that may call no command: a remote one, one from `CompMD`'s own scheme, where its sandbox frames are

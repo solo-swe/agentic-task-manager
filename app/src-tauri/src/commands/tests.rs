@@ -376,6 +376,61 @@ fn json_answers_and_bodies_are_transparent() {
     );
 }
 
+/// ATM-768: a reload's tag is what its answer depends on, hashed as atm serve's `ETag`; the body is worked out only
+/// when the page's tag isn't it
+#[test]
+fn a_reload_answers_its_body_unless_the_page_has_it() {
+    let parts = json!(["claims", [1, 2], []]);
+    let worked = std::cell::Cell::new(0);
+    let body = || {
+        worked.set(worked.get() + 1);
+        Ok(json!({"claims": []}))
+    };
+    // None known: the body, and its tag (16 hex digits, quoted)
+    let first = Fresh::of(None, &parts, body).expect("an answer");
+    assert_eq!(first.body, Some(Json(json!({"claims": []}))));
+    let digest = atm_common::sha1::sha1_hex(atm_common::py::to_json(&parts).as_bytes());
+    assert_eq!(first.tag, format!("\"{}\"", &digest[..16]));
+    // Its tag known: no body, and it wasn't worked out
+    let again = Fresh::of(Some(&first.tag), &parts, body).expect("an answer");
+    assert_eq!((again.tag.as_str(), again.body), (first.tag.as_str(), None));
+    assert_eq!(worked.get(), 1);
+    // A stale tag, or one unquoted: the body
+    for stale in ["\"0000000000000000\"", first.tag.trim_matches('"'), ""] {
+        assert!(
+            Fresh::of(Some(stale), &parts, body)
+                .expect("an answer")
+                .body
+                .is_some(),
+            "{stale}"
+        );
+    }
+    // Other parts, another tag; the same parts, the same tag
+    assert_ne!(
+        Fresh::of(None, &json!(["claims", [1, 3], []]), body)
+            .expect("an answer")
+            .tag,
+        first.tag
+    );
+    assert_eq!(
+        Fresh::of(None, &parts, body).expect("an answer").tag,
+        first.tag
+    );
+    // The body's error is the answer's, unless the page has it
+    let failing = || Err(AppError::NotFound("gone".into()));
+    assert!(matches!(
+        Fresh::of(None, &parts, failing),
+        Err(AppError::NotFound(_))
+    ));
+    assert!(Fresh::of(Some(&first.tag), &parts, failing).is_ok());
+    // As the page reads it: the tag, and the body or null
+    assert_eq!(
+        serde_json::to_value(Fresh::of(Some(&first.tag), &parts, body).expect("an answer"))
+            .expect("json"),
+        json!({"tag": first.tag, "body": null})
+    );
+}
+
 #[test]
 fn version_is_atms() {
     assert_eq!(version(), atm_common::VERSION);

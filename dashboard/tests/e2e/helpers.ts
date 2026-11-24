@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -1001,7 +1002,7 @@ export class TasksServer {
       if (/^\/(api|p)\//.test(pathname)) this.httpRequests.push(pathname);
     });
     await this.page.exposeFunction('__atmInvoke', (command: string, args: Record<string, unknown>) =>
-      command === 'install_update' ? this.answerInstall(args) : this.answerCommand(command, args),
+      command === 'install_update' ? this.answerInstall(args) : this.reload(command, args),
     );
     await this.page.addInitScript((version) => {
       const w = window as unknown as Record<string, unknown> & {
@@ -1082,6 +1083,26 @@ export class TasksServer {
       };
     }
     return JSON.stringify(parsed);
+  }
+
+  /** The reload commands' answers (ATM-768), in order: the command, and whether it carried a body (the page didn't
+   * have it) */
+  reloads: { command: string; body: boolean }[] = [];
+
+  /** A command's answer, a reload command's as the app's `Fresh` (ATM-768): its tag (a hash of the answer and what
+   * asked for it) and its body, or none when the page's `known` tag is still it */
+  private reload(command: string, args: Record<string, unknown>): { ok?: unknown; error?: unknown } {
+    const answer = this.answerCommand(command, args);
+    if (!['list_projects', 'project_tasks', 'claims', 'worktrees'].includes(command) || !('ok' in answer))
+      return answer;
+    const { known, ...asked } = args;
+    const digest = createHash('sha1')
+      .update(JSON.stringify([command, asked, answer.ok]))
+      .digest('hex');
+    const tag = `"${digest.slice(0, 16)}"`;
+    const body = known === tag ? null : answer.ok;
+    this.reloads.push({ command, body: body !== null });
+    return { ok: { tag, body } };
   }
 
   /** What the app's command answers: `{ok}`, or `{error}` as its `AppError` */

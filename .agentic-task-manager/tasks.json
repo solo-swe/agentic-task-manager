@@ -1934,7 +1934,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 772,
+    "next_number": 774,
     "review": "async"
   },
   "tasks": [
@@ -21021,9 +21021,9 @@
         "dashboard/src/lib/tab-actions.ts"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T16:47:45Z",
+      "updated_at": "2026-11-24T17:34:41Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -21043,15 +21043,22 @@
         }
       ],
       "review_requested_at": "2026-11-24T16:47:45Z",
-      "review_state": "waiting",
+      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-24T16:47:45Z",
           "kind": "review",
           "text": "CR-165: The new tab's chooser of scope and item (/new)",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T17:34:41Z",
+          "kind": "note",
+          "text": "Approved: in CR-165 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviewed_at": "2026-11-24T17:34:41Z"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e88e728b0f5d",
@@ -21446,7 +21453,7 @@
       "description": "[The inbox design](docs/inbox-design.md) §6: the Inbox item's page, in the app and the webapp.\n\n## Change\n- The **quick-add box** at the top, focused on open, Enter adds (⇧Enter a new line), focus kept for the next; its draft kept on its tab.\n- The **filter** Open (default) · Discarded · Injected · All and *archived*, in the address (`?state=&archived=`).\n- **Each item:** first line as title (the rest on a click), when and who; Edit and Discard (a dialog asking the reason) when open; reason and Restore when discarded; its tasks as links when injected.\n- The sidebar's Inbox **badge** from the summary's open count.\n\n## Tests\nComponent tests (adding, the filter, each state's actions, the reason dialog); e2e with the fixture playing the routes.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e89307ded508",
         "01a20ae0-5493-734f-9c10-e88bc947df5c"
@@ -21456,7 +21463,7 @@
         "dashboard/src/lib/api/inbox.ts"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T16:47:51Z",
+      "updated_at": "2026-11-24T17:06:59Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21469,7 +21476,24 @@
       "review": "async",
       "number": 762,
       "started_at": "2026-11-24T16:47:51Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "7f0edd61932da26afd748de2e4a7168a802d2d34",
+      "code_reviews": [
+        {
+          "id": "01a20e86-693c-7542-bee0-3643f278b83c",
+          "ref": "CR-166"
+        }
+      ],
+      "review_requested_at": "2026-11-24T17:06:59Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-24T17:06:59Z",
+          "kind": "review",
+          "text": "CR-166: Inbox: the page",
+          "by": "claude:ba530ebb"
+        }
+      ]
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e895a1716a0b",
@@ -21729,7 +21753,7 @@
       "description": "From [the memory analysis §3b](docs/memory-growth-analysis.md#3b-what-a-reload-does-in-the-app-the-code-cr-140), CR-140. In the browser an unchanged answer is a `304` with no body (`ETag`s); the app has none (`api/ipc.ts`: \"No ETags\"), so each reload carries the whole answer again: 1.16 MB of task view for this repo, plus the project list.\n\n## Change\nThe app's read commands (project list, a project's tasks, claims, …) take the stamp the page last got (the same one `atm serve`'s `ETag` hashes) and answer \"unchanged\" with no body when it still matches; `ipc.ts` maps that to what the client already handles for a `304`.\n\n## Tests\nThe commands' unit tests (a matching stamp, a stale one, none); an e2e in the app fixture checking a reload with nothing new carries no body.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a20b6d-f9af-72ac-9448-da28a38919f5"
       ],
@@ -21738,7 +21762,7 @@
         "app/src-tauri/src/commands/state.rs"
       ],
       "created_at": "2026-11-24T02:41:26Z",
-      "updated_at": "2026-11-24T02:43:32Z",
+      "updated_at": "2026-11-24T17:21:28Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21755,7 +21779,9 @@
       "number": 768,
       "components": [
         "dashboard"
-      ]
+      ],
+      "started_at": "2026-11-24T17:21:28Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a20b6d-f9af-72ac-9448-da2a83797476",
@@ -21946,6 +21972,92 @@
       "review": "async",
       "number": 771,
       "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "01a20e86-f20a-70b2-9d4a-35cff3a353eb",
+      "name": "Inbox: an agent adds an item to another project's inbox",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "inbox",
+        "agents",
+        "security"
+      ],
+      "description": "From Hakan: an agent working in one project can leave a note in another project's inbox, for that project's user to triage, as a person would.\n\n**No new API.** The dashboard's routes, the app's commands and `atm inbox` already call one atm-lib function per operation (`inbox::add`, `inbox::list`, `inbox::show`, `inbox::decide`). This task makes `inbox::add` reachable for another project. The only new thing is how the project is found: `--project` opens it through the workspaces, as atm-api's routes open a project (`Workspace::project(id)` → `Member`). There is no second add, no new route, and no new command.\n\n## Change\n- `atm inbox add --project <key or ID> --text-file F` (or `'<text>'`): the same `inbox::add`, on the project the workspaces find. The project must be registered (the workspaces' projects, as [ADR-007 §7](docs/adr/ADR-007-cross-project-references.md) finds another project's task). One that isn't is refused, naming the registered ones.\n- **Who:** `inbox::add`'s rule, the one place it is decided. An agent may add to **another** project's inbox. Adding to its own stays a person's (the inbox is the user's input there, [the design §3](docs/inbox-design.md#3-states-and-who-moves-them)).\n- **Its origin:** `created_by` is the agent, as now. `inbox::add` also records `from_project` (the adding project's key, else its ID) when it comes from another project. Because it is in the item, the dashboard's answer, its page and `atm inbox show` all have it; the page shows *from <project>*.\n- **Nothing else changes for the target:** the item is `created`. Edit, discard, restore and inject stay as they are (its user's, its triage skill's). The text's limits are the same (20,000 characters, not empty).\n- `--json` answers the item with its project, so the agent can ask about it later (ATM-773).\n\n## Security\nA new write across projects by an agent:\n- The item's text is data (I1): the target's triage never runs anything an item says, as now.\n- Only registered projects. The target's own files only, through its store (its lock), never a path the agent names.\n- Update `docs/security-architecture.md` (the entry points and I1's note) and the inbox design's §3 table (who may add).\n- Update `docs/agent/commands.md`: the option, and what it is for. It carries a finding for another project's user, never instructions for its agents.\n\n## Tests\n- atm-lib unit tests of `inbox::add`'s rule and origin: an agent adding to another project (origin recorded), to its own (refused), a person as now, the text limits.\n- A test that `--project` opens the project through the workspaces (registered, unregistered, missing).\n- CLI suite scenarios in `tests/scripts/scenarios/inbox.json` with two registered projects.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a20ae0-5493-734f-9c10-e8925a26795e"
+      ],
+      "files": [
+        "crates/atm-lib/src/inbox.rs",
+        "crates/atm-cli/src/commands/inbox.rs",
+        "docs/inbox-design.md",
+        "docs/agent/commands.md",
+        "docs/security-architecture.md",
+        "tests/scripts/scenarios/inbox.json"
+      ],
+      "created_at": "2026-11-24T17:07:34Z",
+      "updated_at": "2026-11-24T17:20:09Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T17:07:34Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 772,
+      "components": [
+        "cli",
+        "docs"
+      ]
+    },
+    {
+      "id": "01a20e86-f20a-70b2-9d4a-35d0eac05318",
+      "name": "Inbox: another project's item's status, with its tasks' statuses once injected",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "inbox",
+        "agents"
+      ],
+      "description": "From Hakan: the agent that left a note in another project's inbox (ATM-772) can check what became of it.\n\n**No new API.** This reads through the same atm-lib functions the dashboard's route and the app's command call (`inbox::show`, `inbox::list`), on the project the workspaces find for `--project` (as ATM-772 opens it). The injected tasks' statuses are added **in those functions**, so the dashboard's inbox answer, its page and `atm inbox show` get them from the one answer. There is no second reader and no new route.\n\n## Change\n- **`inbox::show` and `inbox::list`:** an injected item's `tasks` come with what each task is now: its key, name, status and its status's kind, `done` when archived. A task not found says so.\n  - The project's own tasks are read from its store.\n  - A task in a third project (by its key) is read as [ADR-007 §7](docs/adr/ADR-007-cross-project-references.md) reads another project's task (atm-lib's `foreign`).\n  - The page's injected items then show each task's status beside its link.\n- **`atm inbox show IN-3 --project <key or ID> [--json]`:** the item as that project has it, in its inbox or its archive: its state, its reason when discarded, its tasks with their statuses when injected. `<KEY>:IN-3` (the project's key before the item's) works too.\n- **`atm inbox list --project <key or ID> --mine [--json]`:** the items this agent added there (by their `created_by`, as kept now), so an agent finds its notes without keeping their IDs.\n- Read-only; registered projects only.\n\n## Tests\n- atm-lib unit tests of `inbox::show` and `inbox::list`: each state's answer (created; discarded with its reason; injected with each task's status, including an archived task, a task not found, and one in another project); an archived item; `--mine`.\n- The route's tests and `InboxPage`'s: the tasks' statuses in the answer and on the page.\n- CLI suite scenarios with two registered projects: add from one, inject in the other, show from the first.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a20e86-f20a-70b2-9d4a-35cff3a353eb"
+      ],
+      "files": [
+        "crates/atm-lib/src/inbox.rs",
+        "crates/atm-cli/src/commands/inbox.rs",
+        "docs/agent/commands.md",
+        "tests/scripts/scenarios/inbox.json",
+        "crates/atm-api/src/routes/inbox.rs",
+        "dashboard/src/lib/inbox/InboxPage.svelte"
+      ],
+      "created_at": "2026-11-24T17:07:34Z",
+      "updated_at": "2026-11-24T17:20:19Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T17:07:34Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 773,
+      "components": [
+        "cli",
+        "docs",
         "dashboard"
       ]
     }

@@ -2,8 +2,9 @@
 // commands (app/src-tauri/src/commands.rs, ADR-003 §5), which answer what the REST routes do. `ipcFetch` takes the
 // dashboard's own URLs (api/http.ts builds them: `default`'s v1 routes, another workspace's v2 ones) and answers each
 // as a `Response` (a JSON one handing the command's answer through as it is, ATM-769), so everything above the client
-// layer works unchanged. No ETags: the app reads its own files, and
-// its live changes come through the subscriptions' channels.
+// layer works unchanged. Its live changes come through the subscriptions' channels; the reloads they cause are
+// conditional as in the browser (ATM-768): the reload commands (`RELOADS`) take the tag the page last got and answer
+// none when it still matches, which is a `304` here.
 import { invoke } from '@tauri-apps/api/core';
 import { DEFAULT_WORKSPACE } from './workspace';
 
@@ -163,30 +164,46 @@ export function callFor(url: string): Call | null {
  * docs/memory-growth-analysis.md §3b). The client reads `ok`, `status`, `headers` and `json()`; `text()` is there for
  * anything else, made only when asked. Each `json()` gives the same object: the client never changes what it reads.
  */
-export function answered(body: unknown, status = 200): Response {
+export function answered(body: unknown, status = 200, tag?: string): Response {
+  const headers = new Headers({ 'Content-Type': 'application/json' });
+  if (tag) headers.set('ETag', tag);
   const answer = {
     ok: status >= 200 && status < 300,
     status,
     statusText: '',
-    headers: new Headers({ 'Content-Type': 'application/json' }),
+    headers,
     redirected: false,
     type: 'basic',
     url: '',
     json: () => Promise.resolve(body),
     text: () => Promise.resolve(JSON.stringify(body)),
-    clone: () => answered(body, status),
+    clone: () => answered(body, status, tag),
   };
   return answer as unknown as Response;
 }
 
 const json = answered;
 
-/** `fetch`'s shape, answered by the app's commands (a request's options, such as its validators, don't apply) */
-export async function ipcFetch(input: RequestInfo | URL): Promise<Response> {
+/** The commands a page reloads (ATM-768): each takes `known`, the tag the page last got, and answers `Fresh` */
+const RELOADS = new Set(['list_projects', 'project_tasks', 'claims', 'worktrees']);
+
+/** A reload command's answer (`Fresh`): its tag, and its body, or null when the page's tag still matches */
+interface Fresh {
+  tag: string;
+  body: unknown;
+}
+
+/** `fetch`'s shape, answered by the app's commands: of a request's options, only its `If-None-Match` applies */
+export async function ipcFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
   const call = callFor(url);
   if (!call) return json({ error: 'not found' }, 404);
   try {
+    if (RELOADS.has(call.command)) {
+      const known = new Headers(init?.headers).get('If-None-Match') ?? undefined;
+      const { tag, body } = await invoke<Fresh>(call.command, { ...call.args, known });
+      return body === null ? json(null, 304, tag) : json(body, 200, tag);
+    }
     const answer = await invoke<unknown>(call.command, call.args);
     if (!call.image) return json(answer);
     if (answer === null) return json({ error: 'no logo' }, 404);
