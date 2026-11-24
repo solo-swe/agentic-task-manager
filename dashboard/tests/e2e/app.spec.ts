@@ -1016,6 +1016,12 @@ test.describe('the dashboard in the atm app', () => {
     await trail.locator('#progress-card').click();
     await expect(page.locator('#progress-panel')).toBeVisible();
     await page.keyboard.press('Escape');
+    // Code Reviews: its line's search is the reviews' (ATM-738), not the tasks'
+    await openView(page, 'reviews');
+    await expect(page.locator('.topbar.in-tab .in-tab-row > .review-search-box')).toHaveCount(1);
+    await expect(page.locator('#task-search')).toHaveCount(0);
+    await openView(page, 'kanban');
+    await expect(page.locator('.topbar.in-tab .in-tab-row #task-search')).toHaveCount(1);
     // A narrow tab: they give way, the subtitle stays
     await page.setViewportSize({ width: 1100, height: 900 });
     await expect(trail).toBeVisible();
@@ -1032,11 +1038,15 @@ test.describe('the dashboard in the atm app', () => {
       await expect(trail.locator('#activity-card'), item).toBeVisible();
       await expect(trail.locator('#progress-card'), item).toHaveCount(0);
       await expect(page.locator('#app-titlebar #activity-card'), item).toHaveCount(0);
-      // Its search (ATM-737): on Tasks, at the left of the tab's line, before the subtitle, as a project's is
-      const search = page.locator('.topbar.in-tab .in-tab-row > .board-search');
-      await expect(search, item).toHaveCount(item === 'tasks' ? 1 : 0);
-      if (item === 'tasks')
+      // Its search, at the left of the tab's line, before the subtitle, as a project's is: on Tasks the tasks'
+      // (ATM-737), on Code Reviews the reviews' (ATM-738)
+      const searches = { tasks: '.board-search', reviews: '.review-search-box' } as Record<string, string>;
+      const search = page.locator('.topbar.in-tab .in-tab-row > .task-search');
+      await expect(search, item).toHaveCount(searches[item] ? 1 : 0);
+      if (searches[item]) {
+        await expect(search, item).toHaveClass(new RegExp(searches[item].slice(1)));
         expect((await search.boundingBox())!.x).toBeLessThan((await page.locator('#subtitle').boundingBox())!.x);
+      }
     }
     await expect(page.locator('.projects-toolbar #board-search')).toHaveCount(0);
     const allPills = (await trail.boundingBox())!;

@@ -1,0 +1,26 @@
+// The reviews list's search, which the title bar shows (ATM-738, docs/sidebar-overhaul-design.md §6): where a
+// project's search is, the same field in the same place on every page that searches. The list (ReviewList) offers
+// its search while it is shown; the title bar (Header) shows the field while one is offered, and what is typed goes
+// to the list's query.
+
+/** A list's search: its query's text now, and what to do with a new one */
+export interface OfferedSearch {
+  readonly q: string;
+  search: (q: string) => void;
+}
+
+let offered = $state.raw<OfferedSearch | null>(null);
+
+/** The search offered now, if a reviews list is shown */
+export function offeredReviewSearch(): OfferedSearch | null {
+  return offered;
+}
+
+/** Offer `search` while the list is shown: the returned function takes it back (only it: another list may have
+ * offered its own since) */
+export function offerReviewSearch(search: OfferedSearch): () => void {
+  offered = search;
+  return () => {
+    if (offered === search) offered = null;
+  };
+}

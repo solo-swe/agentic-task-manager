@@ -4,6 +4,7 @@ import {
   expect,
   loadFixture,
   openDashboard,
+  openView,
   projectDocument,
   summary,
   test,
@@ -296,6 +297,33 @@ test.describe('the reviews tab', () => {
     await expect(unreadable).toHaveAttribute('data-unreadable', 'CR-13');
     await expect(unreadable).toHaveText("CR-13 Can't be read no status frozen A newer atm may have written it.");
     await expect(unreadable.getByRole('link')).toHaveCount(0);
+  });
+
+  test('the search is in the title bar, where the tasks’ search is on the other tabs; All’s reviews have it too (ATM-738)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openReviews(page, tasksServer);
+    const search = page.locator('.topbar .topbar-charts .review-search-box');
+    await expect(search).toHaveCount(1);
+    await expect(page.locator('#review-list .review-search')).toHaveCount(0);
+    // One search there, the page's own: not the tasks' search and Filters, which the reviews don't take
+    await expect(page.locator('#task-search, #filters-toggle')).toHaveCount(0);
+    // Before the pills, as the tasks' search is
+    expect((await search.boundingBox())!.x).toBeLessThan((await page.locator('#progress-card').boundingBox())!.x);
+    // "/" focuses it
+    await page.locator('#review-list').click({ position: { x: 1, y: 1 } });
+    await page.keyboard.press('/');
+    await expect(page.getByRole('searchbox', { name: 'Search reviews' })).toBeFocused();
+    // Another tab: the tasks' search is back
+    await openView(page, 'kanban');
+    await expect(page.locator('#task-search')).toHaveCount(1);
+    await expect(search).toHaveCount(0);
+    // All projects' Code Reviews
+    await page.goto('/reviews');
+    await expect(page.locator('#overview-reviews')).toBeVisible();
+    await expect(page.locator('.topbar .review-search-box')).toHaveCount(1);
+    await expect(page.locator('#overview-reviews .review-search')).toHaveCount(0);
   });
 
   test('opens with the last filter chosen, kept in the browser (not the search words); Clear forgets it', async ({

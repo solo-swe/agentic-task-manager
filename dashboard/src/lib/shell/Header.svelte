@@ -7,6 +7,8 @@
   import NeedsYouMenu from './NeedsYouMenu.svelte';
   import ActivityWidget from '../progress/ActivityWidget.svelte';
   import BoardSearch from '../overview/BoardSearch.svelte';
+  import ReviewSearch from '../reviews/ReviewSearch.svelte';
+  import { offeredReviewSearch } from '../reviews/search.svelte';
   import OverviewActivity from '../overview/OverviewActivity.svelte';
   import ProgressWidget from '../progress/ProgressWidget.svelte';
   import TitleBar from './TitleBar.svelte';
@@ -53,12 +55,15 @@
   const onAllTasks = $derived(
     route.page === 'overview' && (dashboard.overviewTab === 'board' || dashboard.overviewTab === 'list'),
   );
+  // A reviews list's search, while one is shown (a project's Code Reviews, All's): the title bar's (ATM-738)
+  const reviewSearch = $derived(offeredReviewSearch());
 </script>
 
 <!-- A project's search and Filters, and its Progress and Activity pills: the browser's title bar has them together, the
      app's in two places (search and Filters before the tabs) -->
 {#snippet projectSearch()}
-  <Filters />
+  <!-- On the Code Reviews tab its list's search instead (ATM-738): one search where a page's search is, the page's own -->
+  {#if reviewSearch}<ReviewSearch offered={reviewSearch} />{:else}<Filters />{/if}
 {/snippet}
 {#snippet projectPills()}
   <ProgressWidget />
@@ -73,10 +78,10 @@
     </div>
   {/if}
 {/snippet}
-<!-- All projects' search, on the pages that search every project's tasks (the Board and the List), where a project's
-     search is (ATM-737), and its activity -->
+<!-- All projects' search where a project's search is: on the pages that search every project's tasks (the Board and
+     the List, ATM-737), and on Code Reviews its list's (ATM-738); and its activity -->
 {#snippet overviewSearch()}
-  {#if onAllTasks}<BoardSearch />{/if}
+  {#if onAllTasks}<BoardSearch />{:else if reviewSearch}<ReviewSearch offered={reviewSearch} />{/if}
 {/snippet}
 {#snippet overviewPills()}
   <!-- Every project's activity together (T-328) -->
@@ -143,7 +148,7 @@
     selector={dashboard.projects.length > 0}
     inTab={inApp}
     charts={overviewCharts}
-    lead={inApp && onAllTasks ? overviewSearch : undefined}
+    lead={inApp && (onAllTasks || reviewSearch) ? overviewSearch : undefined}
     trail={inApp && route.page === 'overview' ? overviewPills : undefined}
   >
     {#snippet subtitle()}
