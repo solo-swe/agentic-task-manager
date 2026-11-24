@@ -43,6 +43,8 @@ export interface Prefs {
   needsYouBadge: boolean;
   /** The app notifies when a project's needs-you count goes up (T-520) */
   needsYouNotify: boolean;
+  /** The Documents page's open folders, by project id (ATM-766): their paths */
+  documentFolders: Record<string, string[]>;
 }
 
 function storage(): Storage | null {

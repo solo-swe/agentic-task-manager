@@ -1934,7 +1934,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 777,
+    "next_number": 778,
     "review": "async"
   },
   "tasks": [
@@ -21748,7 +21748,7 @@
       "description": "[The documents design](docs/documents-design.md) §4: the Documents item's page.\n\n## Change\n- **Tree** (default: folders open or closed, a submodule marked as one) and **Recent** (by last change); the view and the search in the address (`?view=&q=`), open folders per project in the preferences.\n- **Each row:** title, file name, how long ago it changed, *new* when untracked.\n- **Search** in the tab's header line, filtering in the page, or by the route's `?q=` when the list was cut at 500.\n- **A click opens the viewer in place** (`?doc=…` over the page, Back closes it); ⌘-click a new tab.\n\n## Tests\nComponent tests (tree, recent, search both ways, the *new* mark, submodules); e2e: open a document and Back to the list.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e897f4d0ca72",
         "01a20ae0-5493-734f-9c10-e88adf1461c5"
@@ -21758,7 +21758,7 @@
         "dashboard/src/lib/api/documents.ts"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T20:04:20Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21769,7 +21769,9 @@
       ],
       "sprint": "Sidebar overhaul",
       "review": "async",
-      "number": 766
+      "number": 766,
+      "started_at": "2026-11-24T20:04:20Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a20b6d-f9af-72ac-9448-da28a38919f5",
@@ -22084,7 +22086,7 @@
       "description": "From Hakan on CR-148 (ATM-753's review): with the sidebar overhaul the sidebar is how a user gets around the app, so a hidden one shouldn't leave nothing behind for a new user.\n\n## Change\n- **The rail:** in the app, with the sidebar hidden, a thin strip stays at the window's left edge (a few dozen px), icons only: the scope (the project's logo, or All's), then the scope's items' icons with their badges, in the sidebar's order. The page keeps its width less the rail.\n- **A hover shows the sidebar:** pointing at the rail (or focusing it with the keyboard) shows the full sidebar over the page, not pushing it, until the pointer or the focus leaves it; nothing is saved, it is still hidden after.\n- **Clicks work from either:** a rail icon opens its item as a sidebar item does (a new tab, ⌘-click in the background, ATM-753); so does an item of the shown sidebar.\n- **Show Sidebar** (the button, View ▸ Show Sidebar) still pins it open, as now; hiding it brings the rail back.\n- The browser has no sidebar (docs/sidebar-overhaul-design.md §5): no rail there.\n\n## Tests\n- Component tests (`Sidebar.component.test.ts`): hidden, the rail with the scope and each item's icon and badge, no labels; a hover or focus shows the full sidebar, leaving hides it; an icon's click opens its item.\n- e2e (`app.spec.ts`): the rail's width and the page's beside it; hovering shows the sidebar over the page, a click on an item there opens it, moving away hides it; Show Sidebar pins it.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e88bc947df5c"
       ],
@@ -22093,7 +22095,7 @@
         "dashboard/src/app.css"
       ],
       "created_at": "2026-11-24T16:33:19Z",
-      "updated_at": "2026-11-24T19:17:10Z",
+      "updated_at": "2026-11-24T19:32:20Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -22109,7 +22111,38 @@
         "dashboard"
       ],
       "started_at": "2026-11-24T19:17:10Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "5d5699a0dcdefc52aea6097939a5b108f3ec6cbf",
+      "code_reviews": [
+        {
+          "id": "01a20f09-c7ad-7149-97e0-6fcb920b2c6d",
+          "ref": "CR-172"
+        }
+      ],
+      "review_requested_at": "2026-11-24T19:30:29Z",
+      "notes": [
+        {
+          "at": "2026-11-24T19:30:29Z",
+          "kind": "review",
+          "text": "CR-172: The hidden sidebar is a thin rail of icons; a hover shows it",
+          "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T19:32:01Z",
+          "kind": "note",
+          "text": "Approved: in CR-172 (round 1)",
+          "by": "Hakan Serce"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T19:30:29Z",
+          "to": "2026-11-24T19:32:01Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T19:32:20Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a20e86-f20a-70b2-9d4a-35cff3a353eb",
@@ -22339,7 +22372,7 @@
       "description": "From Hakan: when atm opens, there is some weird per-tab opening and latency. It should open instantly and load nothing for the tabs that aren't visible.\n\n## Look into\nAs the app starts, the page first shows the window's own address (the app's root), and only once `restored_tabs` answers does it go to the tab that was active (`+layout.svelte`'s `onMount`, `appTabs.start`). Record in the app fixture every command the page asks from start until the active tab shows, with several restored tabs (projects, a review, All projects), and find what is loaded for a tab not shown, and what is shown before the active tab.\n\n## Change\n- The active restored tab is the first page shown: nothing of the root (or another tab) is loaded or drawn before it.\n- A tab not shown loads nothing until it is switched to (its title comes from what the page has: the project list).\n\n## Tests\nAn app e2e test: with restored tabs, the commands asked until the active tab shows are only the project list and the active tab's own; no other tab's page was shown in between.",
       "requirements": [],
       "use_cases": [],
-      "status": "blocked",
+      "status": "todo",
       "dependencies": [],
       "files": [
         "dashboard/src/routes/+layout.svelte",
@@ -22348,7 +22381,7 @@
         "dashboard/tests/e2e/helpers.ts"
       ],
       "created_at": "2026-11-24T18:24:38Z",
-      "updated_at": "2026-11-24T19:11:33Z",
+      "updated_at": "2026-11-24T20:16:55Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -22385,12 +22418,29 @@
           "kind": "note",
           "text": "Still not reproduced: with 2 boards, a review's page and the Code Reviews list restored, the fixture shows all four tabs at once (~0.2 s) and loads only the active tab's project, whichever is active. The fixture stands in for the app's Rust side and its real data.",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T19:30:52Z",
+          "kind": "note",
+          "text": "Hakan: it was 'cargo tauri dev'. In dev the window loads the page from Vite's dev server: hundreds of unbundled modules, each compiled on its first request, so the first show of each kind of page waits on them (a likely cause of the tabs appearing one at a time). The release loads one prebuilt file. Next: check the same start in a release build (cargo tauri build) before changing anything.",
+          "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T20:16:55Z",
+          "kind": "answer",
+          "text": "Which app was it: the installed release, or a build of this branch (tauri dev)? And what does 'one at a time' look like: tabs appearing in the strip one by one, the page switching through tabs, or several windows opening? A short screen recording would settle it. → In a release build: a similar load latency, but no showing one tab and then jumping to another. So the jumping was the dev server's; the latency at the start is real. Next: measure what the first load asks atm for and how long each takes.",
+          "by": "claude:ba530ebb"
         }
       ],
       "blocks": [
         {
           "from": "2026-11-24T18:44:09Z",
           "to": "2026-11-24T19:09:26Z",
+          "on": "user"
+        },
+        {
+          "from": "2026-11-24T19:11:33Z",
+          "to": "2026-11-24T20:16:55Z",
           "on": "user"
         }
       ],
@@ -22399,15 +22449,46 @@
           "from": "2026-11-24T18:24:46Z",
           "to": "2026-11-24T18:44:09Z",
           "by": "claude:ba530ebb"
+        },
+        {
+          "from": "2026-11-24T19:09:26Z",
+          "to": "2026-11-24T19:11:33Z",
+          "by": "claude:ba530ebb"
+        }
+      ]
+    },
+    {
+      "id": "01a20f0a-2258-70ca-bca7-b29b7753d0eb",
+      "name": "App: the first switch to another project's tab is over budget",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "performance",
+        "tabs"
+      ],
+      "description": "The timed test *a click on a tab, and Next Tab round them all* (`performance.spec.ts`, T-525) fails about one run in two locally: its first click into the second project's tab takes 107 to 329 ms against the 200 ms budget, while every other switch, that tab by Next Tab included, takes 30 to 130 ms. It fails the same way before ATM-771 (170, 139, 266 ms over three runs alone, `--project timed --no-deps --repeat-each 3`), so it isn't that change's.\n\n## Look into\nWhat the first show of a project not shown before does that the next doesn't (its load, its parse, its first render of the board; `--trace on` on a failing run). Never raise the budget (AGENTS.md, Performance budgets): a real fix.\n\n## Tests\nThe timed test passing on repeated runs alone (`--repeat-each 5`), and in the full suite.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/tests/e2e/performance.spec.ts",
+        "dashboard/src/lib/state.svelte.ts"
+      ],
+      "created_at": "2026-11-24T19:30:52Z",
+      "updated_at": "2026-11-24T19:30:52Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T19:30:52Z"
         }
       ],
-      "started_at": "2026-11-24T19:09:26Z",
-      "started_by": "claude:ba530ebb",
-      "waiting_on": "user",
-      "questions": [
-        "Which app was it: the installed release, or a build of this branch (tauri dev)? And what does 'one at a time' look like: tabs appearing in the strip one by one, the page switching through tabs, or several windows opening? A short screen recording would settle it."
-      ],
-      "blocked_at": "2026-11-24T19:11:33Z"
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 777
     }
   ]
 }

@@ -69,7 +69,7 @@ test.describe('the page by item', () => {
     await expect(panel(page, 'project')).toHaveAttribute('aria-labelledby', 'item-overview');
   });
 
-  test('the Inbox is its page (ATM-762); Documents says its page is coming', async ({ page, tasksServer }) => {
+  test('the Inbox is its page (ATM-762); so is Documents (ATM-766)', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, 'standard');
     await item(page, 'inbox').click();
     await expectSelected(page, 'inbox');
@@ -77,7 +77,8 @@ test.describe('the page by item', () => {
     await expect(page.locator('#inbox-page')).toBeVisible();
     await item(page, 'documents').click();
     await expectSelected(page, 'documents');
-    await expect(page.locator('#documents-placeholder')).toContainText('Documents are coming');
+    await expect(page).toHaveURL(/\/projects\/[^/]+\/documents(\?|$)/);
+    await expect(page.locator('#documents-page')).toBeVisible();
   });
 
   test('a project’s address without a tab is its Overview, whatever tab was seen last (ATM-751)', async ({

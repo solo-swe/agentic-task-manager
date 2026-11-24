@@ -81,6 +81,12 @@ export function inboxUrl(project: string, state: InboxState = 'created', archive
   return projectRoute(project, 'inbox') + (text ? `?${text}` : '');
 }
 
+/** A project's documents (GET …/projects/<id>/documents without a path, ATM-765): those `q` names, every one without */
+export function documentsUrl(project: string, q = ''): string {
+  const query = q.trim();
+  return projectRoute(project, 'documents') + (query ? `?q=${encodeURIComponent(query)}` : '');
+}
+
 /** A file of the project for the document viewer: what it is, and the CompMD document to render (T-392) */
 export function v1DocumentUrl(project: string, path: string): string {
   return `${projectRoute(project, 'documents')}?path=${encodeURIComponent(path)}`;

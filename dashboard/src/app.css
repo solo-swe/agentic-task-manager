@@ -3170,12 +3170,6 @@ a.detail-dep-item {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
-/* Inbox and Documents until their pages come (ATM-762, ATM-766) */
-.view-placeholder {
-  color: var(--text-muted);
-  padding: var(--space-6);
-  font-size: var(--text-lg);
-}
 .view-tab {
   display: inline-flex;
   align-items: center;

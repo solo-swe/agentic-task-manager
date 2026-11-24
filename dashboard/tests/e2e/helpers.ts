@@ -27,7 +27,8 @@ const AGENT_SKILLS = ['atm-do-task', 'atm-serve'];
 const WORKSPACE_PROJECTS = /\/api\/v2\/workspaces\/[^/]+\/projects(\?.*)?$/;
 const V1_TASKS = /\/api\/v1\/projects\/([^/]+)\/tasks(\?.*)?$/;
 const V1_STATS = /\/api\/v1\/projects\/([^/]+)\/stats(\?.*)?$/;
-const V1_DOCUMENTS = /\/api\/v1\/projects\/([^/]+)\/documents\?/;
+/** A project's documents route: a file (`?path=`), or without a path its documents' listing (ATM-766) */
+const V1_DOCUMENTS = /\/api\/v1\/projects\/([^/]+)\/documents(\?|$)/;
 const V1_FILES = /\/api\/v1\/projects\/([^/]+)\/files\?/;
 /** A project's reviews, or one review's page (ATM-574) */
 const V1_REVIEWS = /\/api\/v1\/projects\/([^/]+)\/reviews(?:\/([^/?]+))?(?:\?.*)?$/;
@@ -423,6 +424,41 @@ export class TasksServer {
     this.images.set(at ? `${at}:${path}` : path, { contentType, body });
   }
 
+  /** The default project's documents' listing (the documents route without a path, ATM-766): the one a test sets,
+   * else made from the documents set (`setDocument`), each by its title or file name, tracked; the searches it was
+   * asked for, in order ('' for every document) */
+  private documentList: { documents: unknown[]; submodules: unknown[]; more: number; git?: boolean } | null = null;
+  documentListRequests: string[] = [];
+  setDocumentList(listing: { documents: unknown[]; submodules?: unknown[]; more?: number; git?: boolean }) {
+    this.documentList = { submodules: [], more: 0, ...listing };
+  }
+  private listedDocuments(q: string) {
+    const all = this.documentList ?? {
+      documents: [...this.documents.entries()]
+        .filter(([, d]) => d.status === 200 && /\.(md|markdown)$/.test((d.body as { path: string }).path))
+        .map(([path, d]) => {
+          const body = d.body as { title?: string; document?: string; modified_at?: string; tracked?: boolean };
+          const heading = /^#\s+(.+)$/m.exec(body.document ?? '')?.[1];
+          return {
+            path,
+            title: body.title ?? heading ?? path.split('/').pop(),
+            bytes: (body.document ?? '').length,
+            modified_at: body.modified_at ?? '2026-11-20T10:00:00Z',
+            tracked: body.tracked ?? true,
+          };
+        }),
+      submodules: [],
+      more: 0,
+    };
+    const query = q.toLowerCase();
+    const documents = query
+      ? (all.documents as { path: string; title: string }[]).filter(
+          (d) => d.path.toLowerCase().includes(query) || d.title.toLowerCase().includes(query),
+        )
+      : all.documents;
+    return { ...all, documents, more: query ? 0 : all.more };
+  }
+
   /** Answer the documents route for `path` with an error, as atm serve refuses a file */
   refuseDocument(path: string, status: number, error: string) {
     this.documents.set(path, { status, body: { error }, version: 0 });
@@ -770,6 +806,18 @@ export class TasksServer {
       const url = new URL(route.request().url());
       const path = url.searchParams.get('path') ?? '';
       const revision = url.searchParams.get('at');
+      // No path: the documents' listing (ATM-766), tagged by what it answers
+      if (!path && !revision) {
+        const q = url.searchParams.get('q') ?? '';
+        this.documentListRequests.push(q);
+        if (!isDefault(route.request().url(), V1_DOCUMENTS))
+          return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error": "unknown project"}' });
+        const body = JSON.stringify(this.listedDocuments(q));
+        const etag = `"l${createHash('sha1').update(body).digest('hex').slice(0, 12)}"`;
+        if (route.request().headers()['if-none-match'] === etag)
+          return route.fulfill({ status: 304, headers: { ETag: etag } });
+        return route.fulfill({ status: 200, contentType: 'application/json', body, headers: { ETag: etag } });
+      }
       if (revision) {
         this.documentRequests.push(`${path}@${revision}`);
         const doc = this.revisionDocuments.get(`${revision}:${path}`);

@@ -13,6 +13,7 @@
   import ProgressTab from '../progress/ProgressTab.svelte';
   import ProjectTab from './ProjectTab.svelte';
   import ReviewsTab from './ReviewsTab.svelte';
+  import DocumentsPage from '../documents-page/DocumentsPage.svelte';
   import InboxPage from '../inbox/InboxPage.svelte';
   import ScopeBar from './ScopeBar.svelte';
   import SubTabs from './SubTabs.svelte';
@@ -110,7 +111,6 @@
       <!-- Mounted only while selected: it asks the server for the inbox, and again now and then (ATM-762) -->
       {#if view === 'inbox'}<InboxPage />{/if}
     </div>
-    <!-- The Documents page (docs/documents-design.md) comes with its own task -->
     <div
       class="view-panel"
       id="panel-documents"
@@ -118,11 +118,8 @@
       aria-labelledby="item-documents"
       hidden={view !== 'documents'}
     >
-      {#if view === 'documents'}
-        <p class="view-placeholder" id="documents-placeholder">
-          Documents are coming: the project’s documents, listed and searchable, to open in the viewer.
-        </p>
-      {/if}
+      <!-- Mounted only while selected: it asks the server for the documents, and again now and then (ATM-766) -->
+      {#if view === 'documents'}<DocumentsPage />{/if}
     </div>
   </div>
 </div>

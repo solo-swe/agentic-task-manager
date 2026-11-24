@@ -45,9 +45,9 @@
   <input
     class="review-search"
     type="search"
-    placeholder="Search reviews"
-    aria-label="Search reviews"
-    title="Search the reviews’ titles, summaries and comments (/)"
+    placeholder={offered.placeholder ?? 'Search reviews'}
+    aria-label={offered.placeholder ?? 'Search reviews'}
+    title={offered.title ?? 'Search the reviews’ titles, summaries and comments (/)'}
     bind:this={input}
     value={text}
     oninput={(e) => typed(e.currentTarget.value)}
