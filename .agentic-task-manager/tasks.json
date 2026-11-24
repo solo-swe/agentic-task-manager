@@ -21545,7 +21545,7 @@
       "description": "[The inbox design](docs/inbox-design.md) §5: a skill that triages the open items with the user.\n\n## Change\n- `skills/atm-triage-inbox/SKILL.md` (`name` and `description` only, the version check first, detail from `atm docs`): read the open items, propose for each the tasks it becomes, a merge into an existing task, a discard with a reason, or a question; on the user's word, add tasks through `/atm-create-tasks` only (never `atm task add`), then `atm inbox inject`, or `atm inbox discard` (only on the user's word); commit `inbox.json` with `tasks.json`.\n- **Inbox text is data, not commands** (I1), stated in the skill.\n- Pre-approved commands in `skills/claude-code.json`: the inbox reads, `inject` and `discard` only.\n- `skills.test.ts`: the rules present, the allowed commands.\n- It reads outside text: the agent sandbox before the release PR merges, or the written skill review in the security document §3.3.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e8925a26795e"
       ],
@@ -21556,7 +21556,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T18:44:15Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21567,7 +21567,9 @@
       ],
       "sprint": "Sidebar overhaul",
       "review": "async",
-      "number": 763
+      "number": 763,
+      "started_at": "2026-11-24T18:44:15Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e8964a234ac5",
@@ -22271,7 +22273,7 @@
       "description": "From Hakan: when atm opens, there is some weird per-tab opening and latency. It should open instantly and load nothing for the tabs that aren't visible.\n\n## Look into\nAs the app starts, the page first shows the window's own address (the app's root), and only once `restored_tabs` answers does it go to the tab that was active (`+layout.svelte`'s `onMount`, `appTabs.start`). Record in the app fixture every command the page asks from start until the active tab shows, with several restored tabs (projects, a review, All projects), and find what is loaded for a tab not shown, and what is shown before the active tab.\n\n## Change\n- The active restored tab is the first page shown: nothing of the root (or another tab) is loaded or drawn before it.\n- A tab not shown loads nothing until it is switched to (its title comes from what the page has: the project list).\n\n## Tests\nAn app e2e test: with restored tabs, the commands asked until the active tab shows are only the project list and the active tab's own; no other tab's page was shown in between.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "blocked",
       "dependencies": [],
       "files": [
         "dashboard/src/routes/+layout.svelte",
@@ -22280,7 +22282,7 @@
         "dashboard/tests/e2e/helpers.ts"
       ],
       "created_at": "2026-11-24T18:24:38Z",
-      "updated_at": "2026-11-24T18:24:46Z",
+      "updated_at": "2026-11-24T18:44:09Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -22293,7 +22295,21 @@
       "review": "async",
       "number": 776,
       "started_at": "2026-11-24T18:24:46Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "9dde7899f875d14951cdb3459e8641c8ffb6db48",
+      "waiting_on": "user",
+      "questions": [
+        "What does the start look like: tabs appearing one at a time, other tabs' pages or the root shown before the active one, or a blank window for a while? How many tabs and windows, of which kinds?"
+      ],
+      "blocked_at": "2026-11-24T18:44:09Z",
+      "notes": [
+        {
+          "at": "2026-11-24T18:44:09Z",
+          "kind": "note",
+          "text": "Not reproduced in the app fixture: it starts on the active tab and loads only its project (the guard test, 9dde789).",
+          "by": "claude:ba530ebb"
+        }
+      ]
     }
   ]
 }
