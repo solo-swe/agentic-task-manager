@@ -1369,6 +1369,39 @@ test.describe('the dashboard in the atm app', () => {
     expect(tasksServer.httpRequests).toEqual([]);
   });
 
+  test('a reload with nothing new carries no body; a change carries the new answer (ATM-768)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    const data = loadFixture('standard');
+    const task = data.tasks[0] as { id: string; name: string };
+    tasksServer.use(data);
+    await page.goto(`/projects/${tasksServer.projectId}/kanban`);
+    const card = page.locator(`#kanban .kanban-card[data-id="${task.id}"]`);
+    await expect(card).toContainText(task.name);
+    await expect.poll(() => tasksServer.subscriptions.size).toBeGreaterThan(0);
+    const tasksLoads = () => tasksServer.reloads.filter((r) => r.command === 'project_tasks');
+    // The first load carried the tasks
+    expect(tasksLoads()[0]).toEqual({ command: 'project_tasks', body: true });
+
+    // A change message with nothing new: the page asks again, with the tag it got, and gets no body (the claims, a
+    // few hundred bytes, the page asks for without its tag, in the browser too)
+    const before = tasksServer.reloads.length;
+    await tasksServer.pushChange(tasksServer.projectId);
+    await expect.poll(() => tasksServer.reloads.slice(before).some((r) => r.command === 'project_tasks')).toBe(true);
+    expect(tasksServer.reloads.slice(before).filter((r) => r.body && r.command !== 'claims')).toEqual([]);
+    await expect(card).toContainText(task.name);
+
+    // The tasks change: the next reload carries them
+    tasksServer.use({ ...data, tasks: [{ ...task, name: 'Renamed by an agent' }, ...data.tasks.slice(1)] });
+    const changed = tasksServer.reloads.length;
+    await tasksServer.pushChange(tasksServer.projectId);
+    await expect(card).toContainText('Renamed by an agent');
+    expect(tasksServer.reloads.slice(changed)).toContainEqual({ command: 'project_tasks', body: true });
+    expect(tasksServer.httpRequests).toEqual([]);
+  });
+
   test('a newer version of the app is offered, installed only on the click; a failure says why; Not now lasts (T-483)', async ({
     page,
     tasksServer,

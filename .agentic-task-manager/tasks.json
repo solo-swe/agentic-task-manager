@@ -21762,7 +21762,7 @@
         "app/src-tauri/src/commands/state.rs"
       ],
       "created_at": "2026-11-24T02:41:26Z",
-      "updated_at": "2026-11-24T17:21:28Z",
+      "updated_at": "2026-11-24T17:34:45Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21781,7 +21781,8 @@
         "dashboard"
       ],
       "started_at": "2026-11-24T17:21:28Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "112353dacaad7a56d0000f1f106c5e35c62c6c7c"
     },
     {
       "id": "01a20b6d-f9af-72ac-9448-da2a83797476",
