@@ -21226,7 +21226,7 @@
       "description": "Bring the docs in line with [the sidebar overhaul](docs/sidebar-overhaul-design.md) as built: `docs/app-desktop-ui-design.md` §4 (the sidebar) replaced by a pointer to the overhaul design, and Help's pages on the sidebar, the items, the new tab's chooser and tab titles.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e88bc947df5c",
         "01a20ae0-5493-734f-9c10-e88db033076e"
@@ -21236,9 +21236,9 @@
         "docs/help.md"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T23:12:01Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -21247,7 +21247,9 @@
       ],
       "sprint": "Sidebar overhaul",
       "review": "async",
-      "number": 758
+      "number": 758,
+      "started_at": "2026-11-24T23:12:01Z",
+      "started_by": "claude:33cba067"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e8910f0acbe3",
@@ -22604,14 +22606,14 @@
       "description": "The timed test *a click on a tab, and Next Tab round them all* (`performance.spec.ts`, T-525) fails about one run in two locally: its first click into the second project's tab takes 107 to 329 ms against the 200 ms budget, while every other switch, that tab by Next Tab included, takes 30 to 130 ms. It fails the same way before ATM-771 (170, 139, 266 ms over three runs alone, `--project timed --no-deps --repeat-each 3`), so it isn't that change's.\n\n## Look into\nWhat the first show of a project not shown before does that the next doesn't (its load, its parse, its first render of the board; `--trace on` on a failing run). Never raise the budget (AGENTS.md, Performance budgets): a real fix.\n\n## Tests\nThe timed test passing on repeated runs alone (`--repeat-each 5`), and in the full suite.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/state.svelte.ts",
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-24T19:30:52Z",
-      "updated_at": "2026-11-24T23:11:46Z",
+      "updated_at": "2026-11-24T23:11:57Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:33cba067",
       "sprint_history": [
@@ -22624,7 +22626,24 @@
       "review": "async",
       "number": 777,
       "started_at": "2026-11-24T23:05:36Z",
-      "started_by": "claude:33cba067"
+      "started_by": "claude:33cba067",
+      "commit": "6507b824e076c24e7d827e814241535b46a78581",
+      "code_reviews": [
+        {
+          "id": "01a20fd4-8cb4-76f7-97bc-33917879ebd7",
+          "ref": "CR-179"
+        }
+      ],
+      "review_requested_at": "2026-11-24T23:11:57Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-24T23:11:57Z",
+          "kind": "review",
+          "text": "CR-179: App: a switch to another project's tab loads its data first",
+          "by": "claude:33cba067"
+        }
+      ]
     },
     {
       "id": "01a20fc4-92be-7263-87d6-894ac379109d",
