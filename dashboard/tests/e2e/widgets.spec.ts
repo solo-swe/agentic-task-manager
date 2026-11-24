@@ -1,11 +1,22 @@
 import type { Page } from '@playwright/test';
-import { expect, loadFixture, openDashboard, test } from './helpers';
+import { expect, follow, loadFixture, openDashboard, sparkline, test } from './helpers';
 
 // The top bar: compact Progress and Activity pills between the title and the controls; a click opens the details.
 // Numbers from fixtures/agents.md: 6 of 8 tasks done, completions between 08:00 and 11:00 UTC.
 const NOW = new Date('2026-04-01T12:00:00Z');
 const progressPill = (page: Page) => page.locator('#progress-card');
 const activityPill = (page: Page) => page.locator('#activity-card');
+
+/** A task the archive holds, done on 20 March (before the fixture's completions) */
+const archivedDone = (id: string) => ({
+  id,
+  name: `Archived ${id}`,
+  type: 'feature',
+  status: 'done',
+  started_by: 'claude:alice001',
+  started_at: '2026-03-20T09:00:00Z',
+  completed_at: '2026-03-20T09:30:00Z',
+});
 
 test.beforeEach(async ({ page, tasksServer }) => {
   await page.clock.setFixedTime(NOW);
@@ -112,6 +123,35 @@ test.describe('Activity widget', () => {
       'Tasks completed per hour, all time: 6 · the line is the average of the last 3 hours · click for details',
     );
     await expect(activityPill(page).locator('svg.sparkline rect.ongoing')).toHaveCount(0);
+  });
+
+  // ATM-739 (Hakan): the pill charts tasks.json's completions, never the archive's, so it is the same chart every time
+  test('the same bars after opening the panel (which loads the archive) and after another page and back', async ({
+    page,
+    tasksServer,
+  }) => {
+    tasksServer.archive({ tasks: [archivedDone('A-1'), archivedDone('A-2')] });
+    const data = loadFixture('agents');
+    await openDashboard(page, tasksServer, { ...data, meta: { ...data.meta, archived: 2 } });
+    const left = 'Activity: 6 tasks completed, archived tasks left out';
+    await expect(activityPill(page)).toHaveAccessibleName(left);
+    await expect(activityPill(page)).toHaveAttribute('title', /all time: 6 \(archived tasks left out\)/);
+    const before = await sparkline(page);
+    await activityPill(page).click();
+    // The deep dive counts the archive for all time (D-5.2); the pill doesn't
+    await expect(page.locator('#kpi-done .kpi-value')).toHaveText('8');
+    expect(tasksServer.archiveRequests).toBeGreaterThan(0);
+    expect(await sparkline(page)).toEqual(before);
+    await page.keyboard.press('Escape');
+    expect(await sparkline(page)).toEqual(before);
+    await expect(activityPill(page)).toHaveAccessibleName(left);
+    // The overview, then Back to the project, in the page (the project loaded again): the same bars
+    await follow(page, '/projects');
+    await expect(page.locator('#projects-overview')).toBeVisible();
+    await page.goBack();
+    await expect(page.locator('#projects-overview')).toHaveCount(0);
+    await expect(activityPill(page)).toHaveAccessibleName(left);
+    expect(await sparkline(page)).toEqual(before);
   });
 
   test('the sparkline: the current hour, not over yet, lighter and counted "so far" (T-249)', async ({ page }) => {

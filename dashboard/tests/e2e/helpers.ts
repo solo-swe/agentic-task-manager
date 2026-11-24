@@ -1351,6 +1351,18 @@ export async function follow(page: Page, address: string) {
   }, address);
 }
 
+/** The Activity pill's bars and line as drawn (ATM-739): each bar's place, size and colour, and the line's path */
+export async function sparkline(page: Page): Promise<string[]> {
+  const svg = page.locator('#activity-card svg.sparkline');
+  await expect(svg).toBeVisible();
+  return svg.evaluate((s) => [
+    ...[...s.querySelectorAll('rect')].map((r) =>
+      ['x', 'y', 'width', 'height', 'fill'].map((a) => r.getAttribute(a)).join(' '),
+    ),
+    s.querySelector('path')?.getAttribute('d') ?? '',
+  ]);
+}
+
 /** The page's address as the dashboard writes it: its path and query (`/projects/fixture/list?about`) */
 export function addressOf(page: Page): string {
   const url = new URL(page.url());

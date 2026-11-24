@@ -176,6 +176,11 @@ describe('the sparkline tooltip (T-249)', () => {
     expect(sparklineTitle(s, T0 + 5 * H)).toBe(
       'Tasks completed per hour, all time: 3 · the line is the average of the last 3 hours · click for details',
     );
+    // A project with an archive: the pill says it is left out (ATM-739)
+    expect(sparklineTitle(s, T0 + 5 * H, true)).toBe(
+      'Tasks completed per hour, all time: 3 (archived tasks left out) · the line is the average of the last 3 hours · ' +
+        'click for details',
+    );
     const months = series([worked('a', 0, 1), worked('b', 0, 24 * 365 * 5)])!;
     expect(sparklineTitle(months, Date.parse('2040-01-01'))).toContain('the average of the last 3 periods of 30 days');
   });

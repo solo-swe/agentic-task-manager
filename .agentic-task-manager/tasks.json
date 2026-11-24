@@ -20016,14 +20016,14 @@
       "description": "In the Code Reviews tab of the sidebar overhaul (`docs/sidebar-overhaul-design.md`), move the reviews search up in the tab, placed like the other searches.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a207f0-a2e1-7602-b260-d97d26c2073b",
         "01a20ae0-5493-734f-9c10-e88adf1461c5"
       ],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T14:43:17Z",
+      "updated_at": "2026-11-24T14:53:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -20036,7 +20036,24 @@
       "review": "async",
       "number": 738,
       "started_at": "2026-11-24T14:43:17Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "df03fcd51cd4774ce6e94fde9203f67cc6885ebf",
+      "code_reviews": [
+        {
+          "id": "01a20e0c-516c-71b6-aee2-410de92f7525",
+          "ref": "CR-156"
+        }
+      ],
+      "review_requested_at": "2026-11-24T14:53:38Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-24T14:53:38Z",
+          "kind": "review",
+          "text": "CR-156: Reviews search moves up in the tab",
+          "by": "claude:ba530ebb"
+        }
+      ]
     },
     {
       "id": "01a207f5-b8d8-77e2-b9e8-b65158981919",
@@ -20049,7 +20066,7 @@
       "description": "The bar chart in the Activity pill, on a project's tab and on All projects, changes when the user clicks the pill, and changes again after switching to another tab and back. It must show the same chart every time.\n\n## Decision (Hakan)\nThe pill's all-time chart **leaves the archive out**: it charts the completions in `tasks.json` only, before and after the panel is opened, and never triggers an archive load. The panel's deep dive may still load and include the archive for its periods (D-5.2).\n\n## Likely cause\n`ActivityWidget.svelte` charts the pill from `dashboard.history` (line 43), and opening the panel calls `dashboard.wantArchive()` (line 91): once the archive arrives, `history` holds archived completions too, so the pill's bars change on the first click. Switching tabs likely reloads the project without the archive, which changes them back. Confirm this, and find the cause on All projects separately: `OverviewActivity.svelte` builds its own source from `dashboard.projectSources`, which leaves archives out, so something else changes there (check what re-derives on click and on returning to the tab, e.g. `dashboard.loadedAt` moving the buckets, or the sources being reloaded).\n\n## Change\n- The pill's series from the non-archived tasks only (`dashboard.tasks` for a project, the merged sources on All projects); the deep dive keeps using `history` where its period needs the archive.\n- The pill's tooltip and aria label say it is the task file's completions, without the archive.\n- Whatever changes the All projects pill on click or tab return, fixed so the same data gives the same bars.\n- Record the causes found in the task's notes.\n\n## Tests\n- Unit tests for the series the pill charts: with and without a loaded archive, the same result.\n- An e2e test in the Activity specs, on a project and on All projects: read the pill's bars, open and close the panel, switch to another tab and back, and the bars are unchanged.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/progress/ActivityWidget.svelte",
@@ -20057,9 +20074,9 @@
         "dashboard/src/lib/state.svelte.ts"
       ],
       "created_at": "2026-11-23T10:31:13Z",
-      "updated_at": "2026-11-23T10:31:18Z",
+      "updated_at": "2026-11-24T15:02:17Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:3c21f374",
+      "updated_by": "claude:ba530ebb",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -20068,7 +20085,17 @@
       ],
       "sprint": "Sidebar overhaul",
       "number": 739,
-      "review": "async"
+      "review": "async",
+      "started_at": "2026-11-24T14:53:43Z",
+      "started_by": "claude:ba530ebb",
+      "notes": [
+        {
+          "at": "2026-11-24T15:02:17Z",
+          "kind": "note",
+          "text": "Cause on a project: the pill charted dashboard.history, which holds the archive once any view loads it (the panel, the project's Overview); a project loaded again starts without it, so the bars changed on a click and again after another page. On All projects: not reproduced on the current code (browser and app: a click, Board and back, another app tab and back keep the same bars); its sources always held the archives. Both pills now chart the task files alone.",
+          "by": "claude:ba530ebb"
+        }
+      ]
     },
     {
       "id": "01a20808-570f-738e-a5c5-e9142ff2e1c9",

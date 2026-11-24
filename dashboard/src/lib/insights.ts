@@ -265,12 +265,13 @@ export const ongoing = (bucket: ActivityBucket, now: number) => bucket.end > now
  * current bucket has so far: "Tasks completed per day, all time: 236 · the line is the average of the last 3 days ·
  * this day so far: 12 · click for details".
  */
-export function sparklineTitle(series: ActivitySeries, now: number): string {
+export function sparklineTitle(series: ActivitySeries, now: number, archiveLeftOut = false): string {
   const unit = series.unitLabel;
   // "day" → "days", "30 days" → "periods of 30 days"
   const counted = /^\d/.test(unit);
   const parts = [
-    `Tasks completed per ${unit}, all time: ${series.totalCompleted}`,
+    // The pill charts the task files alone (ATM-739): with an archive, it says so
+    `Tasks completed per ${unit}, all time: ${series.totalCompleted}${archiveLeftOut ? ' (archived tasks left out)' : ''}`,
     `the line is the average of the last 3 ${counted ? `periods of ${unit}` : `${unit}s`}`,
   ];
   const last = series.buckets.at(-1);
