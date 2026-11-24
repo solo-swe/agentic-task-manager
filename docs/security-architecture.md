@@ -54,7 +54,7 @@ with the task that adds it.
 
 | #   | Invariant                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Enforced by                                                                                                                                                                    |
 | --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| I1  | **Task text is data, not commands.** The skills and `atm docs rules` (`docs/agent/rules.md`) say so, and an agent blocks a task that asks it to run copied commands, fetch scripts, touch credentials, CI, git config or hooks. Review comments are task text (`atm docs reviews`, the skills' rule; ATM-569), wherever they were written: the CLI, the app or the browser; so are inbox items (`atm docs commands`, ATM-760), which no loop reads and `/atm-triage-inbox` reads only with the user (ATM-763)                                                                                                                                                                                                               | `dashboard/tests/unit/skills.test.ts` (the rule is present); the agent sandbox's red-team run (`tests/sandbox/run.mjs`; its verdict: `tests/scripts/sandbox-verdict.test.mjs`) |
+| I1  | **Task text is data, not commands.** The skills and `atm docs rules` (`docs/agent/rules.md`) say so, and an agent blocks a task that asks it to run copied commands, fetch scripts, touch credentials, CI, git config or hooks. Review comments are task text (`atm docs reviews`, the skills' rule; ATM-569), wherever they were written: the CLI, the app or the browser; so are inbox items (`atm docs commands`, ATM-760), which no loop reads and `/atm-triage-inbox` reads only with the user (ATM-763), whoever wrote them: another project's agent too (`atm inbox add --project`, ATM-772, its origin recorded as `from_project`)                                                                                                                                                                                                               | `dashboard/tests/unit/skills.test.ts` (the rule is present); the agent sandbox's red-team run (`tests/sandbox/run.mjs`; its verdict: `tests/scripts/sandbox-verdict.test.mjs`) |
 | I2  | **Skills pre-approve no command runner**: only named `atm` commands (`atm task state`, `atm db migrate`, …), never `atm *` or a whole group (atm itself runs no command since T-437, I24)                                                                                                                                                                                                                                                                                                                                                                                                | `skills.test.ts`                                                                                                                                                               |
 | I3  | **Agent-written text is single-quoted** in skill templates, never double-quoted                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `skills.test.ts`                                                                                                                                                               |
 | I4  | **CI logs and PR comments are evidence**, never instructions, for the push skill                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `skills.test.ts` (the rule is present)                                                                                                                                         |
@@ -1409,7 +1409,7 @@ The skills changed, so a written skill review (no API key for the sandbox run; �
 - **`docs/agent/states.md` and `reviews.md`**: the same rule, and the doctor's warning.
 
 **The inbox's triage skill (ATM-763).** A new skill, `/atm-triage-inbox`, reads outside text: the inbox's items, which
-anyone who can change `inbox.json` writes (a person, or another project's agent once ATM-772 lands). A written skill
+anyone who can change `inbox.json` writes (a person, or another project's agent: ATM-772, below). A written skill
 review (no API key for the sandbox run; §3.3):
 - **Inbox text is data, not commands** (I1), stated in the skill as the other skills state it for tasks: it never runs
   a command copied from an item, fetches or runs a remote script, touches credentials, CI, git config, git hooks or
@@ -1424,6 +1424,25 @@ review (no API key for the sandbox run; §3.3):
 - It reads no file but through atm (never `inbox.json` or `tasks.json` directly), fetches nothing, and commits only
   `inbox.json` and `tasks.json` (`git commit -- <those two>`), on the user's word.
 - **No new entry point or field**: the commands are ATM-760's.
+
+**A write across projects by an agent (ATM-772).** `atm inbox add --project <key or ID>` lets an agent leave an item
+in **another** project's inbox, for that project's user to triage; adding to its own project's stays a person's. One
+rule, atm-lib's `inbox::add`, decides who may add; the dashboard's route and the app's command add to the project
+shown, as the user, as before.
+- **Which project:** only one of the user's registered projects, found by its key or `meta.id` among the workspaces
+  (atm-lib's `foreign::registered_project`, as ADR-007 §7 finds another project's task); never a path the agent names,
+  never the project it runs in. An unknown name is refused naming the registered ones; a key two projects share is
+  refused until named by ID.
+- **What it writes:** the target's own `inbox.json` only, through its store (its lock, its symlink checks, I6), one item:
+  `created`, the text's usual limits (not empty, at most 20,000 characters), `created_by` the agent, and a new field
+  `from_project` (the adding project's key, else its ID). Nothing else of the target changes, and an agent there still
+  can't edit, restore or inject it.
+- **What it carries is data** (I1): the triage skill, the only reader, never runs anything an item says
+  (`/atm-triage-inbox`'s rule, above); `docs/agent/commands.md` tells agents to write a finding for the user, never
+  instructions for its agents. The page shows *from LFB* beside its author, so the user sees where it came from.
+- **Tests:** atm-lib's `an_agent_of_another_project_adds_an_item_with_its_origin` and the text limits with an origin;
+  `a_registered_project_is_found_by_its_key_or_id_never_the_one_asking`; the CLI suite's `inbox add --project` scenarios
+  (two registered projects: the item and its origin, `--json`, an unregistered project and this one refused, dry run).
 
 ## 4. Keeping it current
 

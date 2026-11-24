@@ -13,6 +13,8 @@ export interface InboxItem {
   tasks?: string[];
   created_at?: string;
   created_by?: string;
+  /** The project it came from, when another project's agent or person added it (ATM-772) */
+  from_project?: string;
   updated_at?: string;
   decided_at?: string;
   decided_by?: string;

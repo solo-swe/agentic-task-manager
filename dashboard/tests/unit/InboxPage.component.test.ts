@@ -28,7 +28,13 @@ vi.mock('../../src/lib/api/inbox', () => api);
 const listing = (items: InboxListing['items']): InboxListing => ({ items, created: 2, discarded: 1, injected: 1 });
 const ITEMS: InboxListing['items'] = [
   { id: 'IN-4', text: 'Scroll to the moved card\nAnd keep it in view.', state: 'created', created_by: 'Hakan' },
-  { id: 'IN-3', text: 'Look at how others triage', state: 'created', created_by: 'Hakan' },
+  {
+    id: 'IN-3',
+    text: 'Look at how others triage',
+    state: 'created',
+    created_by: 'claude:ab12',
+    from_project: 'LFB',
+  },
   { id: 'IN-2', text: 'a dark sidebar?', state: 'discarded', reason: 'The themes set it.' },
   { id: 'IN-1', text: 'Remember the diff position', state: 'injected', tasks: ['T-001', 'LFB-5'] },
 ];
@@ -68,6 +74,13 @@ describe('InboxPage', () => {
     expect(actions('IN-2')).toEqual(['restore']);
     expect(actions('IN-1')).toEqual([]);
     expect(row(container, 'IN-2')).toHaveTextContent('discarded: The themes set it.');
+    // Left by another project's agent (ATM-772): from that project; the project's own say nothing of it
+    expect(row(container, 'IN-3').querySelector('.inbox-from')).toHaveTextContent('from LFB');
+    expect(row(container, 'IN-3').querySelector('.inbox-from')).toHaveAttribute(
+      'title',
+      'Left here by claude:ab12 working in LFB',
+    );
+    expect(row(container, 'IN-4').querySelector('.inbox-from')).toBeNull();
     // Injected: its tasks, this project's a link to its details here, another's as text
     const tasks = row(container, 'IN-1').querySelector('.inbox-tasks')!;
     expect(tasks.querySelector('a[data-task="T-001"]')).toHaveAttribute('href', '/projects/fixture/inbox?task=T-001');

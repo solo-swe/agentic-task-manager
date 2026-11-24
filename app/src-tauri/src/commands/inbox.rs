@@ -58,7 +58,7 @@ pub async fn add_inbox_item(
     let mut project = member(&state.workspaces, &workspace, &project)?.project_as_user()?;
     let item: inbox::NewItem = request_from(object(item)?)?;
     Ok(Json(
-        json!({ "item": inbox::add(&mut project, &item.text)? }),
+        json!({ "item": inbox::add(&mut project, &item.text, None)? }),
     ))
 }
 

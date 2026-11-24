@@ -1,7 +1,9 @@
 [
   {
     "name": "inbox add: a person notes something; it is IN-1, open, by them",
-    "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
+    "setup": {
+      "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } }
+    },
     "env": { "ATM_AGENT": "Ana", "ATM_NOW": "2026-11-24T09:00:00Z" },
     "args": ["inbox", "add", "Fix the sidebar's **scope**\n\nIt forgets the project."],
     "expect": {
@@ -27,29 +29,189 @@
   {
     "name": "inbox add from a file, as JSON",
     "setup": {
-      "files": { ".agentic-task-manager/tasks.json": { "tasks": [] }, "note.md": "From a file\n" }
+      "files": {
+        ".agentic-task-manager/tasks.json": { "tasks": [] },
+        "note.md": "From a file\n"
+      }
     },
     "env": { "ATM_AGENT": "Ana" },
     "args": ["inbox", "add", "--text-file", "note.md", "--json"],
-    "expect": { "stdoutIncludes": ["\"id\": \"IN-1\"", "\"text\": \"From a file\"", "\"state\": \"created\""] }
+    "expect": {
+      "stdoutIncludes": ["\"id\": \"IN-1\"", "\"text\": \"From a file\"", "\"state\": \"created\""]
+    }
   },
   {
     "name": "inbox add refuses an agent: the inbox is the user's input",
-    "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
+    "setup": {
+      "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } }
+    },
     "env": { "ATM_AGENT": "claude:abc" },
     "args": ["inbox", "add", "Something"],
     "expect": {
       "exit": 1,
-      "stderrIncludes": ["only a person adds to the inbox"],
+      "stderrIncludes": ["only a person adds to its project's inbox"],
       "files": { ".agentic-task-manager/inbox.json": false }
     }
   },
   {
+    "name": "inbox add --project: an agent leaves a finding in another registered project's inbox, from this one (ATM-772)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "id": "lfb00001", "key": "LFB" },
+          "tasks": []
+        },
+        "atm/.agentic-task-manager/tasks.json": {
+          "meta": { "id": "atm00001", "key": "ATM" },
+          "tasks": []
+        }
+      },
+      "commands": [["sh", "-c", "ATM_HOME=\"$PWD/.atm-home\" \"$ATM\" workspace add-project default atm"]]
+    },
+    "env": { "ATM_AGENT": "claude:abc", "ATM_NOW": "2026-11-24T09:00:00Z" },
+    "args": ["inbox", "add", "--project", "atm", "Your API answers 500 on an empty body\n\nSeen from LFB's client."],
+    "expect": {
+      "stdout": "IN-1: added to ATM's inbox · Your API answers 500 on an empty body\n",
+      "files": {
+        "atm/.agentic-task-manager/inbox.json": {
+          "version": 1,
+          "next": 2,
+          "items": [
+            {
+              "id": "IN-1",
+              "text": "Your API answers 500 on an empty body\n\nSeen from LFB's client.",
+              "state": "created",
+              "created_at": "2026-11-24T09:00:00Z",
+              "created_by": "claude:abc",
+              "updated_at": "2026-11-24T09:00:00Z",
+              "from_project": "LFB"
+            }
+          ]
+        },
+        ".agentic-task-manager/inbox.json": false
+      }
+    }
+  },
+  {
+    "name": "inbox add --project --json: the item with its project, to ask about it later; by its ID too",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "id": "lfb00001", "key": "LFB" },
+          "tasks": []
+        },
+        "atm/.agentic-task-manager/tasks.json": {
+          "meta": { "id": "atm00001", "key": "ATM" },
+          "tasks": []
+        },
+        "note.md": "A finding\n"
+      },
+      "commands": [["sh", "-c", "ATM_HOME=\"$PWD/.atm-home\" \"$ATM\" workspace add-project default atm"]]
+    },
+    "env": { "ATM_AGENT": "claude:abc" },
+    "args": ["inbox", "add", "--project", "atm00001", "--text-file", "note.md", "--json"],
+    "expect": {
+      "stdoutIncludes": [
+        "\"id\": \"IN-1\"",
+        "\"project\": \"ATM\"",
+        "\"from_project\": \"LFB\"",
+        "\"created_by\": \"claude:abc\""
+      ]
+    }
+  },
+  {
+    "name": "inbox add --project refuses a project that isn't registered, naming those that are; this one isn't another",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "id": "lfb00001", "key": "LFB" },
+          "tasks": []
+        },
+        "atm/.agentic-task-manager/tasks.json": {
+          "meta": { "id": "atm00001", "key": "ATM" },
+          "tasks": []
+        },
+        "elsewhere/.agentic-task-manager/tasks.json": {
+          "meta": { "id": "els00001", "key": "ELS" },
+          "tasks": []
+        }
+      },
+      "commands": [
+        ["sh", "-c", "ATM_HOME=\"$PWD/.atm-home\" \"$ATM\" workspace add-project default atm"],
+        ["sh", "-c", "ATM_HOME=\"$PWD/.atm-home\" \"$ATM\" workspace add-project"]
+      ]
+    },
+    "env": { "ATM_AGENT": "claude:abc" },
+    "args": ["inbox", "add", "--project", "ELS", "A finding"],
+    "expect": {
+      "exit": 1,
+      "stderrIncludes": ["no registered project \"ELS\"", "registered: ATM"],
+      "files": {
+        "elsewhere/.agentic-task-manager/inbox.json": false,
+        "atm/.agentic-task-manager/inbox.json": false,
+        ".agentic-task-manager/inbox.json": false
+      }
+    }
+  },
+  {
+    "name": "inbox add --project naming this project: not another, so an agent is refused there as always",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "id": "lfb00001", "key": "LFB" },
+          "tasks": []
+        },
+        "atm/.agentic-task-manager/tasks.json": {
+          "meta": { "id": "atm00001", "key": "ATM" },
+          "tasks": []
+        }
+      },
+      "commands": [
+        ["sh", "-c", "ATM_HOME=\"$PWD/.atm-home\" \"$ATM\" workspace add-project default atm"],
+        ["sh", "-c", "ATM_HOME=\"$PWD/.atm-home\" \"$ATM\" workspace add-project"]
+      ]
+    },
+    "env": { "ATM_AGENT": "claude:abc" },
+    "args": ["inbox", "add", "--project", "LFB", "A finding"],
+    "expect": {
+      "exit": 1,
+      "stderrIncludes": ["no registered project \"LFB\"", "registered: ATM"],
+      "files": { ".agentic-task-manager/inbox.json": false }
+    }
+  },
+  {
+    "name": "inbox add --project --dry-run says where it would go and writes nothing",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "id": "lfb00001", "key": "LFB" },
+          "tasks": []
+        },
+        "atm/.agentic-task-manager/tasks.json": {
+          "meta": { "id": "atm00001", "key": "ATM" },
+          "tasks": []
+        }
+      },
+      "commands": [["sh", "-c", "ATM_HOME=\"$PWD/.atm-home\" \"$ATM\" workspace add-project default atm"]]
+    },
+    "env": { "ATM_AGENT": "claude:abc" },
+    "args": ["inbox", "add", "--project", "ATM", "A finding", "--dry-run"],
+    "expect": {
+      "stdoutIncludes": ["add an item to ATM's inbox, from LFB"],
+      "files": { "atm/.agentic-task-manager/inbox.json": false }
+    }
+  },
+  {
     "name": "inbox add refuses no text, and empty text",
-    "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
+    "setup": {
+      "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } }
+    },
     "env": { "ATM_AGENT": "Ana" },
     "args": ["inbox", "add", "   "],
-    "expect": { "exit": 2, "files": { ".agentic-task-manager/inbox.json": false } }
+    "expect": {
+      "exit": 2,
+      "files": { ".agentic-task-manager/inbox.json": false }
+    }
   },
   {
     "name": "inbox list: the open items, newest first, and the counts",
@@ -128,9 +290,19 @@
   },
   {
     "name": "inbox list on a project without an inbox: none, as JSON",
-    "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
+    "setup": {
+      "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } }
+    },
     "args": ["inbox", "list", "--json"],
-    "expect": { "json": { "items": [], "created": 0, "discarded": 0, "injected": 0, "archived": false } }
+    "expect": {
+      "json": {
+        "items": [],
+        "created": 0,
+        "discarded": 0,
+        "injected": 0,
+        "archived": false
+      }
+    }
   },
   {
     "name": "inbox show: the item in full",
@@ -159,7 +331,9 @@
   },
   {
     "name": "inbox show refuses an item that doesn't exist, and what is no item",
-    "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
+    "setup": {
+      "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } }
+    },
     "args": ["inbox", "show", "IN-9"],
     "expect": { "exit": 1, "stderrIncludes": ["no inbox item IN-9"] }
   },
@@ -210,7 +384,9 @@
   },
   {
     "name": "inbox discard needs a reason",
-    "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
+    "setup": {
+      "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } }
+    },
     "args": ["inbox", "discard", "IN-1"],
     "expect": { "exit": 2, "stderrIncludes": ["--reason"] }
   },
@@ -294,12 +470,20 @@
     "name": "inbox inject refuses a task that doesn't exist, and changes nothing",
     "setup": {
       "files": {
-        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-001", "status": "todo" }] },
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [{ "id": "T-001", "status": "todo" }]
+        },
         ".agentic-task-manager/inbox.json": {
           "version": 1,
           "next": 2,
           "items": [
-            { "id": "IN-1", "text": "x", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }
+            {
+              "id": "IN-1",
+              "text": "x",
+              "state": "created",
+              "created_at": "2026-11-24T09:00:00Z",
+              "created_by": "Ana"
+            }
           ]
         }
       }
@@ -313,7 +497,13 @@
           "version": 1,
           "next": 2,
           "items": [
-            { "id": "IN-1", "text": "x", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }
+            {
+              "id": "IN-1",
+              "text": "x",
+              "state": "created",
+              "created_at": "2026-11-24T09:00:00Z",
+              "created_by": "Ana"
+            }
           ]
         }
       }
@@ -323,12 +513,20 @@
     "name": "a task made from an inbox item says so: its from names the item",
     "setup": {
       "files": {
-        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-001", "name": "Made", "status": "todo" }] },
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [{ "id": "T-001", "name": "Made", "status": "todo" }]
+        },
         ".agentic-task-manager/inbox.json": {
           "version": 1,
           "next": 2,
           "items": [
-            { "id": "IN-1", "text": "x", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }
+            {
+              "id": "IN-1",
+              "text": "x",
+              "state": "created",
+              "created_at": "2026-11-24T09:00:00Z",
+              "created_by": "Ana"
+            }
           ]
         }
       },
@@ -339,7 +537,9 @@
   },
   {
     "name": "inbox inject needs a task",
-    "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
+    "setup": {
+      "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } }
+    },
     "args": ["inbox", "inject", "IN-1"],
     "expect": { "exit": 2, "stderrIncludes": ["--task"] }
   },
@@ -368,7 +568,9 @@
     },
     "env": { "ATM_AGENT": "Ana" },
     "args": ["inbox", "restore", "IN-1", "--json"],
-    "expect": { "stdoutIncludes": ["\"state\": \"created\"", "\"updated_by\": \"Ana\""] }
+    "expect": {
+      "stdoutIncludes": ["\"state\": \"created\"", "\"updated_by\": \"Ana\""]
+    }
   },
   {
     "name": "inbox restore and edit refuse an agent",
@@ -379,14 +581,23 @@
           "version": 1,
           "next": 2,
           "items": [
-            { "id": "IN-1", "text": "x", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }
+            {
+              "id": "IN-1",
+              "text": "x",
+              "state": "created",
+              "created_at": "2026-11-24T09:00:00Z",
+              "created_by": "Ana"
+            }
           ]
         }
       }
     },
     "env": { "ATM_AGENT": "claude:abc" },
     "args": ["inbox", "edit", "IN-1", "y"],
-    "expect": { "exit": 1, "stderrIncludes": ["only a person edits an inbox item"] }
+    "expect": {
+      "exit": 1,
+      "stderrIncludes": ["only a person edits an inbox item"]
+    }
   },
   {
     "name": "inbox edit: a person changes an open item's text",
@@ -397,18 +608,28 @@
           "version": 1,
           "next": 2,
           "items": [
-            { "id": "IN-1", "text": "x", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }
+            {
+              "id": "IN-1",
+              "text": "x",
+              "state": "created",
+              "created_at": "2026-11-24T09:00:00Z",
+              "created_by": "Ana"
+            }
           ]
         }
       }
     },
     "env": { "ATM_AGENT": "Ana" },
     "args": ["inbox", "edit", "IN-1", "Better words", "--json"],
-    "expect": { "stdoutIncludes": ["\"text\": \"Better words\"", "\"updated_by\": \"Ana\""] }
+    "expect": {
+      "stdoutIncludes": ["\"text\": \"Better words\"", "\"updated_by\": \"Ana\""]
+    }
   },
   {
     "name": "inbox add --dry-run says what it would do and writes nothing",
-    "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
+    "setup": {
+      "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } }
+    },
     "env": { "ATM_AGENT": "Ana" },
     "args": ["inbox", "add", "x", "--dry-run"],
     "expect": {
@@ -461,7 +682,13 @@
     "args": ["db", "unarchive", "IN-2"],
     "expect": {
       "stdoutIncludes": ["Brought back IN-2 from the archive."],
-      "files": { ".agentic-task-manager/inbox-archive.json": { "version": 1, "next": 1, "items": [] } }
+      "files": {
+        ".agentic-task-manager/inbox-archive.json": {
+          "version": 1,
+          "next": 1,
+          "items": []
+        }
+      }
     }
   },
   {
@@ -496,7 +723,9 @@
       "commands": [["sh", "-c", "ATM_NOW=2026-11-24T12:00:00Z \"$ATM\" db archive"]]
     },
     "args": ["inbox", "list", "--archived", "--state", "all"],
-    "expect": { "stdout": "IN-2  discarded  decided, old · no\n1 item archived: 0 open, 1 discarded, 0 injected\n" }
+    "expect": {
+      "stdout": "IN-2  discarded  decided, old · no\n1 item archived: 0 open, 1 discarded, 0 injected\n"
+    }
   },
   {
     "name": "db archive says which inbox items it moved",
@@ -525,14 +754,22 @@
     "args": ["db", "archive", "--json"],
     "expect": {
       "stdoutIncludes": ["\"inbox_moved\": [\n    \"IN-1\"\n  ]"],
-      "files": { ".agentic-task-manager/inbox.json": { "version": 1, "next": 2, "items": [] } }
+      "files": {
+        ".agentic-task-manager/inbox.json": {
+          "version": 1,
+          "next": 2,
+          "items": []
+        }
+      }
     }
   },
   {
     "name": "project status names the inbox's open items, for the person; --json too",
     "setup": {
       "files": {
-        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-001", "status": "todo" }] },
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [{ "id": "T-001", "status": "todo" }]
+        },
         ".agentic-task-manager/inbox.json": {
           "version": 1,
           "next": 3,
@@ -544,7 +781,13 @@
               "created_at": "2026-11-24T09:00:00Z",
               "created_by": "Ana"
             },
-            { "id": "IN-2", "text": "b", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }
+            {
+              "id": "IN-2",
+              "text": "b",
+              "state": "created",
+              "created_at": "2026-11-24T09:00:00Z",
+              "created_by": "Ana"
+            }
           ]
         }
       }
@@ -554,7 +797,13 @@
   },
   {
     "name": "project status: no inbox line without open items",
-    "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-001", "status": "todo" }] } } },
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [{ "id": "T-001", "status": "todo" }]
+        }
+      }
+    },
     "args": ["project", "status", "--json"],
     "expect": { "stdoutIncludes": ["\"inbox_open\": 0"] }
   },
@@ -562,7 +811,9 @@
     "name": "vcs commit takes the inbox along with tasks.json",
     "setup": {
       "files": {
-        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-001", "status": "in_progress", "name": "Work" }] },
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [{ "id": "T-001", "status": "in_progress", "name": "Work" }]
+        },
         "src.txt": "one\n"
       },
       "git": true,

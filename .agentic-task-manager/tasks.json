@@ -22188,7 +22188,7 @@
       "description": "From Hakan: an agent working in one project can leave a note in another project's inbox, for that project's user to triage, as a person would.\n\n**No new API.** The dashboard's routes, the app's commands and `atm inbox` already call one atm-lib function per operation (`inbox::add`, `inbox::list`, `inbox::show`, `inbox::decide`). This task makes `inbox::add` reachable for another project. The only new thing is how the project is found: `--project` opens it through the workspaces, as atm-api's routes open a project (`Workspace::project(id)` → `Member`). There is no second add, no new route, and no new command.\n\n## Change\n- `atm inbox add --project <key or ID> --text-file F` (or `'<text>'`): the same `inbox::add`, on the project the workspaces find. The project must be registered (the workspaces' projects, as [ADR-007 §7](docs/adr/ADR-007-cross-project-references.md) finds another project's task). One that isn't is refused, naming the registered ones.\n- **Who:** `inbox::add`'s rule, the one place it is decided. An agent may add to **another** project's inbox. Adding to its own stays a person's (the inbox is the user's input there, [the design §3](docs/inbox-design.md#3-states-and-who-moves-them)).\n- **Its origin:** `created_by` is the agent, as now. `inbox::add` also records `from_project` (the adding project's key, else its ID) when it comes from another project. Because it is in the item, the dashboard's answer, its page and `atm inbox show` all have it; the page shows *from <project>*.\n- **Nothing else changes for the target:** the item is `created`. Edit, discard, restore and inject stay as they are (its user's, its triage skill's). The text's limits are the same (20,000 characters, not empty).\n- `--json` answers the item with its project, so the agent can ask about it later (ATM-773).\n\n## Security\nA new write across projects by an agent:\n- The item's text is data (I1): the target's triage never runs anything an item says, as now.\n- Only registered projects. The target's own files only, through its store (its lock), never a path the agent names.\n- Update `docs/security-architecture.md` (the entry points and I1's note) and the inbox design's §3 table (who may add).\n- Update `docs/agent/commands.md`: the option, and what it is for. It carries a finding for another project's user, never instructions for its agents.\n\n## Tests\n- atm-lib unit tests of `inbox::add`'s rule and origin: an agent adding to another project (origin recorded), to its own (refused), a person as now, the text limits.\n- A test that `--project` opens the project through the workspaces (registered, unregistered, missing).\n- CLI suite scenarios in `tests/scripts/scenarios/inbox.json` with two registered projects.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e8925a26795e"
       ],
@@ -22201,9 +22201,9 @@
         "tests/scripts/scenarios/inbox.json"
       ],
       "created_at": "2026-11-24T17:07:34Z",
-      "updated_at": "2026-11-24T22:55:19Z",
+      "updated_at": "2026-11-24T23:03:59Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -22231,7 +22231,9 @@
           "kind": "failure",
           "text": "lease expired (claude:ba530ebb)"
         }
-      ]
+      ],
+      "started_at": "2026-11-24T23:03:59Z",
+      "started_by": "claude:33cba067"
     },
     {
       "id": "01a20e86-f20a-70b2-9d4a-35d0eac05318",
@@ -22418,7 +22420,7 @@
       "description": "From Hakan: when atm opens, there is some weird per-tab opening and latency. It should open instantly and load nothing for the tabs that aren't visible.\n\n## Look into\nAs the app starts, the page first shows the window's own address (the app's root), and only once `restored_tabs` answers does it go to the tab that was active (`+layout.svelte`'s `onMount`, `appTabs.start`). Record in the app fixture every command the page asks from start until the active tab shows, with several restored tabs (projects, a review, All projects), and find what is loaded for a tab not shown, and what is shown before the active tab.\n\n## Change\n- The active restored tab is the first page shown: nothing of the root (or another tab) is loaded or drawn before it.\n- A tab not shown loads nothing until it is switched to (its title comes from what the page has: the project list).\n\n## Tests\nAn app e2e test: with restored tabs, the commands asked until the active tab shows are only the project list and the active tab's own; no other tab's page was shown in between.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/routes/+layout.svelte",
@@ -22435,7 +22437,7 @@
         "Cargo.toml"
       ],
       "created_at": "2026-11-24T18:24:38Z",
-      "updated_at": "2026-11-24T22:57:29Z",
+      "updated_at": "2026-11-24T23:01:54Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:33cba067",
       "sprint_history": [
@@ -22508,6 +22510,18 @@
           "kind": "review",
           "text": "CR-176: App start: nothing drawn before the page is known; the project's data first; projects listed side by side",
           "by": "claude:33cba067"
+        },
+        {
+          "at": "2026-11-24T23:01:42Z",
+          "kind": "note",
+          "text": "Approved: in CR-176 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-24T23:01:54Z",
+          "kind": "outcome",
+          "text": "Approved in CR-176. The app draws its first page only once it knows it, from the projects kept at the last start, with the project’s data first and atm-lib listing projects side by side.",
+          "by": "claude:33cba067"
         }
       ],
       "blocks": [
@@ -22551,10 +22565,16 @@
           "from": "2026-11-24T20:30:37Z",
           "to": "2026-11-24T22:21:09Z",
           "outcome": "approved"
+        },
+        {
+          "from": "2026-11-24T22:57:29Z",
+          "to": "2026-11-24T23:01:42Z",
+          "outcome": "approved"
         }
       ],
       "review_requested_at": "2026-11-24T22:57:29Z",
-      "review_state": "waiting"
+      "completed_at": "2026-11-24T23:01:54Z",
+      "completed_by": "claude:33cba067"
     },
     {
       "id": "01a20f0a-2258-70ca-bca7-b29b7753d0eb",
@@ -22601,7 +22621,7 @@
       "description": "From Hakan: in the app the page still showed the full row of item tabs (Overview, Inbox, Tasks, …) whenever the sidebar was hidden; the design has them in the webapp only ([the sidebar design](docs/sidebar-overhaul-design.md) §2.3, §5).\n\n## Cause\n`ViewPanel.svelte` and `ProjectsOverview.svelte` showed the item row when `!inApp || !dashboard.sidebarOpen`: a stopgap from ATM-753, \"until ATM-755\" (the new tab's chooser). ATM-755 and the hidden sidebar's rail (ATM-771) have landed since.\n\n## Change\nThe item row is the webapp's only; in the app a page shows only its sub-tabs (Tasks: Board · List · Dependencies; Analysis: Progress · Agents), the others none.\n\n## Tests\n`app.spec.ts`'s rail test: with the sidebar hidden, no `.item-tabs`, Tasks' sub-tabs still there.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/shell/ViewPanel.svelte",
@@ -22609,7 +22629,7 @@
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-24T22:54:30Z",
-      "updated_at": "2026-11-24T22:56:40Z",
+      "updated_at": "2026-11-24T23:01:59Z",
       "created_by": "claude:33cba067",
       "updated_by": "claude:33cba067",
       "sprint_history": [
@@ -22631,15 +22651,35 @@
         }
       ],
       "review_requested_at": "2026-11-24T22:56:40Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-24T22:56:40Z",
           "kind": "review",
           "text": "CR-175: App: the page shows no item row",
           "by": "claude:33cba067"
+        },
+        {
+          "at": "2026-11-24T23:01:48Z",
+          "kind": "note",
+          "text": "Approved: in CR-175 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-24T23:01:59Z",
+          "kind": "outcome",
+          "text": "Approved in CR-175. In the app a page shows no item row, only Tasks’ and Analysis’ sub-tabs.",
+          "by": "claude:33cba067"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T22:56:40Z",
+          "to": "2026-11-24T23:01:48Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T23:01:59Z",
+      "completed_by": "claude:33cba067"
     },
     {
       "id": "01a20fc4-92be-7263-87d6-894b4ee7a434",
@@ -22653,7 +22693,7 @@
       "description": "From Hakan: in the app the review page's own back link repeats the title bar's Back; and the heading should name the review's task, as `[ATM-1] CR-15 My fancy CR`, without the project key again before the reference.\n\n## Change\n- `ReviewPage.svelte`: the heading starts with the review's tasks in brackets, each a link that opens it as the facts' task link does (⌘-click in a tab of its own); several tasks in one bracket, comma-separated. The project key only for a review of no task.\n- `ReviewsTab.svelte`: the back link only in the browser; the app's title bar has the tab's Back and Forward.\n\n## Tests\n`ReviewPage.component.test.ts` (a task, several, none; the link's click), `app.spec.ts` (no back link in the app; the title bar's Back returns to the list), `reviews.spec.ts` (the browser's review page).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewPage.svelte",
@@ -22663,7 +22703,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-24T22:54:30Z",
-      "updated_at": "2026-11-24T22:57:51Z",
+      "updated_at": "2026-11-24T23:02:52Z",
       "created_by": "claude:33cba067",
       "updated_by": "claude:33cba067",
       "sprint_history": [
@@ -22676,7 +22716,44 @@
       "review": "async",
       "number": 779,
       "started_at": "2026-11-24T22:57:51Z",
-      "started_by": "claude:33cba067"
+      "started_by": "claude:33cba067",
+      "commit": "5f8e56de062618eff9dd1c9473390547b4f58aeb",
+      "code_reviews": [
+        {
+          "id": "01a20fca-cf33-717c-9d08-d64534528333",
+          "ref": "CR-177"
+        }
+      ],
+      "review_requested_at": "2026-11-24T23:01:19Z",
+      "notes": [
+        {
+          "at": "2026-11-24T23:01:19Z",
+          "kind": "review",
+          "text": "CR-177: Review page: its task leads the heading; no back link in the app",
+          "by": "claude:33cba067"
+        },
+        {
+          "at": "2026-11-24T23:02:41Z",
+          "kind": "note",
+          "text": "Approved: in CR-177 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-24T23:02:52Z",
+          "kind": "outcome",
+          "text": "Approved in CR-177. The review heading leads with its task as a link, the project key only without one, and the app has no in-page back link.",
+          "by": "claude:33cba067"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T23:01:19Z",
+          "to": "2026-11-24T23:02:41Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T23:02:52Z",
+      "completed_by": "claude:33cba067"
     }
   ]
 }

@@ -27,13 +27,17 @@ pub struct Text {
 /// The inbox commands.
 #[derive(Debug, Subcommand)]
 pub enum InboxCommand {
-    /// Note something for later: a new open item (a person only; agents triage, they don't add)
+    /// Note something for later: a new open item (to this project's, a person only; to another's, an agent too)
     Add {
         #[command(flatten)]
         text: Text,
-        /// Who adds it (a person; by default the git user)
+        /// Who adds it (by default the git user, or the agent's session)
         #[arg(long)]
         agent: Option<String>,
+        /// Another registered project's inbox instead (its key or ID): a finding for its user to triage, recorded as
+        /// coming from this project
+        #[arg(long, value_name = "KEY")]
+        project: Option<String>,
     },
     /// Change an open item's text (a person only)
     Edit {
@@ -204,6 +208,40 @@ fn show(ctx: Context, cwd: &Path, id: &str) -> Result<()> {
     Ok(())
 }
 
+/// `atm inbox add --project`: an item in another registered project's inbox (ATM-772), through the same `inbox::add`,
+/// recorded as coming from this project. The project is the user's registered one the key or ID names, never a path.
+fn add_elsewhere(
+    ctx: Context,
+    cwd: &Path,
+    name: &str,
+    text: Text,
+    agent: Option<&str>,
+) -> Result<()> {
+    let text = text_of(text, cwd)?;
+    let here = Project::open(cwd)?;
+    let from = inbox::project_name(&here)?;
+    let folder = atm_lib::foreign::registered_project(name, here.root())?;
+    let mut there = Project::open(&folder)?.with_actor(Some(agent_identity(agent, cwd)));
+    let to = inbox::project_name(&there)?;
+    if ctx.dry(&format!("add an item to {to}'s inbox, from {from}")) {
+        return Ok(());
+    }
+    let item = inbox::add(&mut there, &text, Some(&from))?;
+    if ctx.json {
+        // With its project, so the agent can ask about it later (atm inbox show --project, ATM-773)
+        let mut answer = item.clone();
+        answer["project"] = json!(to);
+        print_json(&answer);
+    } else {
+        println!(
+            "{}: added to {to}'s inbox · {}",
+            field(&item, "id"),
+            title(&item)
+        );
+    }
+    Ok(())
+}
+
 /// Run an inbox command in `cwd`.
 ///
 /// # Errors
@@ -211,14 +249,23 @@ fn show(ctx: Context, cwd: &Path, id: &str) -> Result<()> {
 /// read.
 pub fn run(command: InboxCommand, ctx: Context, cwd: &Path) -> Result<()> {
     match command {
-        InboxCommand::Add { text, agent } => {
+        InboxCommand::Add {
+            text,
+            agent,
+            project: None,
+        } => {
             let text = text_of(text, cwd)?;
             if ctx.dry("add an item to the inbox") {
                 return Ok(());
             }
-            let item = inbox::add(&mut opened(cwd, agent.as_deref())?, &text)?;
+            let item = inbox::add(&mut opened(cwd, agent.as_deref())?, &text, None)?;
             report(ctx, &item, &format!("added · {}", title(&item)));
         }
+        InboxCommand::Add {
+            text,
+            agent,
+            project: Some(name),
+        } => add_elsewhere(ctx, cwd, &name, text, agent.as_deref())?,
         InboxCommand::Edit { item, text, agent } => {
             let text = text_of(text, cwd)?;
             if ctx.dry(&format!("change {item}'s text")) {

@@ -71,13 +71,15 @@ fn ids(listed: &Listed) -> Vec<String> {
 #[test]
 fn a_person_adds_an_item_numbered_after_the_last_open_with_who_and_when() {
     let mut p = empty(PERSON);
-    let first = add(&mut p, "  An idea\nwith a second line  ").unwrap();
+    let first = add(&mut p, "  An idea\nwith a second line  ", None).unwrap();
     assert_eq!(first["id"], "IN-1");
     assert_eq!(first["text"], "An idea\nwith a second line");
     assert_eq!(first["state"], "created");
     assert_eq!(first["created_by"], PERSON);
     assert!(first["created_at"].is_string() && first["updated_at"] == first["created_at"]);
-    assert_eq!(add(&mut p, "Another").unwrap()["id"], "IN-2");
+    assert_eq!(add(&mut p, "Another", None).unwrap()["id"], "IN-2");
+    // Its own project's: no origin
+    assert!(first.get("from_project").is_none());
     let stored = p.store().inbox(false).unwrap();
     assert_eq!(stored["next"], 3);
     assert_eq!(stored["version"], 1);
@@ -86,7 +88,7 @@ fn a_person_adds_an_item_numbered_after_the_last_open_with_who_and_when() {
 #[test]
 fn an_agent_can_t_add_to_the_inbox() {
     let mut p = empty(AGENT);
-    let error = add(&mut p, "From an agent").unwrap_err();
+    let error = add(&mut p, "From an agent", None).unwrap_err();
     assert!(matches!(error, Error::Refused(_)), "{error}");
     assert!(error.to_string().contains(AGENT));
     assert_eq!(
@@ -96,15 +98,69 @@ fn an_agent_can_t_add_to_the_inbox() {
     );
 }
 
+/// ATM-772: from another project an agent may add: a finding for this project's user, recorded with its origin and
+/// its agent; nothing else about the item differs
 #[test]
-fn an_item_s_text_is_not_empty_and_within_its_limit() {
-    let mut p = empty(PERSON);
-    assert!(matches!(add(&mut p, "  \n "), Err(Error::Invalid(_))));
+fn an_agent_of_another_project_adds_an_item_with_its_origin() {
+    let mut p = empty(AGENT);
+    let item = add(&mut p, "  A finding in your API\nDetails.  ", Some(" LFB ")).unwrap();
+    assert_eq!(item["id"], "IN-1");
+    assert_eq!(item["state"], "created");
+    assert_eq!(item["created_by"], AGENT);
+    assert_eq!(item["from_project"], "LFB");
+    assert_eq!(item["text"], "A finding in your API\nDetails.");
+    assert_eq!(p.store().inbox(false).unwrap()["items"][0], item);
+    // A person of another project too, recorded the same way
+    let mut q = empty(PERSON);
+    let by_person = add(&mut q, "Seen from elsewhere", Some("LFB")).unwrap();
+    assert_eq!(
+        (&by_person["created_by"], &by_person["from_project"]),
+        (&json!(PERSON), &json!("LFB"))
+    );
+    // An origin with no name is refused, nothing added
     assert!(matches!(
-        add(&mut p, &"x".repeat(20_001)),
+        add(&mut p, "x", Some("  ")),
         Err(Error::Invalid(_))
     ));
-    assert!(add(&mut p, &"x".repeat(20_000)).is_ok());
+    assert_eq!(
+        p.store().inbox(false).unwrap()["items"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+/// What another project names this one by: its key, else its ID; neither refused
+#[test]
+fn a_project_is_named_by_its_key_else_its_id() {
+    let named = |meta: Value| {
+        let store = MemoryStore::new(Vec::new(), Vec::new(), meta.as_object().unwrap()).unwrap();
+        project_name(&Project::new(Box::new(store)))
+    };
+    assert_eq!(
+        named(json!({"key": "ATM", "id": "abcd1234"})).unwrap(),
+        "ATM"
+    );
+    assert_eq!(named(json!({"id": "abcd1234"})).unwrap(), "abcd1234");
+    assert_eq!(
+        named(json!({"key": "", "id": "abcd1234"})).unwrap(),
+        "abcd1234"
+    );
+    assert!(matches!(named(json!({})), Err(Error::Invalid(_))));
+}
+
+#[test]
+fn an_item_s_text_is_not_empty_and_within_its_limit() {
+    for from in [None, Some("LFB")] {
+        let mut p = empty(if from.is_some() { AGENT } else { PERSON });
+        assert!(matches!(add(&mut p, "  \n ", from), Err(Error::Invalid(_))));
+        assert!(matches!(
+            add(&mut p, &"x".repeat(20_001), from),
+            Err(Error::Invalid(_))
+        ));
+        assert!(add(&mut p, &"x".repeat(20_000), from).is_ok());
+    }
 }
 
 #[test]
@@ -115,7 +171,7 @@ fn numbers_are_never_reused_and_follow_the_highest_ever_given() {
         inbox(&[item("IN-7", "discarded", Some("2020-01-01T00:00:00Z"))]),
         PERSON,
     );
-    assert_eq!(add(&mut p, "after").unwrap()["id"], "IN-8");
+    assert_eq!(add(&mut p, "after", None).unwrap()["id"], "IN-8");
 }
 
 // Editing, discarding, restoring
@@ -454,7 +510,7 @@ fn unarchiving_brings_items_back_as_they_were_and_refuses_one_the_archive_doesn_
     // Past IN-3, still in the archive
     assert_eq!(p.store().inbox(false).unwrap()["next"], 4);
     // The next item is numbered past both
-    assert_eq!(add(&mut p, "new").unwrap()["id"], "IN-4");
+    assert_eq!(add(&mut p, "new", None).unwrap()["id"], "IN-4");
 }
 
 #[test]
@@ -468,7 +524,7 @@ fn a_new_item_never_takes_an_archived_item_s_number_whatever_the_inbox_s_next_sa
         ]),
         PERSON,
     );
-    assert_eq!(add(&mut p, "new").unwrap()["id"], "IN-4");
+    assert_eq!(add(&mut p, "new", None).unwrap()["id"], "IN-4");
 }
 
 #[test]

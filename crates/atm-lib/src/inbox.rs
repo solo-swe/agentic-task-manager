@@ -4,7 +4,7 @@
 //!
 //! | Move | Who | From |
 //! |---|---|---|
-//! | add | a person (an agent is refused) | — |
+//! | add | a person; from another project, an agent too (ATM-772: recorded as `from_project`) | — |
 //! | edit | a person | created |
 //! | discard (a reason) | anyone (an agent on the user's word: the triage skill) | created |
 //! | inject (tasks that exist) | anyone | created; final |
@@ -175,12 +175,43 @@ fn item_in<'w>(
     Ok(item)
 }
 
-/// Add an item with `text` to the inbox, as the person acting.
+/// How another project names `project` in an item it gets from it (`from_project`): its key, else its `meta.id`.
 ///
 /// # Errors
-/// `Refused` for an agent; `Invalid` text; the store's.
-pub fn add(project: &mut Project, text: &str) -> Result<Value> {
-    let by = person(project, "adds to the inbox")?;
+/// `Invalid` for a project with neither; task data that can't be read.
+pub fn project_name(project: &Project) -> Result<String> {
+    let document = project.store().document()?;
+    atm_common::keys::project_key(document)
+        .filter(|k| !k.is_empty())
+        .or_else(|| {
+            document
+                .get("meta")
+                .and_then(|m| m.get("id"))
+                .and_then(Value::as_str)
+        })
+        .map(String::from)
+        .ok_or_else(|| Error::Invalid("this project has no key or ID to name it by".into()))
+}
+
+/// Add an item with `text` to the inbox, as the one acting. `from`: the project it comes from (its key, else its
+/// ID), when it comes from another project's agent or person (ATM-772); none for the project's own.
+///
+/// To its own project's inbox only a person adds (the inbox is the user's input there); from another project, an agent
+/// may too: a finding for this project's user to triage, recorded as `from_project`.
+///
+/// # Errors
+/// `Refused` for an agent adding to its own project's inbox; `Invalid` text or origin; the store's.
+pub fn add(project: &mut Project, text: &str, from: Option<&str>) -> Result<Value> {
+    let from = from.map(str::trim);
+    let by = match from {
+        None => person(project, "adds to its project's inbox")?,
+        Some("") => {
+            return Err(Error::Invalid(
+                "the project an item comes from has no name".into(),
+            ));
+        }
+        Some(_) => actor(project),
+    };
     let text = checked_text(text)?;
     project.change(|work| {
         // Past every item ever numbered, the archived ones too: a number is never given twice
@@ -188,10 +219,13 @@ pub fn add(project: &mut Project, text: &str) -> Result<Value> {
         let inbox = work.inbox()?;
         let number = next_number(inbox).max(past_archive);
         let now = now_iso();
-        let item = json!({
+        let mut item = json!({
             "id": item_id(number), "text": text, "state": InboxState::Created.as_str(),
             "created_at": now, "created_by": by, "updated_at": now,
         });
+        if let Some(from) = from {
+            item["from_project"] = json!(from);
+        }
         inbox["version"] = json!(atm_common::inbox::INBOX_VERSION);
         inbox["next"] = json!(number + 1);
         items_mut(inbox).push(item.clone());

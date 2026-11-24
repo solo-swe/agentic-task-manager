@@ -174,6 +174,52 @@ fn a_project_removed_from_the_workspaces_or_gone_is_unregistered_on_the_next_use
     );
 }
 
+/// ATM-772: another registered project, by its key (any case) or its ID; never the one asking; none or two of a key
+/// refused, saying which there are
+#[test]
+fn a_registered_project_is_found_by_its_key_or_id_never_the_one_asking() {
+    let scene = Scene::new("named");
+    for name in ["ATM", "atm", " atm ", scene.id.as_str()] {
+        assert_eq!(registered_project(name, None).unwrap(), scene.b, "{name}");
+    }
+    // The one asking isn't another project
+    let found = registered_project("ATM", Some(&scene.b)).unwrap_err();
+    assert!(matches!(found, Error::NotFound(_)), "{found}");
+    // None of that name: the registered ones named
+    let missing = registered_project("LFB", None).unwrap_err();
+    assert!(matches!(missing, Error::NotFound(_)));
+    assert!(missing.to_string().contains("registered: ATM"), "{missing}");
+    // A second project of the same key: refused, by their IDs
+    let c = scene.dir.join("c");
+    std::fs::create_dir_all(c.join(TASK_DIR)).unwrap();
+    std::fs::write(
+        c.join(TASK_DIR).join("tasks.json"),
+        json!({"meta": {"id": "c-id", "key": "ATM", "format": 2}, "tasks": []}).to_string(),
+    )
+    .unwrap();
+    std::fs::write(
+        scene.dir.join("home/workspaces/default.json"),
+        json!({"version": 1, "projects": [
+            {"id": "b", "name": "atm", "path": scene.b.to_string_lossy()},
+            {"id": "c", "name": "other", "path": c.to_string_lossy()},
+        ]})
+        .to_string(),
+    )
+    .unwrap();
+    let both = registered_project("ATM", None).unwrap_err();
+    assert!(matches!(both, Error::Invalid(_)), "{both}");
+    assert!(both.to_string().contains("c-id"), "{both}");
+    // Named by its ID, either one
+    assert_eq!(registered_project("c-id", None).unwrap(), c);
+    // Nothing registered: says how to register one
+    scene.register(false);
+    let none = registered_project("ATM", None).unwrap_err();
+    assert!(
+        none.to_string().contains("atm workspace add-project"),
+        "{none}"
+    );
+}
+
 #[test]
 fn the_registry_is_read_again_only_when_the_workspaces_change() {
     let scene = Scene::new("registry");

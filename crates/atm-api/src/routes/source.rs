@@ -426,7 +426,8 @@ impl ProjectSource for Member {
 
 impl InboxChanges for Project {
     fn add_item(&mut self, item: &NewItem) -> Result<Value> {
-        inbox::add(self, &item.text)
+        // The page's: the user adding to the project shown, its own inbox
+        inbox::add(self, &item.text, None)
     }
 
     fn edit_item(&mut self, id: &str, edit: &ItemEdit) -> Result<Value> {

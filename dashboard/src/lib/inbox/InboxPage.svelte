@@ -246,6 +246,11 @@
           {/if}
           <div class="inbox-meta">
             <span title={item.created_at}>{ago(item.created_at)}{item.created_by ? ` · ${item.created_by}` : ''}</span>
+            {#if item.from_project}<span
+                class="inbox-from"
+                title="Left here by {item.created_by ?? 'someone'} working in {item.from_project}"
+                >from {item.from_project}</span
+              >{/if}
             {#if item.state === 'discarded'}<span class="inbox-reason">discarded: {item.reason}</span>{/if}
             <span class="inbox-actions">
               {#if item.state === 'created'}
@@ -423,6 +428,11 @@
     align-items: center;
     color: var(--text-muted);
     font-size: var(--text-xs);
+  }
+  .inbox-from {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    padding: 0 var(--space-3);
   }
   .inbox-actions {
     display: flex;

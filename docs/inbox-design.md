@@ -81,7 +81,7 @@ stateDiagram-v2
 
 | Move | Who | CLI | Page |
 |---|---|---|---|
-| add | a person (an agent is refused: the inbox is the user's input) | `atm inbox add '<text>'` or `--text-file F` | the quick-add box |
+| add | a person (an agent is refused: the inbox is the user's input); to **another** registered project's inbox, an agent too, recorded as `from_project` (ATM-772) | `atm inbox add '<text>'` or `--text-file F`; `--project <key or ID>` for another's | the quick-add box |
 | edit | a person, while `created` | `atm inbox edit IN-3 --text-file F` | the item's Edit |
 | discard | a person, or an agent the person told to (the triage skill, on their word) | `atm inbox discard IN-3 --reason '…'` | the item's Discard, asking the reason |
 | inject | an agent or a person, naming tasks that exist | `atm inbox inject IN-3 --task ATM-760 [--task …]` | — (the skill does it) |
