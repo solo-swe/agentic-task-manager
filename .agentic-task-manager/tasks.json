@@ -18520,9 +18520,9 @@
         "docs/documents-design.md"
       ],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T03:48:16Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -18646,7 +18646,11 @@
       ],
       "review_requested_at": "2026-11-24T00:07:10Z",
       "completed_at": "2026-11-24T03:48:16Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d97e12924d39",
@@ -18660,9 +18664,9 @@
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T02:37:23Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -18704,7 +18708,11 @@
         }
       ],
       "completed_at": "2026-11-24T02:37:23Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d97fba7f02a1",
@@ -18721,9 +18729,9 @@
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T02:37:35Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -18765,7 +18773,11 @@
         }
       ],
       "completed_at": "2026-11-24T02:37:35Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d980e8e25290",
@@ -18782,9 +18794,9 @@
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T02:37:57Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -18826,7 +18838,11 @@
         }
       ],
       "completed_at": "2026-11-24T02:37:57Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d98174c645b4",
@@ -18843,9 +18859,9 @@
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T02:38:32Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -18887,7 +18903,11 @@
         }
       ],
       "completed_at": "2026-11-24T02:38:32Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d982704f90ae",
@@ -18904,9 +18924,9 @@
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T02:38:47Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -18948,7 +18968,11 @@
         }
       ],
       "completed_at": "2026-11-24T02:38:47Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d98332143200",
@@ -18962,9 +18986,9 @@
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T02:47:13Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -19006,7 +19030,11 @@
         }
       ],
       "completed_at": "2026-11-24T02:47:13Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d9843d6019f3",
@@ -19020,9 +19048,9 @@
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T16:36:46Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -19064,7 +19092,11 @@
         }
       ],
       "completed_at": "2026-11-24T16:36:46Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d985bd59fa46",
@@ -19084,9 +19116,9 @@
       ],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T16:21:28Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -19128,7 +19160,11 @@
         }
       ],
       "completed_at": "2026-11-24T16:21:28Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d98638440e40",
@@ -19148,9 +19184,9 @@
       ],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T16:21:29Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -19192,7 +19228,11 @@
         }
       ],
       "completed_at": "2026-11-24T16:21:29Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d9875c4593f8",
@@ -19213,9 +19253,9 @@
       ],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T16:21:29Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -19257,7 +19297,11 @@
         }
       ],
       "completed_at": "2026-11-24T16:21:29Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a207f5-b8d8-77e2-b9e8-b65158981919",
@@ -19278,9 +19322,9 @@
         "dashboard/src/lib/state.svelte.ts"
       ],
       "created_at": "2026-11-23T10:31:13Z",
-      "updated_at": "2026-11-24T16:24:35Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -19328,7 +19372,11 @@
         }
       ],
       "completed_at": "2026-11-24T16:24:35Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20808-570f-738e-a5c5-e9142ff2e1c9",
@@ -19349,9 +19397,9 @@
         "tests/scripts/loop-run.test.mjs"
       ],
       "created_at": "2026-11-23T10:51:34Z",
-      "updated_at": "2026-11-24T01:00:39Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "components": [
         "cli",
         "docs"
@@ -19383,7 +19431,11 @@
           "text": "Skipped: Hakan, after the evaluation (docs/fresh-session-loop.md): none of the ways to a fresh session per task keeps the interaction with Claude he wants; skipped.",
           "by": "claude:ba530ebb"
         }
-      ]
+      ],
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20922-b137-7532-a01a-b872ae882998",
@@ -19482,9 +19534,9 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-23T22:20:58Z",
-      "updated_at": "2026-11-24T16:24:43Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "review": "async",
       "number": 742,
       "components": [
@@ -19529,7 +19581,11 @@
         }
       ],
       "completed_at": "2026-11-24T16:24:43Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20a7f-82f6-7703-ac29-a944947d1493",
@@ -19752,9 +19808,9 @@
         "dashboard/tests/unit/ci-workflow.test.ts"
       ],
       "created_at": "2026-11-23T22:20:58Z",
-      "updated_at": "2026-11-24T03:27:56Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "review": "async",
       "with": "user",
       "number": 749,
@@ -19806,7 +19862,11 @@
         }
       ],
       "completed_at": "2026-11-24T03:27:56Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20a91-76ac-710c-81db-f000bc9edfc9",
@@ -19860,7 +19920,7 @@
         "dashboard/tests/e2e/__screenshots__/"
       ],
       "created_at": "2026-11-23T22:40:34Z",
-      "updated_at": "2026-11-25T01:28:44Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:33cba067",
       "sprint_history": [
@@ -19911,7 +19971,11 @@
         }
       ],
       "completed_at": "2026-11-25T01:28:44Z",
-      "completed_by": "claude:33cba067"
+      "completed_by": "claude:33cba067",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e889c1f825f3",
@@ -19933,9 +19997,9 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T02:39:16Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -19977,7 +20041,11 @@
         }
       ],
       "completed_at": "2026-11-24T02:39:16Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e88adf1461c5",
@@ -19999,9 +20067,9 @@
         "dashboard/src/lib/shell/Header.svelte"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T03:36:48Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -20043,7 +20111,11 @@
         }
       ],
       "completed_at": "2026-11-24T03:36:48Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e88bc947df5c",
@@ -20069,9 +20141,9 @@
         "dashboard/src/lib/ui/Icon.svelte"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T16:34:50Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -20113,7 +20185,11 @@
         }
       ],
       "completed_at": "2026-11-24T16:34:50Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e88c3ee7f2b3",
@@ -20136,9 +20212,9 @@
         "dashboard/src/lib/places.ts"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T16:36:10Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -20180,7 +20256,11 @@
         }
       ],
       "completed_at": "2026-11-24T16:36:10Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e88db033076e",
@@ -20203,9 +20283,9 @@
         "dashboard/src/lib/tab-actions.ts"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T17:35:06Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -20247,7 +20327,11 @@
         }
       ],
       "completed_at": "2026-11-24T17:35:06Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e88e728b0f5d",
@@ -20268,9 +20352,9 @@
         "dashboard/src/lib/overview/ProjectsOverview.svelte"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T16:37:06Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -20312,7 +20396,11 @@
         }
       ],
       "completed_at": "2026-11-24T16:37:06Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e88f1d3ccd68",
@@ -20335,9 +20423,9 @@
         "dashboard/src/lib/address.ts"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T16:37:15Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -20379,7 +20467,11 @@
         }
       ],
       "completed_at": "2026-11-24T16:37:15Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e890ef3d8071",
@@ -20402,7 +20494,7 @@
         "docs/help.md"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T23:23:06Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:33cba067",
       "sprint_history": [
@@ -20452,7 +20544,11 @@
         }
       ],
       "completed_at": "2026-11-24T23:23:06Z",
-      "completed_by": "claude:33cba067"
+      "completed_by": "claude:33cba067",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e8910f0acbe3",
@@ -20473,9 +20569,9 @@
         "crates/atm-lib/src/inbox.rs"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T02:41:36Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -20517,7 +20613,11 @@
         }
       ],
       "completed_at": "2026-11-24T02:41:36Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e8925a26795e",
@@ -20540,9 +20640,9 @@
         "docs/agent/commands.md"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T16:37:52Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -20597,7 +20697,11 @@
         }
       ],
       "completed_at": "2026-11-24T16:37:52Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e89307ded508",
@@ -20623,9 +20727,9 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T16:38:01Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -20667,7 +20771,11 @@
         }
       ],
       "completed_at": "2026-11-24T16:38:01Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e8942c011d6d",
@@ -20691,9 +20799,9 @@
         "dashboard/src/lib/api/inbox.ts"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T17:36:22Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -20735,7 +20843,11 @@
         }
       ],
       "completed_at": "2026-11-24T17:36:22Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e895a1716a0b",
@@ -20761,9 +20873,9 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T18:54:28Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -20805,7 +20917,11 @@
         }
       ],
       "completed_at": "2026-11-24T18:54:28Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e8964a234ac5",
@@ -20825,9 +20941,9 @@
         "crates/atm-vcs/src/lib.rs"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T16:38:15Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -20869,7 +20985,11 @@
         }
       ],
       "completed_at": "2026-11-24T16:38:15Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e897f4d0ca72",
@@ -20895,9 +21015,9 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T19:17:05Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -20939,7 +21059,11 @@
         }
       ],
       "completed_at": "2026-11-24T19:17:05Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e89835dfc661",
@@ -20963,9 +21087,9 @@
         "dashboard/src/lib/api/documents.ts"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T20:25:51Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -21007,7 +21131,11 @@
         }
       ],
       "completed_at": "2026-11-24T20:25:51Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20b6d-f9af-72ac-9448-da28a38919f5",
@@ -21030,9 +21158,9 @@
         "app/src-tauri/src/lib.rs"
       ],
       "created_at": "2026-11-24T02:41:26Z",
-      "updated_at": "2026-11-24T16:38:26Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -21080,7 +21208,11 @@
         }
       ],
       "completed_at": "2026-11-24T16:38:26Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20b6d-f9af-72ac-9448-da292a487519",
@@ -21103,9 +21235,9 @@
         "app/src-tauri/src/commands/state.rs"
       ],
       "created_at": "2026-11-24T02:41:26Z",
-      "updated_at": "2026-11-24T17:37:02Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -21153,7 +21285,11 @@
         }
       ],
       "completed_at": "2026-11-24T17:37:02Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20b6d-f9af-72ac-9448-da2a83797476",
@@ -21174,9 +21310,9 @@
         "dashboard/tests/unit/ipc.test.ts"
       ],
       "created_at": "2026-11-24T02:41:26Z",
-      "updated_at": "2026-11-24T16:38:27Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -21237,7 +21373,11 @@
         }
       ],
       "completed_at": "2026-11-24T16:38:27Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20bac-5c81-7593-a6ce-57fe10d96ef7",
@@ -21261,9 +21401,9 @@
         "docs/agent/reviews.md"
       ],
       "created_at": "2026-11-24T03:49:34Z",
-      "updated_at": "2026-11-24T16:40:08Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -21308,7 +21448,11 @@
         }
       ],
       "completed_at": "2026-11-24T16:40:08Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20e67-969c-7295-9a1e-a5969c007066",
@@ -21331,9 +21475,9 @@
         "dashboard/src/app.css"
       ],
       "created_at": "2026-11-24T16:33:19Z",
-      "updated_at": "2026-11-24T19:32:20Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -21378,7 +21522,11 @@
         }
       ],
       "completed_at": "2026-11-24T19:32:20Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20e86-f20a-70b2-9d4a-35cff3a353eb",
@@ -21406,7 +21554,7 @@
         "tests/scripts/scenarios/inbox.json"
       ],
       "created_at": "2026-11-24T17:07:34Z",
-      "updated_at": "2026-11-24T23:24:09Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:33cba067",
       "sprint_history": [
@@ -21490,7 +21638,11 @@
       ],
       "review_requested_at": "2026-11-24T23:23:16Z",
       "completed_at": "2026-11-24T23:24:09Z",
-      "completed_by": "claude:33cba067"
+      "completed_by": "claude:33cba067",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20e86-f20a-70b2-9d4a-35d0eac05318",
@@ -21521,7 +21673,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-24T17:07:34Z",
-      "updated_at": "2026-11-24T23:44:27Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:33cba067",
       "sprint_history": [
@@ -21576,7 +21728,11 @@
         }
       ],
       "completed_at": "2026-11-24T23:44:27Z",
-      "completed_by": "claude:33cba067"
+      "completed_by": "claude:33cba067",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20ea0-9cc0-77e3-8aa6-ec22e4e6b22b",
@@ -21597,9 +21753,9 @@
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-24T17:35:36Z",
-      "updated_at": "2026-11-24T18:42:18Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -21641,7 +21797,11 @@
         }
       ],
       "completed_at": "2026-11-24T18:42:18Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20ea3-39a1-7679-9b4b-441ae7c5c873",
@@ -21661,9 +21821,9 @@
         "crates/atm-lib/src/review_pages/list.rs"
       ],
       "created_at": "2026-11-24T17:38:27Z",
-      "updated_at": "2026-11-24T18:12:04Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -21705,7 +21865,11 @@
         }
       ],
       "completed_at": "2026-11-24T18:12:04Z",
-      "completed_by": "claude:ba530ebb"
+      "completed_by": "claude:ba530ebb",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20ecd-7e9d-75cc-aae4-3ed01bc173fa",
@@ -21737,7 +21901,7 @@
         "Cargo.toml"
       ],
       "created_at": "2026-11-24T18:24:38Z",
-      "updated_at": "2026-11-24T23:01:54Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:33cba067",
       "sprint_history": [
@@ -21874,7 +22038,11 @@
       ],
       "review_requested_at": "2026-11-24T22:57:29Z",
       "completed_at": "2026-11-24T23:01:54Z",
-      "completed_by": "claude:33cba067"
+      "completed_by": "claude:33cba067",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20f0a-2258-70ca-bca7-b29b7753d0eb",
@@ -21896,7 +22064,7 @@
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-24T19:30:52Z",
-      "updated_at": "2026-11-24T23:22:57Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:33cba067",
       "sprint_history": [
@@ -21946,7 +22114,11 @@
         }
       ],
       "completed_at": "2026-11-24T23:22:57Z",
-      "completed_by": "claude:33cba067"
+      "completed_by": "claude:33cba067",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20fc4-92be-7263-87d6-894ac379109d",
@@ -21968,7 +22140,7 @@
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-24T22:54:30Z",
-      "updated_at": "2026-11-24T23:01:59Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:33cba067",
       "updated_by": "claude:33cba067",
       "sprint_history": [
@@ -22018,7 +22190,11 @@
         }
       ],
       "completed_at": "2026-11-24T23:01:59Z",
-      "completed_by": "claude:33cba067"
+      "completed_by": "claude:33cba067",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20fc4-92be-7263-87d6-894b4ee7a434",
@@ -22042,7 +22218,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-24T22:54:30Z",
-      "updated_at": "2026-11-24T23:02:52Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:33cba067",
       "updated_by": "claude:33cba067",
       "sprint_history": [
@@ -22092,7 +22268,11 @@
         }
       ],
       "completed_at": "2026-11-24T23:02:52Z",
-      "completed_by": "claude:33cba067"
+      "completed_by": "claude:33cba067",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a20fe0-ae78-72ff-88c4-f6621c301a92",
@@ -22119,7 +22299,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-24T23:25:12Z",
-      "updated_at": "2026-11-25T00:22:15Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:33cba067",
       "updated_by": "claude:33cba067",
       "sprint_history": [
@@ -22169,7 +22349,11 @@
         }
       ],
       "completed_at": "2026-11-25T00:22:15Z",
-      "completed_by": "claude:33cba067"
+      "completed_by": "claude:33cba067",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     },
     {
       "id": "01a21014-c566-736e-b5a1-7c0c7bae90a0",
@@ -22192,7 +22376,7 @@
         "dashboard/tests/e2e/documents-page.spec.ts"
       ],
       "created_at": "2026-11-25T00:22:06Z",
-      "updated_at": "2026-11-25T01:00:16Z",
+      "updated_at": "2026-11-25T01:35:19Z",
       "created_by": "claude:33cba067",
       "updated_by": "claude:33cba067",
       "sprint_history": [
@@ -22242,7 +22426,11 @@
         }
       ],
       "completed_at": "2026-11-25T01:00:16Z",
-      "completed_by": "claude:33cba067"
+      "completed_by": "claude:33cba067",
+      "pr": {
+        "number": 64,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/64"
+      }
     }
   ]
 }
