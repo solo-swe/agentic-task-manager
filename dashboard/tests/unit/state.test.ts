@@ -383,10 +383,34 @@ describe('DashboardState', () => {
       await vi.waitFor(() => expect(held.waiting).toHaveLength(2));
       for (const answer of held.waiting) answer(asTaskViews(standard));
       await Promise.all([out, asked]);
+      // The tick was covered by the reload asked after it: nothing more asked
+      await new Promise((r) => setTimeout(r, 0));
+      expect(held.waiting).toHaveLength(2);
       // Nothing out: the next poll asks
       s.poll();
       await vi.waitFor(() => expect(held.waiting).toHaveLength(3));
       held.waiting[2](asTaskViews(standard));
+    });
+
+    it('a tick a load still out made wait is done once that load is over, however many came (ATM-781)', async () => {
+      const s = new DashboardState();
+      await s.load();
+      const held = holding(server(), tasksOf('p1'));
+      vi.stubGlobal('fetch', held.fn);
+      const out = s.reload();
+      await vi.waitFor(() => expect(held.waiting).toHaveLength(1));
+      s.poll();
+      s.poll();
+      s.poll();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(held.waiting).toHaveLength(1);
+      held.waiting[0](asTaskViews(standard));
+      await out;
+      // One reload for the ticks missed, not three
+      await vi.waitFor(() => expect(held.waiting).toHaveLength(2));
+      held.waiting[1](asTaskViews(standard));
+      await new Promise((r) => setTimeout(r, 0));
+      expect(held.waiting).toHaveLength(2);
     });
 
     it("project A's archive coming after B is shown is not B's", async () => {

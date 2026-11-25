@@ -53,13 +53,14 @@ test.describe('the Documents page', () => {
     await search.fill('crates');
     await expect.poll(() => rows(page)).toEqual(['[docs]', '[docs/adr]', 'docs/adr/ADR-003.md']);
     await expect.poll(() => addressOf(page)).toBe('/projects/fixture/documents?q=crates');
-    await page.locator('[data-view="recent"]').click();
+    // The button (the list says its view by `data-view` too, ATM-781: a slow run found both)
+    await page.locator('button[data-view="recent"]').click();
     await expect.poll(() => addressOf(page)).toBe('/projects/fixture/documents?list=recent&q=crates');
     expect(await rows(page)).toEqual(['docs/adr/ADR-003.md']);
     await search.fill('');
     await expect.poll(() => rows(page).then((r) => r.length)).toBe(3);
     // A reload keeps the view
     await page.reload();
-    await expect(page.locator('[data-view="recent"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('button[data-view="recent"]')).toHaveAttribute('aria-pressed', 'true');
   });
 });

@@ -504,11 +504,18 @@ export class DashboardState {
     setTimeout(() => (this.reloading = false), RELOAD_SPIN_MS);
   }
 
-  /** The timer's reload: skipped while a load is still out (ATM-675), so slow answers don't pile up */
+  /** The timer's reload: never piled on a load still out (ATM-675), so slow answers don't pile up; but not lost either
+   * (ATM-781): the tick is kept, and done once the loads are over, unless a load started after it brought the page up
+   * to date. At most one waits, whatever the ticks */
   poll() {
-    if (this.#loads.busy) return;
+    if (this.#loads.busy) {
+      this.#pollMissed = true;
+      return;
+    }
     void this.reload();
   }
+  /** A tick came while a load was out, and no load has started since */
+  #pollMissed = false;
 
   /** Re-fetch the project list and decide the page from the URL; returns the project to load, or null for a page
    * without one (the overview, how to add a project, an unknown project); undefined when a newer load was asked for
@@ -821,10 +828,17 @@ export class DashboardState {
 
   private async fetchAndApply() {
     const ticket = this.#loads.ask();
+    // A tick missed before this load started: this load asks for everything it would have
+    this.#pollMissed = false;
     try {
       await this.fetchAndApplyFor(ticket);
     } finally {
       ticket.done();
+      // The loads over, and a tick missed meanwhile: done now, once (ATM-781)
+      if (this.#pollMissed && !this.#loads.busy) {
+        this.#pollMissed = false;
+        void this.reload();
+      }
     }
   }
 

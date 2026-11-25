@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import {
   addressOf,
   expect,
@@ -176,11 +176,15 @@ async function openDiffs(page: Page, tasksServer: TasksServer, rest = '') {
   await openReviews(page, tasksServer, `CR-2${rest}`);
   await page.getByRole('tab', { name: /^Diffs/ }).click();
   await expect(diffOf(page, 'src/a.rs').getByRole('button', { name: 'Line 3', exact: true }).first()).toBeVisible();
-  // CompMD done drawing its code (ATM-780): until then the rows still move, and a test that measures a line first and
-  // points at it after can point at another
-  const view = diffOf(page, 'src/a.rs');
-  await expect(view.locator('.compmd[data-compmd="ready"]').first()).toBeAttached();
-  await expect(view.locator('.compmd:not([data-compmd="ready"])')).toHaveCount(0);
+  await drawn(diffOf(page, 'src/a.rs'));
+}
+
+/** CompMD done drawing what `within` holds (ATM-780, ATM-781): until then its lines still move, and a test that measures
+ * a line first and points at it after can point at another. A text that changes (more lines shown) goes back to
+ * `loading` before it is drawn again, so this waits for that drawing too */
+async function drawn(within: Locator) {
+  await expect(within.locator('.compmd[data-compmd="ready"]').first()).toBeAttached();
+  await expect(within.locator('.compmd:not([data-compmd="ready"])')).toHaveCount(0);
 }
 
 test.describe('the reviews tab', () => {
@@ -995,6 +999,7 @@ test.describe('a review’s page', () => {
       const newSide = view.locator('.diff-pane.diff-new');
       await newSide.getByRole('button', { name: 'Show 2 unchanged lines' }).click();
       await expect(newSide.locator('.doc-gutter-lines [data-line="1"]')).toBeVisible();
+      await drawn(newSide);
       // Each number's text centre less its block's first line of text's (the text, not the block's box)
       const offsets = await newSide.evaluate((side) => {
         const centre = (r: DOMRect) => (r.top + r.bottom) / 2;
@@ -1783,6 +1788,7 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect(newSide.locator('.doc-gutter-lines [data-line="1"]')).toHaveCount(0);
     await newSide.getByRole('button', { name: 'Show 2 unchanged lines' }).click();
     await expect(newSide.locator('.doc-gutter-lines [data-line="1"]')).toBeVisible();
+    await drawn(newSide);
     // The document viewer's own page on a desk (ATM-645: DocumentPage), all shown, its last text inside it; the numbers
     // in its margin, clear of the text
     await expect(newSide).toHaveClass(/doc-sheet/);
@@ -2183,6 +2189,8 @@ test.describe('the diff viewer on a review’s page', () => {
     await page.getByRole('button', { name: 'Rendered' }).click();
     const newSide = view.locator('.diff-pane.diff-new');
     await newSide.getByRole('button', { name: 'Show 2 unchanged lines' }).click();
+    // The whole page drawn again before the heading is measured (ATM-781: a slow run pointed where it had been)
+    await drawn(newSide);
     // No + until the pointer is over a block; then the + of that block's line, beside its number
     await expect(newSide.locator('.diff-plus')).toHaveCount(0);
     const heading = newSide.locator('.compmd-page h1');
@@ -2237,6 +2245,8 @@ test.describe('the diff viewer on a review’s page', () => {
     await page.getByRole('button', { name: 'Rendered' }).click();
     const newSide = view.locator('.diff-pane.diff-new');
     await newSide.getByRole('button', { name: 'Show 2 unchanged lines' }).click();
+    // The whole page drawn again before its blocks are measured (ATM-781)
+    await drawn(newSide);
     const first = (await newSide.locator('.compmd-page p', { hasText: 'First step.' }).boundingBox())!;
     const last = (await newSide.locator('.compmd-page p', { hasText: 'New ending.' }).boundingBox())!;
     await page.mouse.move(first.x + 10, first.y + first.height / 2);
