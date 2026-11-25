@@ -1,0 +1,156 @@
+diff --git a/crates/atm-lib/src/review_pages/list.rs b/crates/atm-lib/src/review_pages/list.rs
+index 18a797a8..062f352f 100644
+--- a/crates/atm-lib/src/review_pages/list.rs
++++ b/crates/atm-lib/src/review_pages/list.rs
+@@ -1,8 +1,11 @@
+ //! The reviews list: which reviews a page's query keeps, the latest activity first (ATM-574).
+ 
++use std::collections::HashMap;
++use std::path::PathBuf;
++
+ use super::{
+     Deserialize, Error, FileStore, Found, Project, Result, Review, ReviewFilter, ReviewHeader,
+-    ReviewRef, ReviewStore, Status, TASK_DIR, Value, json, me, needs, reviews, waiting_for,
++    ReviewStore, Status, TASK_DIR, Value, json, me, needs, reviews, waiting_for,
+ };
+ 
+ /// Which reviews a page lists (`…/reviews?q=&status=&author=&reviewer=&task=&branch=`): each one given must fit.
+@@ -71,11 +74,30 @@ pub(super) fn mentions(review: &Review, words: &[String]) -> bool {
+     words.iter().all(|w| text.contains(w))
+ }
+ 
+-/// A review found in one of the working copies, read from that copy (else the project's own store).
+-pub(super) fn whole(found: &Found, store: &FileStore) -> Result<Review> {
+-    FileStore::open(&found.working_copy.join(TASK_DIR))
+-        .and_then(|s| s.get_review(&ReviewRef(found.header.id.0.clone())))
+-        .or_else(|_| store.get_review(&found.header.reference))
++/// The working copies' reviews, whole, by ID: each copy's read once, when a review found there is first asked for
++/// (ATM-775). Reading one review from its store reads the whole folder to find it, so a list asking for each in turn
++/// read n² of them.
++#[derive(Default)]
++pub(super) struct Wholes(HashMap<PathBuf, HashMap<String, Review>>);
++
++impl Wholes {
++    /// A review found in one of the working copies, read from that copy (else the project's own store).
++    pub(super) fn of(&mut self, found: &Found, store: &FileStore) -> Result<Review> {
++        let copy = self.0.entry(found.working_copy.clone()).or_insert_with(|| {
++            FileStore::open(&found.working_copy.join(TASK_DIR))
++                .and_then(|s| s.reviews())
++                .map(|all| {
++                    all.into_iter()
++                        .map(|r| (r.header.id.0.clone(), r))
++                        .collect()
++                })
++                .unwrap_or_default()
++        });
++        match copy.get(&found.header.id.0) {
++            Some(review) => Ok(review.clone()),
++            None => store.get_review(&found.header.reference),
++        }
++    }
+ }
+ 
+ /// The reviews of every working copy the query keeps, the latest activity first: `{reviews: [{review, branch, chains,
+@@ -106,11 +128,12 @@ pub fn list_reviews(project: &Project, query: &ReviewQuery) -> Result<Value> {
+     };
+     let (me, words) = (me(project), words(&query.q));
+     let mut listed: Vec<(String, Value)> = Vec::new();
++    let mut wholes = Wholes::default();
+     for found in reviews::list_naming(project, root, &filter)? {
+         if !fits(&found.header, found.branch.as_deref(), query) {
+             continue;
+         }
+-        let review = whole(&found, &store)?;
++        let review = wholes.of(&found, &store)?;
+         if !mentions(&review, &words) {
+             continue;
+         }
+diff --git a/crates/atm-lib/tests/reviews/listing.rs b/crates/atm-lib/tests/reviews/listing.rs
+index d8e13eb2..235c2bcc 100644
+--- a/crates/atm-lib/tests/reviews/listing.rs
++++ b/crates/atm-lib/tests/reviews/listing.rs
+@@ -87,6 +87,84 @@ fn the_list_says_whether_each_review_has_ended() {
+     assert_eq!(ended(&hakan), json!(true));
+ }
+ 
++/// ATM-775: each working copy's reviews are read once, and each review listed whole from the copy it was found in: one
++/// only in a worktree comes with its comments and its words, on that copy's branch
++#[test]
++fn the_list_reads_each_review_whole_from_its_own_working_copy() {
++    let (main, other) = (dir(), dir());
++    git(&["init", "-q", "-b", "main"], &main.0);
++    let mut here = project(&main.0, "claude:1");
++    git(&["add", "-A"], &main.0);
++    git(&["commit", "-q", "-m", "tasks"], &main.0);
++    let copy = other.0.join("wt");
++    git(
++        &[
++            "worktree",
++            "add",
++            "-q",
++            "-b",
++            "side",
++            copy.to_str().unwrap(),
++        ],
++        &main.0,
++    );
++    waiting(&mut here, &["T-1"]).unwrap();
++    let mut there = reopen(&copy, "claude:1");
++    let cr = atm_lib::reviews::create(
++        &mut there,
++        NewReview {
++            title: "Elsewhere".into(),
++            summary: "A walrus in the worktree.".into(),
++            tasks: vec!["T-2".into()],
++            author: Some("claude:1".into()),
++            reviewers: vec!["Hakan".into()],
++            status: Status::Waiting,
++            first: round(),
++        },
++    )
++    .unwrap()
++    .reference;
++    let mut reviews = atm_lib::reviews::store(&there).unwrap();
++    atm_lib::reviews::Reviews::new(&mut reviews)
++        .comment(
++            &cr,
++            atm_lib::reviews::Anchor {
++                round: 1,
++                ..atm_lib::reviews::Anchor::default()
++            },
++            "Why a walrus?",
++            &"Hakan".into(),
++        )
++        .unwrap();
++    let list = |q: &str| {
++        atm_lib::review_pages::list_reviews(
++            &here,
++            &atm_lib::review_pages::ReviewQuery {
++                q: q.into(),
++                ..atm_lib::review_pages::ReviewQuery::default()
++            },
++        )
++        .unwrap()["reviews"]
++            .as_array()
++            .unwrap()
++            .iter()
++            .map(|r| json!([r["review"]["title"], r["branch"], r["chains"], r["open"]]))
++            .collect::<Vec<_>>()
++    };
++    let mut all = list("");
++    all.sort_by_key(ToString::to_string);
++    assert_eq!(
++        all,
++        vec![
++            json!(["Elsewhere", "side", 1, 1]),
++            json!(["The change", "main", 0, 0]),
++        ]
++    );
++    // Its words are its copy's: its summary's and its comment's
++    assert_eq!(list("walrus why"), vec![json!(["Elsewhere", "side", 1, 1])]);
++    assert_eq!(list("nowhere"), Vec::<serde_json::Value>::new());
++}
++
+ /// ATM-610: the list says since when each review waits on its reviewers, its latest round's time
+ #[test]
+ fn the_list_says_since_when_each_review_waits() {

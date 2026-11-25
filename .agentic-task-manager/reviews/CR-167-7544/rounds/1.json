@@ -1,0 +1,57 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "7f0edd61932da26afd748de2e4a7168a802d2d34",
+    "head": "83fd90b508b7a6a9086f5f1eaa8c54a1656a745e"
+  },
+  "files": [
+    {
+      "path": "app/src-tauri/src/commands/reads.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/src/commands/state.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/src/commands/tests.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/src/integration_tests.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/api/http.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/api/ipc.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/app.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/helpers.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/ipc.test.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:ba530ebb",
+  "at": "2026-11-24T17:35:21Z"
+}

@@ -1,0 +1,22 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "6507b824e076c24e7d827e814241535b46a78581",
+    "head": "54c8ea493961d281c934fbc463d9e68b2bb145df"
+  },
+  "files": [
+    {
+      "path": "docs/app-desktop-ui-design.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/help.md",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:33cba067",
+  "at": "2026-11-24T23:13:57Z"
+}

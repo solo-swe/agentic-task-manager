@@ -1,0 +1,62 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "fab9a740fec932047f8540de9e5e5bfee0fd8ef6",
+    "head": "ab087d8755cde92558f452ddd00b5ea2d2729d99"
+  },
+  "files": [
+    {
+      "path": "crates/atm-cli/src/commands/inbox.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/foreign/tests.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/inbox.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/inbox/tests.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/api/inbox.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/inbox/InboxPage.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/InboxPage.component.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/agent/commands.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/security-architecture.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/scenarios/inbox.json",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:33cba067",
+  "at": "2026-11-24T23:36:49Z"
+}

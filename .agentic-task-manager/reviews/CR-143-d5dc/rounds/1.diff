@@ -1,0 +1,131 @@
+diff --git a/dashboard/src/app.css b/dashboard/src/app.css
+index b3742c55..3f053f95 100644
+--- a/dashboard/src/app.css
++++ b/dashboard/src/app.css
+@@ -2567,10 +2567,12 @@ button.repo-ref {
+   --doc-page-ink: var(--text);
+ }
+ .doc-body {
++  /* Its padding, which the contents box (.doc-toc) reaches out across to sit in the viewer's corner */
++  --doc-body-pad: var(--space-9);
+   flex: 1 1 auto;
+   min-height: 0;
+   overflow: auto;
+-  padding: var(--space-9);
++  padding: var(--doc-body-pad);
+   background: var(--doc-desk);
+   scrollbar-width: thin;
+   scrollbar-color: var(--border) transparent;
+@@ -2674,18 +2676,20 @@ button.repo-ref {
+ /* The contents (T-402): one box at the page's top left that stays in view as the document scrolls (sticky, taking no
+    room). Closed, it is a faint button, brighter while the pointer is over the window; hovered or focused, the box
+    itself grows from the button into the list (down and to the right), so the pointer is inside it all along */
++/* The contents sit in the viewer's top left corner (ATM-729), whatever the page's width (a document style's page is
++   wider than the 820 px column the box once sat in, which put it over the text): stuck at the body's padding edge (a
++   sticky box's top counts from inside its scroller's padding), so it stays put as the document scrolls, and reaching
++   out across that padding to the corner */
+ .doc-toc {
+   position: sticky;
+   top: 0;
+   height: 0;
+   z-index: 5;
+-  max-width: 820px;
+-  margin: 0 auto;
+ }
+ .doc-toc-box {
+   position: absolute;
+-  top: -12px;
+-  left: -12px;
++  top: calc(var(--space-3) - var(--doc-body-pad));
++  left: calc(var(--space-3) - var(--doc-body-pad));
+   display: flex;
+   flex-direction: column;
+   width: 28px;
+@@ -2815,7 +2819,7 @@ button.repo-ref {
+   pointer-events: none;
+ }
+ .doc-viewer.narrow .doc-body {
+-  padding: var(--space-6);
++  --doc-body-pad: var(--space-6);
+ }
+ .doc-viewer.narrow .doc-page {
+   padding: var(--space-8) var(--space-7) var(--space-9);
+diff --git a/dashboard/src/lib/documents/DocumentViewer.svelte b/dashboard/src/lib/documents/DocumentViewer.svelte
+index e3cd3174..0bbb8a81 100644
+--- a/dashboard/src/lib/documents/DocumentViewer.svelte
++++ b/dashboard/src/lib/documents/DocumentViewer.svelte
+@@ -500,8 +500,8 @@
+       onclick={clearTextFragment}
+     >
+       {#if doc && toc.length >= 2}
+-        <!-- The contents: one box at the page's top left, in view as it scrolls. Closed, it is a faint button; hovered
+-             or focused, the box itself grows into the list, so the pointer is already inside it -->
++        <!-- The contents: one box in the viewer's top left corner (ATM-729), in view as it scrolls. Closed, it is a faint
++             button; hovered or focused, the box itself grows into the list, so the pointer is already inside it -->
+         <div class="doc-toc" class:open={tocOpen} id="doc-toc">
+           <div
+             class="doc-toc-box"
+diff --git a/dashboard/tests/e2e/documents.spec.ts b/dashboard/tests/e2e/documents.spec.ts
+index 65c34c90..835e08c9 100644
+--- a/dashboard/tests/e2e/documents.spec.ts
++++ b/dashboard/tests/e2e/documents.spec.ts
+@@ -721,6 +721,44 @@ test.describe('the document viewer: contents', () => {
+     await expect(viewer(page).locator('.compmd')).toHaveAttribute('data-compmd', 'ready');
+   }
+ 
++  /** How far the contents box is from the document's body's top left corner, the viewer's below its title bar */
++  const fromCorner = (page: Page) =>
++    page.locator('#doc-viewer').evaluate((el) => {
++      const box = el.querySelector('.doc-toc-box')!.getBoundingClientRect();
++      const body = el.querySelector('.doc-body')!.getBoundingClientRect();
++      return { left: Math.round(box.left - body.left), top: Math.round(box.top - body.top) };
++    });
++
++  // ATM-729 (Hakan): the box sat in an 820 px column, inside a style's wider page and over its text
++  // In WebKit too (the app's engine): sticky boxes are laid out by the engine's own rules
++  test(
++    'the contents sit in the viewer’s corner in every document style, as the document scrolls',
++    { tag: '@webkit' },
++    async ({ page, tasksServer }) => {
++      await open(page, tasksServer);
++      for (const id of ['github', 'docs', 'magazine', 'auto']) {
++        await openMenu(page, '#settings-btn');
++        await page.locator('#doc-style-select').selectOption(id);
++        // The settings closed by their button again (Escape would close the viewer under them)
++        await page.locator('#settings-btn').click();
++        await expect(page.locator('#settings-menu')).toHaveCount(0);
++        expect(await fromCorner(page), id).toEqual({ left: 6, top: 6 });
++        // Left of where the text starts, never over it
++        const text = await viewer(page).locator('.compmd-page').first().boundingBox();
++        const box = await page.locator('.doc-toc-box').boundingBox();
++        expect(box!.x + box!.width, id).toBeLessThanOrEqual(text!.x);
++      }
++      await viewer(page)
++        .locator('.doc-body')
++        .evaluate((el) => (el.scrollTop = el.scrollHeight / 2));
++      expect(await fromCorner(page)).toEqual({ left: 6, top: 6 });
++      // Open, it grows from the corner
++      await page.locator('#doc-toc-button').hover();
++      await expect(page.locator('.doc-toc-list')).toBeVisible();
++      expect(await fromCorner(page)).toEqual({ left: 6, top: 6 });
++    },
++  );
++
+   test('a faint button; hovering it shows the headings by level; a pick scrolls there and hides the list', async ({
+     page,
+     tasksServer,
+@@ -729,12 +767,8 @@ test.describe('the document viewer: contents', () => {
+     const button = page.locator('#doc-toc-button');
+     await expect(button).toBeVisible();
+     await expect(page.locator('.doc-toc-list')).toBeHidden();
+-    // At the page's top left
+-    const place = await page.locator('#doc-viewer').evaluate((el) => ({
+-      box: el.querySelector('.doc-toc-box')!.getBoundingClientRect().left,
+-      page: el.querySelector('.doc-page')!.getBoundingClientRect(),
+-    }));
+-    expect(place.box).toBeLessThan(place.page.left + place.page.width / 4);
++    // In the viewer's top left corner (ATM-729)
++    expect(await fromCorner(page)).toEqual({ left: 6, top: 6 });
+     await button.hover();
+     const entries = page.locator('.doc-toc-list button');
+     await expect(entries).toHaveText([

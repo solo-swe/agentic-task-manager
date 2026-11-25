@@ -1,0 +1,22 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "9cc701b4da46e8e29cd7a85db6fb5aed79dfb2f5",
+    "head": "5c441be1a223c35e85ce9f61862e0fafd09e61cb"
+  },
+  "files": [
+    {
+      "path": "crates/atm-lib/src/review_pages/list.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/tests/reviews/listing.rs",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:ba530ebb",
+  "at": "2026-11-24T17:56:09Z"
+}

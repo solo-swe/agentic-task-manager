@@ -1,0 +1,1475 @@
+diff --git a/dashboard/src/lib/address.ts b/dashboard/src/lib/address.ts
+index 46d8f57e..8fedab0f 100644
+--- a/dashboard/src/lib/address.ts
++++ b/dashboard/src/lib/address.ts
+@@ -291,6 +291,34 @@ export function withReviewList(address: string, query: ReviewListAddress): strin
+   return formatAddress(params);
+ }
+ 
++/** The Inbox page's filter (docs/inbox-design.md §6, ATM-762): which items, and whether of the archive */
++export interface InboxListAddress {
++  state: 'created' | 'discarded' | 'injected' | 'all';
++  archived: boolean;
++}
++const INBOX_STATES: readonly InboxListAddress['state'][] = ['created', 'discarded', 'injected', 'all'];
++
++/** The Inbox page's filter `address` names (`?state=all&archived=1`): the open items, not archived, by default; a
++ * state that isn't one is the default */
++export function inboxListOf(address: string): InboxListAddress {
++  const params = addressParams(address);
++  const state = params.get('state') as InboxListAddress['state'] | null;
++  return {
++    state: state && INBOX_STATES.includes(state) ? state : 'created',
++    archived: ['1', 'true'].includes(params.get('archived') ?? ''),
++  };
++}
++
++/** `address` (the Inbox page's) listing by `list`: the defaults left out */
++export function withInboxList(address: string, list: InboxListAddress): string {
++  const params = addressParams(address);
++  params.delete('state');
++  params.delete('archived');
++  if (list.state !== 'created') params.set('state', list.state);
++  if (list.archived) params.set('archived', '1');
++  return formatAddress(params);
++}
++
+ /** All reviews' project filter (ATM-757, docs/sidebar-overhaul-design.md §2.5): the projects `?projects=atm,compmd`
+  * names, those among `known` in its order; none (every project) when it names none of them */
+ export function reviewProjectsOf(address: string, known: readonly string[]): string[] {
+diff --git a/dashboard/src/lib/api/http.ts b/dashboard/src/lib/api/http.ts
+index a1f2e0e6..566cef68 100644
+--- a/dashboard/src/lib/api/http.ts
++++ b/dashboard/src/lib/api/http.ts
+@@ -68,6 +68,19 @@ export function statsUrl(project: string, request: StatsRequest = {}): string {
+   return projectRoute(project, 'stats') + (text ? `?${text}` : '');
+ }
+ 
++/** Which of a project's inbox items a listing gives (docs/inbox-design.md §6, ATM-762) */
++export type InboxState = 'created' | 'discarded' | 'injected' | 'all';
++
++/** A project's inbox items (GET …/projects/<id>/inbox, ATM-761): those in `state` (the open ones by default), of the
++ * archive with `archived` */
++export function inboxUrl(project: string, state: InboxState = 'created', archived = false): string {
++  const query = new URLSearchParams();
++  if (state !== 'created') query.set('state', state);
++  if (archived) query.set('archived', '1');
++  const text = query.toString();
++  return projectRoute(project, 'inbox') + (text ? `?${text}` : '');
++}
++
+ /** A file of the project for the document viewer: what it is, and the CompMD document to render (T-392) */
+ export function v1DocumentUrl(project: string, path: string): string {
+   return `${projectRoute(project, 'documents')}?path=${encodeURIComponent(path)}`;
+diff --git a/dashboard/src/lib/api/inbox.ts b/dashboard/src/lib/api/inbox.ts
+new file mode 100644
+index 00000000..36afe414
+--- /dev/null
++++ b/dashboard/src/lib/api/inbox.ts
+@@ -0,0 +1,109 @@
++// A project's inbox (docs/inbox-design.md §6–§7, ATM-762): its items, read as the other routes are (conditionally, by
++// `ETag`), and the page's changes, as the user: add, edit, discard with a reason, restore. Injecting is an agent's
++// (the triage skill's), never the page's.
++import { browserFetch, fetchFile, inboxUrl, type Fetch, type InboxState, type Validators } from './http';
++import { send, type ChangeResult } from './review-changes';
++
++/** An item, as atm keeps it (`inbox.json`) */
++export interface InboxItem {
++  id: string;
++  text: string;
++  state: 'created' | 'discarded' | 'injected';
++  reason?: string;
++  tasks?: string[];
++  created_at?: string;
++  created_by?: string;
++  updated_at?: string;
++  decided_at?: string;
++  decided_by?: string;
++}
++
++/** A listing: its items, newest first, and how many there are in each state */
++export interface InboxListing {
++  items: InboxItem[];
++  created: number;
++  discarded: number;
++  injected: number;
++}
++
++export type InboxResult = { unchanged: true } | { unchanged: false; listing: InboxListing; validators: Validators };
++
++const count = (n: unknown) => (typeof n === 'number' && n >= 0 ? n : 0);
++
++/** The items of `state`, of the archive with `archived`; anything unexpected in the answer left out */
++export async function loadInbox(
++  project: string,
++  state: InboxState = 'created',
++  archived = false,
++  fetchFn: Fetch = browserFetch,
++  since?: Validators,
++): Promise<InboxResult> {
++  const file = await fetchFile(inboxUrl(project, state, archived), fetchFn, since);
++  if (file.unchanged) return file;
++  const data = (file.data ?? {}) as Partial<Record<keyof InboxListing, unknown>>;
++  const items = (Array.isArray(data.items) ? data.items : []).filter(
++    (i): i is InboxItem => !!i && typeof i === 'object' && typeof i.id === 'string' && typeof i.text === 'string',
++  );
++  return {
++    unchanged: false,
++    listing: {
++      items,
++      created: count(data.created),
++      discarded: count(data.discarded),
++      injected: count(data.injected),
++    },
++    validators: file.validators,
++  };
++}
++
++const item = (id: string) => `/${encodeURIComponent(id)}`;
++
++/** A new item, as the user */
++export function addItem(project: string, text: string): Promise<ChangeResult> {
++  return send(project, {
++    method: 'POST',
++    area: 'inbox',
++    resource: '',
++    body: { text },
++    command: 'add_inbox_item',
++    args: { item: { text } },
++  });
++}
++
++/** An open item's new text */
++export function editItem(project: string, id: string, text: string): Promise<ChangeResult> {
++  return send(project, {
++    method: 'PATCH',
++    area: 'inbox',
++    resource: item(id),
++    body: { text },
++    command: 'edit_inbox_item',
++    args: { id, edit: { text } },
++  });
++}
++
++/** An item discarded, with why */
++export function discardItem(project: string, id: string, reason: string): Promise<ChangeResult> {
++  const decision = { decision: 'discarded', reason };
++  return send(project, {
++    method: 'POST',
++    area: 'inbox',
++    resource: `${item(id)}/decisions`,
++    body: decision,
++    command: 'decide_inbox_item',
++    args: { id, decision },
++  });
++}
++
++/** A discarded item brought back */
++export function restoreItem(project: string, id: string): Promise<ChangeResult> {
++  const decision = { decision: 'restored' };
++  return send(project, {
++    method: 'POST',
++    area: 'inbox',
++    resource: `${item(id)}/decisions`,
++    body: decision,
++    command: 'decide_inbox_item',
++    args: { id, decision },
++  });
++}
+diff --git a/dashboard/src/lib/api/ipc.ts b/dashboard/src/lib/api/ipc.ts
+index 0f5a532b..d93e5a78 100644
+--- a/dashboard/src/lib/api/ipc.ts
++++ b/dashboard/src/lib/api/ipc.ts
+@@ -109,6 +109,11 @@ function projectCall(workspace: string, project: string, route: string[], query:
+         args: { ...at, path: query.get('path') ?? '', at: query.get('at') || undefined },
+         image: true,
+       };
++    case 'inbox': {
++      // Its items (ATM-761, ATM-762): those of `state` (the open ones without), of the archive with `archived`
++      const archived = ['1', 'true'].includes(query.get('archived') ?? '');
++      return { command: 'project_inbox', args: { ...at, which: query.get('state') || undefined, archived } };
++    }
+     case 'claims':
+     case 'claims.json':
+       return { command: 'claims', args: at };
+diff --git a/dashboard/src/lib/api/review-changes.ts b/dashboard/src/lib/api/review-changes.ts
+index fcc8b322..6ff852cf 100644
+--- a/dashboard/src/lib/api/review-changes.ts
++++ b/dashboard/src/lib/api/review-changes.ts
+@@ -26,9 +26,11 @@ async function token(): Promise<string | null> {
+   }
+ }
+ 
+-/** One change: its REST method and resource, and its command with the arguments past workspace and project */
+-interface Change {
++/** One change: its REST method, its resource (under the project's `area`: its reviews, or its inbox, ATM-762), and its
++ * command with the arguments past workspace and project */
++export interface Change {
+   method: 'POST' | 'PATCH' | 'PUT' | 'DELETE';
++  area?: 'reviews' | 'inbox';
+   resource: string;
+   body: unknown;
+   command: string;
+@@ -40,7 +42,8 @@ interface Change {
+ const DOTTED = new Set(['.', '..']);
+ const dotted = (segments: string[]) => segments.some((s) => DOTTED.has(s));
+ 
+-async function send(project: string, change: Change): Promise<ChangeResult> {
++/** A change of the project's, from the page, as the user: the app's command, or the REST route with the page's token */
++export async function send(project: string, change: Change): Promise<ChangeResult> {
+   const workspace = apiWorkspace();
+   if (dotted([workspace, project, ...change.resource.split('/').map((s) => decodeURIComponent(s))]))
+     return { ok: false, message: 'A review, project or workspace ID can’t be . or ..' };
+@@ -53,8 +56,13 @@ async function send(project: string, change: Change): Promise<ChangeResult> {
+     }
+   }
+   const session = await token();
+-  if (!session) return { ok: false, message: 'This page wasn’t served by atm, so it can’t change a review.' };
+-  const url = `/api/v2/workspaces/${encodeURIComponent(workspace)}/projects/${encodeURIComponent(project)}/reviews${change.resource}`;
++  const area = change.area ?? 'reviews';
++  if (!session)
++    return {
++      ok: false,
++      message: `This page wasn’t served by atm, so it can’t change ${area === 'inbox' ? 'the inbox' : 'a review'}.`,
++    };
++  const url = `/api/v2/workspaces/${encodeURIComponent(workspace)}/projects/${encodeURIComponent(project)}/${area}${change.resource}`;
+   try {
+     const resp = await fetch(url, {
+       method: change.method,
+diff --git a/dashboard/src/lib/inbox/InboxPage.svelte b/dashboard/src/lib/inbox/InboxPage.svelte
+new file mode 100644
+index 00000000..27fe164b
+--- /dev/null
++++ b/dashboard/src/lib/inbox/InboxPage.svelte
+@@ -0,0 +1,446 @@
++<script lang="ts">
++  // The Inbox item's page (docs/inbox-design.md §6, ATM-762): what the user notes for later, for an agent to make tasks
++  // of. The quick-add box on top (focused, Enter adds, ⇧Enter a new line, its draft kept on its tab); the filter (Open,
++  // Discarded, Injected, All; archived) in the address; each item by its first line, the rest on a click, with what
++  // its state allows: Edit and Discard (asking why) while open, its reason and Restore once discarded, its tasks once
++  // injected. Asked again after each change, and now and then while in view.
++  import { onDestroy, onMount, untrack } from 'svelte';
++  import { inboxListOf, withInboxList, type InboxListAddress } from '../address';
++  import { inApp } from '../api/http';
++  import {
++    addItem,
++    discardItem,
++    editItem,
++    loadInbox,
++    restoreItem,
++    type InboxItem,
++    type InboxListing,
++  } from '../api/inbox';
++  import type { ChangeResult } from '../api/review-changes';
++  import { appTabs } from '../app-tabs.svelte';
++  import CompMd from '../documents/CompMd.svelte';
++  import { formatAgoOrDate } from '../format';
++  import { latest } from '../latest';
++  import { currentAddress, navigate } from '../navigation';
++  import { withTask } from '../routes';
++  import { dashboard } from '../state.svelte';
++  import { park, unpark } from '../tab-parked';
++  import type { Validators } from '../api/http';
++  import Dialog from '../ui/Dialog.svelte';
++
++  const project = $derived(dashboard.projectId);
++  const list = $derived(inboxListOf(dashboard.address));
++  const FILTERS: { state: InboxListAddress['state']; label: string }[] = [
++    { state: 'created', label: 'Open' },
++    { state: 'discarded', label: 'Discarded' },
++    { state: 'injected', label: 'Injected' },
++    { state: 'all', label: 'All' },
++  ];
++
++  let listing = $state.raw<InboxListing | null>(null);
++  let problem = $state<string | null>(null);
++  let validators: Validators | undefined;
++  let asked = '';
++  const loads = latest();
++
++  async function load() {
++    const id = project;
++    if (!id) return;
++    const key = JSON.stringify([id, list]);
++    // Another listing: asked afresh, not by the last one's validators
++    if (key !== asked) validators = undefined;
++    asked = key;
++    const ask = loads.ask();
++    try {
++      const result = await loadInbox(id, list.state, list.archived, undefined, validators);
++      if (!ask.current()) return;
++      problem = null;
++      if (!result.unchanged) [listing, validators] = [result.listing, result.validators];
++    } catch (e) {
++      if (ask.current()) problem = `The inbox couldn’t be read: ${(e as Error).message}`;
++    } finally {
++      ask.done();
++    }
++  }
++  $effect(() => {
++    void [project, list.state, list.archived];
++    untrack(() => void load());
++  });
++  // Asked again every 10 s while the page is in view (an agent's triage changes it too)
++  const timer = setInterval(() => document.visibilityState === 'visible' && void load(), 10_000);
++  onDestroy(() => clearInterval(timer));
++
++  function choose(next: InboxListAddress) {
++    navigate(withInboxList(currentAddress(), next));
++  }
++
++  // The quick-add box: its draft kept on its tab (docs/tabs-and-navigation-design.md §4.2)
++  // The tab it is on: the first one it is shown on (the app's first page is made before its tabs are started)
++  let shownOn = untrack(() => (inApp ? appTabs.active || undefined : undefined));
++  $effect(() => {
++    if (inApp && !shownOn) shownOn = appTabs.active || undefined;
++  });
++  // By the tab alone: its page is one project's inbox at a time, and on the way back the project may not be known yet
++  const draftKey = 'inbox-draft';
++  let draft = $state(
++    unpark<string>(
++      untrack(() => shownOn),
++      draftKey,
++    ) ?? '',
++  );
++  onDestroy(() => {
++    if (draft) park(shownOn, draftKey, draft);
++  });
++  let box = $state<HTMLTextAreaElement>();
++  let adding = $state(false);
++  // Focused when the page opens, unless the focus is somewhere already (the item tabs, walked with the arrow keys)
++  onMount(() => {
++    const at = document.activeElement;
++    if (!at || at === document.body) box?.focus();
++  });
++
++  /** A change made: what it refused said, or the listing asked again */
++  async function changed(result: ChangeResult): Promise<boolean> {
++    if (!result.ok) {
++      problem = result.message;
++      return false;
++    }
++    problem = null;
++    await load();
++    return true;
++  }
++
++  async function add() {
++    const text = draft.trim();
++    if (!text || !project || adding) return;
++    adding = true;
++    if (await changed(await addItem(project, text))) draft = '';
++    adding = false;
++    box?.focus();
++  }
++
++  function onboxkey(e: KeyboardEvent) {
++    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
++      e.preventDefault();
++      void add();
++    }
++  }
++
++  // An item's text: its first line as its title, the rest on a click
++  const firstLine = (text: string) =>
++    text
++      .trim()
++      .split('\n')[0]
++      .replace(/^#+\s*/, '');
++  const more = (text: string) => text.trim().includes('\n');
++  let expanded = $state<string | null>(null);
++
++  // Editing an open item, in place
++  let editing = $state<{ id: string; text: string } | null>(null);
++  async function saveEdit() {
++    if (!editing || !project || !editing.text.trim()) return;
++    if (await changed(await editItem(project, editing.id, editing.text.trim()))) editing = null;
++  }
++
++  // Discarding asks why
++  let discarding = $state<{ id: string; reason: string } | null>(null);
++  async function discard() {
++    if (!discarding || !project || !discarding.reason.trim()) return;
++    if (await changed(await discardItem(project, discarding.id, discarding.reason.trim()))) discarding = null;
++  }
++
++  async function restore(item: InboxItem) {
++    if (project) await changed(await restoreItem(project, item.id));
++  }
++
++  const countOf = (state: InboxListAddress['state']) =>
++    !listing ? null : state === 'all' ? listing.created + listing.discarded + listing.injected : listing[state];
++  const ago = (at: string | undefined) => (at ? formatAgoOrDate(at, Date.now()) : '');
++  /** A task the item became: its details over this page, when it is one of this project's */
++  const taskLink = (key: string) => (dashboard.findTask(key) ? withTask(currentAddress(), key) : null);
++</script>
++
++<div class="inbox-page" id="inbox-page">
++  <form
++    class="inbox-add"
++    onsubmit={(e) => {
++      e.preventDefault();
++      void add();
++    }}
++  >
++    <textarea
++      id="inbox-add-text"
++      class="inbox-add-text"
++      rows="2"
++      placeholder="Jot something down… (Enter adds, ⇧Enter a new line)"
++      aria-label="A note for the inbox"
++      bind:this={box}
++      bind:value={draft}
++      onkeydown={onboxkey}></textarea>
++    <button type="submit" class="inbox-button primary" id="inbox-add" disabled={adding || !draft.trim()}>Add</button>
++  </form>
++
++  <div class="inbox-filters" role="group" aria-label="Which items">
++    {#each FILTERS as f (f.state)}
++      {@const n = countOf(f.state)}
++      <button
++        class="inbox-chip"
++        data-state={f.state}
++        aria-pressed={list.state === f.state}
++        onclick={() => choose({ ...list, state: f.state })}
++        >{f.label}{#if n !== null}<span class="inbox-count">{n}</span>{/if}</button
++      >
++    {/each}
++    <label class="inbox-archived"
++      ><input
++        type="checkbox"
++        id="inbox-archived"
++        checked={list.archived}
++        onchange={(e) => choose({ ...list, archived: e.currentTarget.checked })}
++      /> archived</label
++    >
++  </div>
++
++  {#if problem}<p class="inbox-problem" role="alert" id="inbox-problem">{problem}</p>{/if}
++
++  {#if listing && !listing.items.length}
++    <p class="inbox-empty" id="inbox-empty">
++      {list.state === 'created' && !list.archived
++        ? 'Nothing in the inbox. Note something above: an agent turns it into tasks with you (/atm-triage-inbox).'
++        : 'No item here.'}
++    </p>
++  {:else if listing}
++    <ul class="inbox-items" id="inbox-items">
++      {#each listing.items as item (item.id)}
++        <li class="inbox-item" data-item={item.id} data-state={item.state}>
++          <div class="inbox-item-head">
++            <span class="inbox-id">{item.id}</span>
++            {#if more(item.text)}
++              <button
++                class="inbox-title link"
++                aria-expanded={expanded === item.id}
++                onclick={() => (expanded = expanded === item.id ? null : item.id)}>{firstLine(item.text)}</button
++              >
++            {:else}
++              <span class="inbox-title">{firstLine(item.text)}</span>
++            {/if}
++            {#if item.state === 'injected' && item.tasks?.length}
++              <span class="inbox-tasks"
++                >→ {#each item.tasks as key, i (key)}{i ? ', ' : ''}{#if taskLink(key)}<a
++                      href={taskLink(key)}
++                      data-task={key}>{key}</a
++                    >{:else}{key}{/if}{/each}</span
++              >
++            {/if}
++          </div>
++          {#if expanded === item.id}<div class="inbox-text"><CompMd text={item.text} /></div>{/if}
++          {#if editing?.id === item.id}
++            <div class="inbox-edit">
++              <textarea class="inbox-add-text" aria-label="The item's text" bind:value={editing.text} rows="3"
++              ></textarea>
++              <button class="inbox-button primary" onclick={() => void saveEdit()} disabled={!editing.text.trim()}
++                >Save</button
++              >
++              <button class="inbox-button" onclick={() => (editing = null)}>Cancel</button>
++            </div>
++          {/if}
++          <div class="inbox-meta">
++            <span title={item.created_at}>{ago(item.created_at)}{item.created_by ? ` · ${item.created_by}` : ''}</span>
++            {#if item.state === 'discarded'}<span class="inbox-reason">discarded: {item.reason}</span>{/if}
++            <span class="inbox-actions">
++              {#if item.state === 'created'}
++                <button
++                  class="inbox-button"
++                  data-action="edit"
++                  onclick={() => (editing = { id: item.id, text: item.text })}>Edit</button
++                >
++                <button
++                  class="inbox-button"
++                  data-action="discard"
++                  onclick={() => (discarding = { id: item.id, reason: '' })}>Discard</button
++                >
++              {:else if item.state === 'discarded'}
++                <button class="inbox-button" data-action="restore" onclick={() => void restore(item)}>Restore</button>
++              {/if}
++            </span>
++          </div>
++        </li>
++      {/each}
++    </ul>
++  {/if}
++</div>
++
++<Dialog
++  id="inbox-discard"
++  title="Discard {discarding?.id ?? ''}"
++  open={!!discarding}
++  onclose={() => (discarding = null)}
++>
++  {#if discarding}
++    <form
++      class="inbox-discard"
++      onsubmit={(e) => {
++        e.preventDefault();
++        void discard();
++      }}
++    >
++      <label for="inbox-discard-reason">Why? It stays in the inbox's Discarded, and can be restored.</label>
++      <textarea id="inbox-discard-reason" class="inbox-add-text" rows="3" bind:value={discarding.reason}></textarea>
++      <div class="inbox-discard-actions">
++        <button type="button" class="inbox-button" onclick={() => (discarding = null)}>Cancel</button>
++        <button
++          type="submit"
++          class="inbox-button primary"
++          id="inbox-discard-confirm"
++          disabled={!discarding.reason.trim()}>Discard</button
++        >
++      </div>
++    </form>
++  {/if}
++</Dialog>
++
++<style>
++  .inbox-page {
++    display: flex;
++    flex-direction: column;
++    gap: var(--space-6);
++    max-width: 860px;
++    padding: var(--space-7) var(--space-6);
++  }
++  .inbox-add,
++  .inbox-edit {
++    display: flex;
++    gap: var(--space-4);
++    align-items: flex-start;
++  }
++  .inbox-add-text {
++    flex: 1;
++    min-width: 0;
++    padding: var(--space-4) var(--space-5);
++    border: 1px solid var(--border);
++    border-radius: var(--radius-md);
++    background: var(--bg);
++    color: var(--text);
++    font: inherit;
++    resize: vertical;
++  }
++  .inbox-add-text:focus {
++    outline: none;
++    border-color: var(--accent);
++  }
++  .inbox-filters {
++    display: flex;
++    flex-wrap: wrap;
++    align-items: center;
++    gap: var(--space-3);
++  }
++  .inbox-chip,
++  .inbox-button {
++    height: 28px;
++    padding: 0 var(--space-5);
++    border: 1px solid var(--border);
++    border-radius: var(--radius-pill);
++    background: var(--surface);
++    color: var(--text);
++    font: inherit;
++    font-size: var(--text-sm);
++    cursor: pointer;
++  }
++  .inbox-chip[aria-pressed='true'] {
++    border-color: var(--accent);
++    color: var(--accent);
++    font-weight: 600;
++  }
++  .inbox-button.primary {
++    background: var(--accent);
++    border-color: var(--accent);
++    color: var(--on-accent);
++  }
++  .inbox-button:disabled {
++    opacity: 0.5;
++    cursor: default;
++  }
++  .inbox-count {
++    margin-left: var(--space-3);
++    color: var(--text-muted);
++  }
++  .inbox-archived {
++    margin-left: var(--space-5);
++    color: var(--text-muted);
++    font-size: var(--text-sm);
++  }
++  .inbox-items {
++    list-style: none;
++    margin: 0;
++    padding: 0;
++    border: 1px solid var(--border);
++    border-radius: var(--radius-lg);
++    background: var(--surface);
++  }
++  .inbox-item {
++    display: flex;
++    flex-direction: column;
++    gap: var(--space-3);
++    padding: var(--space-6) var(--space-7);
++    border-top: 1px solid var(--border);
++  }
++  .inbox-item:first-child {
++    border-top: none;
++  }
++  .inbox-item[data-state='discarded'] .inbox-title {
++    color: var(--text-muted);
++  }
++  .inbox-item-head {
++    display: flex;
++    flex-wrap: wrap;
++    gap: var(--space-4);
++    align-items: baseline;
++  }
++  .inbox-id {
++    font-family: 'SF Mono', Menlo, Consolas, monospace;
++    color: var(--text-muted);
++  }
++  .inbox-title {
++    font-weight: 600;
++  }
++  .inbox-title.link {
++    padding: 0;
++    border: none;
++    background: none;
++    color: var(--text);
++    font: inherit;
++    font-weight: 600;
++    text-align: left;
++    cursor: pointer;
++  }
++  .inbox-tasks a {
++    color: var(--accent);
++  }
++  .inbox-meta {
++    display: flex;
++    flex-wrap: wrap;
++    gap: var(--space-6);
++    align-items: center;
++    color: var(--text-muted);
++    font-size: var(--text-xs);
++  }
++  .inbox-actions {
++    display: flex;
++    gap: var(--space-3);
++    margin-left: auto;
++  }
++  .inbox-empty,
++  .inbox-problem {
++    color: var(--text-muted);
++  }
++  .inbox-discard {
++    display: flex;
++    flex-direction: column;
++    gap: var(--space-4);
++  }
++  .inbox-discard-actions {
++    display: flex;
++    justify-content: flex-end;
++    gap: var(--space-3);
++  }
++</style>
+diff --git a/dashboard/src/lib/projects.ts b/dashboard/src/lib/projects.ts
+index a8a0d252..9e5cc97a 100644
+--- a/dashboard/src/lib/projects.ts
++++ b/dashboard/src/lib/projects.ts
+@@ -19,6 +19,11 @@ export function reviewsWaiting(p: ProjectEntry | undefined): number {
+   return p?.summary?.needs_you.code_reviews ?? 0;
+ }
+ 
++/** The items waiting in a project's inbox (ATM-761, ATM-762): the Inbox item's badge; none from an older server */
++export function inboxOpen(p: ProjectEntry | undefined): number {
++  return p?.summary?.inbox?.open ?? 0;
++}
++
+ /** Tasks still to do: neither done nor skipped */
+ export function openTasks(p: ProjectEntry): number {
+   return p.summary ? p.summary.total - p.summary.done - p.summary.skipped : 0;
+diff --git a/dashboard/src/lib/shell/NewTabPage.svelte b/dashboard/src/lib/shell/NewTabPage.svelte
+index 05347590..f55d388a 100644
+--- a/dashboard/src/lib/shell/NewTabPage.svelte
++++ b/dashboard/src/lib/shell/NewTabPage.svelte
+@@ -10,7 +10,7 @@
+   import { navigate } from '../navigation';
+   import { ITEM_NAMES } from '../places';
+   import { getPref } from '../prefs';
+-  import { needsYou, reviewsWaiting } from '../projects';
++  import { inboxOpen, needsYou, reviewsWaiting } from '../projects';
+   import { itemAddress, itemsOf, scopeFromPref, type Scope } from '../sidebar';
+   import { dashboard } from '../state.svelte';
+   import { ITEM_ICONS } from '../tabs';
+@@ -29,8 +29,9 @@
+   const address = (scope: Scope, item: Item) => itemAddress(dashboard.workspace, scope, item) ?? '/';
+   const projectOf = (id: string) => present.find((p) => p.id === id);
+ 
+-  /** An item's badge: Code Reviews, the reviews waiting on you (All's sums its projects') */
++  /** An item's badge: Code Reviews, the reviews waiting on you (All's sums its projects'); Inbox, the items in it */
+   function badgeOf(item: Item): number {
++    if (item === 'inbox') return chooser.scope === null ? 0 : inboxOpen(projectOf(chooser.scope));
+     if (item !== 'reviews') return 0;
+     return chooser.scope === null
+       ? present.reduce((n, p) => n + reviewsWaiting(p), 0)
+diff --git a/dashboard/src/lib/shell/Sidebar.svelte b/dashboard/src/lib/shell/Sidebar.svelte
+index fe9b463f..988f04e4 100644
+--- a/dashboard/src/lib/shell/Sidebar.svelte
++++ b/dashboard/src/lib/shell/Sidebar.svelte
+@@ -13,7 +13,7 @@
+   import type { ProjectEntry } from '../load';
+   import { ITEM_NAMES } from '../places';
+   import { getPref, setPref } from '../prefs';
+-  import { needsYou, reviewsWaiting } from '../projects';
++  import { inboxOpen, needsYou, reviewsWaiting } from '../projects';
+   import {
+     itemAddress,
+     itemsOf,
+@@ -77,9 +77,10 @@
+     setPref('sidebarScope', scopePref(next));
+   }
+ 
+-  /** The item's badge: Code Reviews, the reviews waiting on you (the scope's: All's sums its projects'); Inbox's comes
+-   * with the inbox (ATM-762) */
++  /** The item's badge: Code Reviews, the reviews waiting on you (the scope's: All's sums its projects'); Inbox, the
++   * items waiting in it (a project's, ATM-762) */
+   function badgeOf(item: Item): number {
++    if (item === 'inbox') return scope === null ? 0 : inboxOpen(scoped ?? undefined);
+     if (item !== 'reviews') return 0;
+     return scope === null
+       ? dashboard.projects.reduce((n, p) => n + reviewsWaiting(p), 0)
+diff --git a/dashboard/src/lib/shell/ViewPanel.svelte b/dashboard/src/lib/shell/ViewPanel.svelte
+index 611c6cc2..4b64087a 100644
+--- a/dashboard/src/lib/shell/ViewPanel.svelte
++++ b/dashboard/src/lib/shell/ViewPanel.svelte
+@@ -13,6 +13,7 @@
+   import ProgressTab from '../progress/ProgressTab.svelte';
+   import ProjectTab from './ProjectTab.svelte';
+   import ReviewsTab from './ReviewsTab.svelte';
++  import InboxPage from '../inbox/InboxPage.svelte';
+   import ScopeBar from './ScopeBar.svelte';
+   import SubTabs from './SubTabs.svelte';
+   import TaskGrid from '../tasks/TaskGrid.svelte';
+@@ -105,17 +106,23 @@
+       <!-- Mounted only while selected: it asks the server for the reviews, and again now and then -->
+       {#if view === 'reviews'}<ReviewsTab />{/if}
+     </div>
+-    <!-- The Inbox (docs/inbox-design.md) and Documents (docs/documents-design.md) pages come with their own tasks -->
+-    {#each ['inbox', 'documents'] as const as id (id)}
+-      <div class="view-panel" id="panel-{id}" role="tabpanel" aria-labelledby="item-{id}" hidden={view !== id}>
+-        {#if view === id}
+-          <p class="view-placeholder" id="{id}-placeholder">
+-            {id === 'inbox'
+-              ? 'The Inbox is coming: what you note for later, for an agent to make tasks of.'
+-              : 'Documents are coming: the project’s documents, listed and searchable, to open in the viewer.'}
+-          </p>
+-        {/if}
+-      </div>
+-    {/each}
++    <div class="view-panel" id="panel-inbox" role="tabpanel" aria-labelledby="item-inbox" hidden={view !== 'inbox'}>
++      <!-- Mounted only while selected: it asks the server for the inbox, and again now and then (ATM-762) -->
++      {#if view === 'inbox'}<InboxPage />{/if}
++    </div>
++    <!-- The Documents page (docs/documents-design.md) comes with its own task -->
++    <div
++      class="view-panel"
++      id="panel-documents"
++      role="tabpanel"
++      aria-labelledby="item-documents"
++      hidden={view !== 'documents'}
++    >
++      {#if view === 'documents'}
++        <p class="view-placeholder" id="documents-placeholder">
++          Documents are coming: the project’s documents, listed and searchable, to open in the viewer.
++        </p>
++      {/if}
++    </div>
+   </div>
+ </div>
+diff --git a/dashboard/src/lib/state.svelte.ts b/dashboard/src/lib/state.svelte.ts
+index d599cac0..e7a15505 100644
+--- a/dashboard/src/lib/state.svelte.ts
++++ b/dashboard/src/lib/state.svelte.ts
+@@ -297,6 +297,10 @@ export class DashboardState {
+     );
+   }
+ 
++  /** The page's address as the last navigation left it, for what a page reads from its query (the Inbox's filter,
++   * ATM-762): the router's, kept here so a component needn't read the router itself */
++  address = $state(typeof location === 'undefined' ? '/' : currentAddress());
++
+   filters = $state.raw<Filters>(emptyFilters());
+   /** Keyword search over ID, name, description and type; part of the saved view */
+   query = $state('');
+@@ -655,6 +659,7 @@ export class DashboardState {
+    * the task, and the page when it names another one. */
+   onNavigate() {
+     let address = currentAddress();
++    this.address = address;
+     // An older address's dialog flag (?about): its dialog opens, and the address is the page's without it
+     const named = dialogOf(address);
+     if (named) {
+diff --git a/dashboard/tests/e2e/helpers.ts b/dashboard/tests/e2e/helpers.ts
+index 284e1f7d..68ed7b00 100644
+--- a/dashboard/tests/e2e/helpers.ts
++++ b/dashboard/tests/e2e/helpers.ts
+@@ -32,6 +32,19 @@ const V1_FILES = /\/api\/v1\/projects\/([^/]+)\/files\?/;
+ const V1_REVIEWS = /\/api\/v1\/projects\/([^/]+)\/reviews(?:\/([^/?]+))?(?:\?.*)?$/;
+ /** The review routes that change something, always v2 (ATM-572): the project, and the path past `reviews` */
+ const V2_REVIEW_CHANGES = /\/api\/v2\/workspaces\/[^/]+\/projects\/([^/]+)\/reviews(\/[^?]*)?(?:\?.*)?$/;
++/** A project's inbox (ATM-761, ATM-762), v1's and v2's: its items, and on v2 the page's changes */
++const INBOX = /\/api\/(?:v1\/projects|v2\/workspaces\/[^/]+\/projects)\/([^/]+)\/inbox(\/[^?]*)?(?:\?.*)?$/;
++
++/** An inbox item, as atm keeps it */
++export interface FixtureInboxItem {
++  id: string;
++  text: string;
++  state: 'created' | 'discarded' | 'injected';
++  reason?: string;
++  tasks?: string[];
++  created_at?: string;
++  created_by?: string;
++}
+ 
+ /** A file as the documents route answers it (docs/multi-project-api.md §2.6): Markdown by default, as it is */
+ export function projectDocument(path: string, text: string, fields: Record<string, unknown> = {}) {
+@@ -426,6 +439,64 @@ export class TasksServer {
+   /** What the next changes are answered with: their status and body */
+   private reviewChangeAnswer: { status: number; body: unknown } = { status: 201, body: { comment: 'c9' } };
+ 
++  /** The default project's inbox (ATM-762), and its archive, newest first; atm's rules for its changes, played */
++  inbox: FixtureInboxItem[] = [];
++  inboxArchive: FixtureInboxItem[] = [];
++  /** The inbox listings asked for (their query), and the changes the page sent with their session token */
++  inboxRequests: string[] = [];
++  inboxChanges: { method: string; path: string; body: unknown; session: string | undefined }[] = [];
++
++  /** The inbox's answer to one operation, as atm's routes and commands give it: `[status, body]` */
++  private answerInbox(
++    op:
++      | { list: { state?: string | null; archived: boolean } }
++      | { add: string }
++      | { edit: [string, string] }
++      | {
++          decide: [string, { decision?: string; reason?: string }];
++        },
++  ): [number, unknown] {
++    if ('list' in op) {
++      const all = op.list.archived ? this.inboxArchive : this.inbox;
++      const state = op.list.state || 'created';
++      const count = (s: string) => all.filter((i) => i.state === s).length;
++      const items = state === 'all' ? all : all.filter((i) => i.state === state);
++      return [200, { items, created: count('created'), discarded: count('discarded'), injected: count('injected') }];
++    }
++    if ('add' in op) {
++      if (!op.add.trim()) return [400, { error: 'an item needs some text' }];
++      const next = Math.max(0, ...[...this.inbox, ...this.inboxArchive].map((i) => Number(i.id.slice(3)))) + 1;
++      const item: FixtureInboxItem = {
++        id: `IN-${next}`,
++        text: op.add,
++        state: 'created',
++        created_at: '2026-11-24T09:00:00Z',
++        created_by: 'Ana',
++      };
++      this.inbox.unshift(item);
++      return [201, { item }];
++    }
++    const [id] = 'edit' in op ? op.edit : op.decide;
++    const item = this.inbox.find((i) => i.id === id);
++    if (!item) return [404, { error: `no item ${id}` }];
++    if ('edit' in op) {
++      if (item.state !== 'created') return [403, { error: `${id} isn't open` }];
++      item.text = op.edit[1];
++      return [200, { item }];
++    }
++    const decision = op.decide[1];
++    if (decision.decision === 'discarded' && item.state === 'created' && decision.reason?.trim()) {
++      Object.assign(item, { state: 'discarded', reason: decision.reason });
++      return [200, { item }];
++    }
++    if (decision.decision === 'restored' && item.state === 'discarded') {
++      item.state = 'created';
++      delete item.reason;
++      return [200, { item }];
++    }
++    return [403, { error: `${id} can't be ${decision.decision} now` }];
++  }
++
+   /** Serve the reviews list (`GET …/reviews`) */
+   setReviews(list: unknown) {
+     this.reviewList = withEnded(list);
+@@ -667,6 +738,33 @@ export class TasksServer {
+         body: JSON.stringify(this.reviewChangeAnswer.body),
+       });
+     });
++    await this.page.route(INBOX, (route) => {
++      const request = route.request();
++      const [, id, rest] = INBOX.exec(request.url())!;
++      if (decodeURIComponent(id) !== this.projectId)
++        return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error": "unknown project"}' });
++      const url = new URL(request.url());
++      const answer = ([status, body]: [number, unknown]) =>
++        route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
++      if (request.method() === 'GET') {
++        this.inboxRequests.push(url.search);
++        return answer(
++          this.answerInbox({
++            list: { state: url.searchParams.get('state'), archived: url.searchParams.get('archived') === '1' },
++          }),
++        );
++      }
++      const path = rest ?? '';
++      const body = request.postDataJSON() as { text?: string; decision?: string; reason?: string };
++      this.inboxChanges.push({ method: request.method(), path, body, session: request.headers()['x-atm-session'] });
++      const [, item, decisions] = /^\/?([^/]*)(\/decisions)?$/.exec(path) ?? [];
++      if (request.method() === 'POST' && !item) return answer(this.answerInbox({ add: body.text ?? '' }));
++      if (request.method() === 'PATCH' && item && !decisions)
++        return answer(this.answerInbox({ edit: [decodeURIComponent(item), body.text ?? ''] }));
++      if (request.method() === 'POST' && item && decisions)
++        return answer(this.answerInbox({ decide: [decodeURIComponent(item), body] }));
++      return answer([405, { error: 'no such route' }]);
++    });
+     await this.page.route(V1_DOCUMENTS, (route) => {
+       const url = new URL(route.request().url());
+       const path = url.searchParams.get('path') ?? '';
+@@ -1029,6 +1127,26 @@ export class TasksServer {
+       }
+       case 'project_reviews':
+         return body ? { ok: this.reviewList ?? { reviews: [], you: 'Ana' } } : unknown;
++      case 'project_inbox':
++      case 'add_inbox_item':
++      case 'edit_inbox_item':
++      case 'decide_inbox_item': {
++        if (project !== this.projectId) return unknown;
++        const [status, answered] = this.answerInbox(
++          command === 'project_inbox'
++            ? { list: { state: (args.which as string | undefined) ?? null, archived: args.archived === true } }
++            : command === 'add_inbox_item'
++              ? { add: String((args.item as { text?: string }).text ?? '') }
++              : command === 'edit_inbox_item'
++                ? { edit: [String(args.id), String((args.edit as { text?: string }).text ?? '')] }
++                : { decide: [String(args.id), args.decision as { decision?: string; reason?: string }] },
++        );
++        if (command !== 'project_inbox')
++          this.inboxChanges.push({ method: command, path: String(args.id ?? ''), body: args, session: undefined });
++        if (status < 300) return { ok: answered };
++        const kind = status === 404 ? 'not_found' : status === 400 ? 'invalid' : 'refused';
++        return { error: { kind, message: (answered as { error: string }).error } };
++      }
+       case 'project_review': {
+         const page = this.reviewPages.get(String(args.review));
+         return page ? { ok: page } : { error: { kind: 'not_found', message: `no review ${String(args.review)}` } };
+diff --git a/dashboard/tests/e2e/inbox.spec.ts b/dashboard/tests/e2e/inbox.spec.ts
+new file mode 100644
+index 00000000..0763ff03
+--- /dev/null
++++ b/dashboard/tests/e2e/inbox.spec.ts
+@@ -0,0 +1,113 @@
++import type { Page } from '@playwright/test';
++import { expect, openDashboard, test, type FixtureInboxItem, type TasksServer } from './helpers';
++import { E2E_SESSION } from './session.mjs';
++
++// The Inbox page (docs/inbox-design.md §6, ATM-762), with the fixture playing atm's inbox routes and commands
++
++const ITEMS: FixtureInboxItem[] = [
++  { id: 'IN-3', text: 'Look at how others triage', state: 'created', created_by: 'Hakan' },
++  { id: 'IN-2', text: 'a dark sidebar?', state: 'discarded', reason: 'The themes set it.', created_by: 'Hakan' },
++  { id: 'IN-1', text: 'Remember the diff position', state: 'injected', tasks: ['T-004'], created_by: 'Hakan' },
++];
++
++async function openInbox(page: Page, tasksServer: TasksServer, items = ITEMS) {
++  tasksServer.inbox = items.map((i) => ({ ...i }));
++  await openDashboard(page, tasksServer, 'standard', { tab: 'inbox' });
++  await expect(page.locator('#inbox-page')).toBeVisible();
++}
++
++const rows = (page: Page) => page.locator('#inbox-items .inbox-item');
++
++test.describe('the Inbox page', () => {
++  test('lists the open items; Enter in the box adds one, as the user, keeping the box focused', async ({
++    page,
++    tasksServer,
++  }) => {
++    await openInbox(page, tasksServer);
++    await expect(rows(page)).toHaveCount(1);
++    await expect(page.locator('.inbox-chip[data-state="created"]')).toHaveText('Open1');
++    const box = page.locator('#inbox-add-text');
++    await expect(box).toBeFocused();
++    await box.fill('Scroll to the moved card');
++    await box.press('Enter');
++    await expect(rows(page)).toHaveCount(2);
++    await expect(rows(page).first()).toContainText('IN-4');
++    await expect(rows(page).first()).toContainText('Scroll to the moved card');
++    await expect(box).toHaveValue('');
++    await expect(box).toBeFocused();
++    expect(tasksServer.inboxChanges).toEqual([
++      { method: 'POST', path: '', body: { text: 'Scroll to the moved card' }, session: E2E_SESSION },
++    ]);
++  });
++
++  test('Discard asks why; the item is then in Discarded with its reason, and Restore brings it back', async ({
++    page,
++    tasksServer,
++  }) => {
++    await openInbox(page, tasksServer);
++    await rows(page).first().locator('[data-action="discard"]').click();
++    const confirm = page.locator('#inbox-discard-confirm');
++    await expect(confirm).toBeDisabled();
++    await page.locator('#inbox-discard-reason').fill('Not now.');
++    await confirm.click();
++    await expect(page.locator('#inbox-empty')).toBeVisible();
++    // The filter is the address's: Discarded, kept over a reload
++    await page.locator('.inbox-chip[data-state="discarded"]').click();
++    await expect(page).toHaveURL(/\/inbox\?(.*&)?state=discarded$/);
++    await page.reload();
++    await expect(rows(page)).toHaveCount(2);
++    const it = page.locator('[data-item="IN-3"]');
++    await expect(it).toContainText('discarded: Not now.');
++    await it.locator('[data-action="restore"]').click();
++    await expect(rows(page)).toHaveCount(1);
++    // Back: Open again
++    await page.goBack();
++    await expect(page.locator('.inbox-chip[data-state="created"]')).toHaveAttribute('aria-pressed', 'true');
++    await expect(rows(page)).toHaveCount(1);
++  });
++
++  test('All lists every state; an injected item links its task, which opens over the page', async ({
++    page,
++    tasksServer,
++  }) => {
++    await openInbox(page, tasksServer);
++    await page.locator('.inbox-chip[data-state="all"]').click();
++    await expect(rows(page)).toHaveCount(3);
++    await page.locator('[data-item="IN-1"] .inbox-tasks a[data-task="T-004"]').click();
++    await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
++    await expect(page).toHaveURL(/\/inbox\?(.*&)?state=all&task=T-004$/);
++  });
++
++  test('Edit changes an open item’s text in place', async ({ page, tasksServer }) => {
++    await openInbox(page, tasksServer);
++    await rows(page).first().locator('[data-action="edit"]').click();
++    const text = page.getByRole('textbox', { name: "The item's text" });
++    await text.fill('Look at how Linear triages');
++    await page.getByRole('button', { name: 'Save' }).click();
++    await expect(rows(page).first()).toContainText('Look at how Linear triages');
++    expect(tasksServer.inboxChanges.at(-1)).toMatchObject({ method: 'PATCH', path: '/IN-3' });
++  });
++
++  test('in the app: through its commands, with no request to a server; the draft kept on its tab', async ({
++    page,
++    tasksServer,
++  }) => {
++    await tasksServer.asApp();
++    tasksServer.use('standard');
++    tasksServer.inbox = ITEMS.map((i) => ({ ...i }));
++    await page.goto(`/projects/${tasksServer.projectId}/inbox`);
++    await expect(rows(page)).toHaveCount(1);
++    const box = page.locator('#inbox-add-text');
++    await box.fill('From the app');
++    await box.press('Enter');
++    await expect(rows(page)).toHaveCount(2);
++    expect(tasksServer.inboxChanges.at(-1)).toMatchObject({ method: 'add_inbox_item' });
++    expect(tasksServer.httpRequests.filter((p) => p.includes('/inbox'))).toEqual([]);
++    // Half written, another tab and back: still there
++    await box.fill('Half written');
++    await page.locator('#app-tab-new').click();
++    await expect(page.locator('#new-tab')).toBeVisible();
++    await page.locator('#app-titlebar [role="tab"]').first().click();
++    await expect(page.locator('#inbox-add-text')).toHaveValue('Half written');
++  });
++});
+diff --git a/dashboard/tests/e2e/tabs.spec.ts b/dashboard/tests/e2e/tabs.spec.ts
+index acdeb01a..a5a10bc9 100644
+--- a/dashboard/tests/e2e/tabs.spec.ts
++++ b/dashboard/tests/e2e/tabs.spec.ts
+@@ -69,12 +69,12 @@ test.describe('the page by item', () => {
+     await expect(panel(page, 'project')).toHaveAttribute('aria-labelledby', 'item-overview');
+   });
+ 
+-  test('Inbox and Documents say their pages are coming', async ({ page, tasksServer }) => {
++  test('the Inbox is its page (ATM-762); Documents says its page is coming', async ({ page, tasksServer }) => {
+     await openDashboard(page, tasksServer, 'standard');
+     await item(page, 'inbox').click();
+     await expectSelected(page, 'inbox');
+     await expect(page).toHaveURL(/\/projects\/[^/]+\/inbox(\?|$)/);
+-    await expect(page.locator('#inbox-placeholder')).toContainText('The Inbox is coming');
++    await expect(page.locator('#inbox-page')).toBeVisible();
+     await item(page, 'documents').click();
+     await expectSelected(page, 'documents');
+     await expect(page.locator('#documents-placeholder')).toContainText('Documents are coming');
+diff --git a/dashboard/tests/unit/InboxPage.component.test.ts b/dashboard/tests/unit/InboxPage.component.test.ts
+new file mode 100644
+index 00000000..30e0d70c
+--- /dev/null
++++ b/dashboard/tests/unit/InboxPage.component.test.ts
+@@ -0,0 +1,162 @@
++import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
++import InboxPage from '../../src/lib/inbox/InboxPage.svelte';
++import type { InboxListing } from '../../src/lib/api/inbox';
++import { dashboard } from '../../src/lib/state.svelte';
++import standard from '../fixtures/standard.json';
++import { loadIntoDashboard, settled } from './components.helpers';
++
++// The Inbox page (lib/inbox/InboxPage.svelte, ATM-762): the client (api/inbox.ts) is a stub here, as are the address
++// and the navigation
++
++const where = vi.hoisted(() => ({ address: '/projects/fixture/inbox' }));
++const navigate = vi.hoisted(() => vi.fn());
++vi.mock('../../src/lib/navigation', async (actual) => ({
++  ...(await actual()),
++  navigate,
++  currentAddress: () => where.address,
++}));
++const api = vi.hoisted(() => ({
++  loadInbox: vi.fn(),
++  addItem: vi.fn(),
++  editItem: vi.fn(),
++  discardItem: vi.fn(),
++  restoreItem: vi.fn(),
++}));
++vi.mock('../../src/lib/api/inbox', () => api);
++
++const listing = (items: InboxListing['items']): InboxListing => ({ items, created: 2, discarded: 1, injected: 1 });
++const ITEMS: InboxListing['items'] = [
++  { id: 'IN-4', text: 'Scroll to the moved card\nAnd keep it in view.', state: 'created', created_by: 'Hakan' },
++  { id: 'IN-3', text: 'Look at how others triage', state: 'created', created_by: 'Hakan' },
++  { id: 'IN-2', text: 'a dark sidebar?', state: 'discarded', reason: 'The themes set it.' },
++  { id: 'IN-1', text: 'Remember the diff position', state: 'injected', tasks: ['T-001', 'LFB-5'] },
++];
++const ok = { ok: true as const, body: {} };
++
++describe('InboxPage', () => {
++  beforeEach(() => {
++    loadIntoDashboard(standard);
++    dashboard.projectId = 'fixture';
++    where.address = '/projects/fixture/inbox';
++    dashboard.address = where.address;
++    for (const f of Object.values(api)) f.mockReset();
++    api.loadInbox.mockResolvedValue({ unchanged: false, listing: listing(ITEMS), validators: {} });
++    for (const f of [api.addItem, api.editItem, api.discardItem, api.restoreItem]) f.mockResolvedValue(ok);
++    navigate.mockClear();
++  });
++  afterEach(() => {
++    dashboard.projectId = null;
++  });
++
++  const row = (c: HTMLElement, id: string) => c.querySelector<HTMLElement>(`[data-item="${id}"]`)!;
++
++  it('lists the items by their first line, with the counts; each state its own actions', async () => {
++    const { container } = render(InboxPage);
++    await waitFor(() => expect(container.querySelectorAll('.inbox-item')).toHaveLength(4));
++    expect(api.loadInbox).toHaveBeenCalledWith('fixture', 'created', false, undefined, undefined);
++    expect(row(container, 'IN-4').querySelector('.inbox-title')).toHaveTextContent('Scroll to the moved card');
++    expect([...container.querySelectorAll('.inbox-chip')].map((c) => c.textContent)).toEqual([
++      'Open2',
++      'Discarded1',
++      'Injected1',
++      'All4',
++    ]);
++    const actions = (id: string) =>
++      [...row(container, id).querySelectorAll<HTMLElement>('[data-action]')].map((a) => a.dataset.action);
++    expect(actions('IN-4')).toEqual(['edit', 'discard']);
++    expect(actions('IN-2')).toEqual(['restore']);
++    expect(actions('IN-1')).toEqual([]);
++    expect(row(container, 'IN-2')).toHaveTextContent('discarded: The themes set it.');
++    // Injected: its tasks, this project's a link to its details here, another's as text
++    const tasks = row(container, 'IN-1').querySelector('.inbox-tasks')!;
++    expect(tasks.querySelector('a[data-task="T-001"]')).toHaveAttribute('href', '/projects/fixture/inbox?task=T-001');
++    expect(tasks).toHaveTextContent('LFB-5');
++    expect(tasks.querySelector('a[data-task="LFB-5"]')).toBeNull();
++  });
++
++  it('the rest of an item’s text on a click on its title', async () => {
++    const { container } = render(InboxPage);
++    await waitFor(() => expect(row(container, 'IN-4')).toBeTruthy());
++    const title = row(container, 'IN-4').querySelector<HTMLButtonElement>('button.inbox-title')!;
++    await fireEvent.click(title);
++    expect(title).toHaveAttribute('aria-expanded', 'true');
++    expect(row(container, 'IN-4').querySelector('.inbox-text')).toBeTruthy();
++    // One line: no more to show
++    expect(row(container, 'IN-3').querySelector('button.inbox-title')).toBeNull();
++  });
++
++  it('the quick-add box is focused; Enter adds and empties it, keeping the focus; ⇧Enter is a new line', async () => {
++    const { container } = render(InboxPage);
++    const box = container.querySelector<HTMLTextAreaElement>('#inbox-add-text')!;
++    expect(document.activeElement).toBe(box);
++    await fireEvent.input(box, { target: { value: 'two lines' } });
++    await fireEvent.keyDown(box, { key: 'Enter', shiftKey: true });
++    expect(api.addItem).not.toHaveBeenCalled();
++    await fireEvent.keyDown(box, { key: 'Enter' });
++    await waitFor(() => expect(api.addItem).toHaveBeenCalledWith('fixture', 'two lines'));
++    await waitFor(() => expect(box.value).toBe(''));
++    expect(document.activeElement).toBe(box);
++    // Asked again after it
++    expect(api.loadInbox.mock.calls.length).toBeGreaterThan(1);
++  });
++
++  it('a refused add says why and keeps the text', async () => {
++    api.addItem.mockResolvedValue({ ok: false, message: 'an item of at most 20,000 characters' });
++    const { container } = render(InboxPage);
++    const box = container.querySelector<HTMLTextAreaElement>('#inbox-add-text')!;
++    await fireEvent.input(box, { target: { value: 'x' } });
++    await fireEvent.click(container.querySelector('#inbox-add')!);
++    await waitFor(() => expect(container.querySelector('#inbox-problem')).toHaveTextContent('20,000'));
++    expect(box.value).toBe('x');
++  });
++
++  it('the filter and archived are the address’s: a choice is a step there; the address’s is asked', async () => {
++    where.address = '/projects/fixture/inbox?state=discarded&archived=1';
++    dashboard.address = where.address;
++    const { container } = render(InboxPage);
++    await waitFor(() => expect(api.loadInbox).toHaveBeenCalledWith('fixture', 'discarded', true, undefined, undefined));
++    expect(container.querySelector('[data-state="discarded"]')).toHaveAttribute('aria-pressed', 'true');
++    expect(container.querySelector<HTMLInputElement>('#inbox-archived')!.checked).toBe(true);
++    await fireEvent.click(container.querySelector('.inbox-chip[data-state="all"]')!);
++    expect(navigate).toHaveBeenLastCalledWith('/projects/fixture/inbox?state=all&archived=1');
++    await fireEvent.click(container.querySelector('#inbox-archived')!);
++    expect(navigate).toHaveBeenLastCalledWith('/projects/fixture/inbox?state=discarded');
++  });
++
++  it('Discard asks why, and needs a reason; Restore brings one back', async () => {
++    const { container } = render(InboxPage);
++    await waitFor(() => expect(row(container, 'IN-3')).toBeTruthy());
++    await fireEvent.click(row(container, 'IN-3').querySelector('[data-action="discard"]')!);
++    await settled();
++    const confirm = document.querySelector<HTMLButtonElement>('#inbox-discard-confirm')!;
++    expect(confirm.disabled).toBe(true);
++    const reason = document.querySelector<HTMLTextAreaElement>('#inbox-discard-reason')!;
++    await fireEvent.input(reason, { target: { value: '  Done already. ' } });
++    await fireEvent.click(confirm);
++    await waitFor(() => expect(api.discardItem).toHaveBeenCalledWith('fixture', 'IN-3', 'Done already.'));
++    await fireEvent.click(row(container, 'IN-2').querySelector('[data-action="restore"]')!);
++    await waitFor(() => expect(api.restoreItem).toHaveBeenCalledWith('fixture', 'IN-2'));
++  });
++
++  it('Edit changes an open item’s text in place', async () => {
++    const { container } = render(InboxPage);
++    await waitFor(() => expect(row(container, 'IN-3')).toBeTruthy());
++    await fireEvent.click(row(container, 'IN-3').querySelector('[data-action="edit"]')!);
++    const text = screen.getByRole('textbox', { name: "The item's text" }) as HTMLTextAreaElement;
++    expect(text.value).toBe('Look at how others triage');
++    await fireEvent.input(text, { target: { value: 'Look at how Linear triages' } });
++    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
++    await waitFor(() => expect(api.editItem).toHaveBeenCalledWith('fixture', 'IN-3', 'Look at how Linear triages'));
++  });
++
++  it('an empty inbox says how it is used; one that can’t be read, why', async () => {
++    api.loadInbox.mockResolvedValue({ unchanged: false, listing: listing([]), validators: {} });
++    const one = render(InboxPage);
++    await waitFor(() => expect(one.container.querySelector('#inbox-empty')).toHaveTextContent('/atm-triage-inbox'));
++    one.unmount();
++    api.loadInbox.mockRejectedValue(new Error('HTTP 500'));
++    const two = render(InboxPage);
++    await waitFor(() => expect(two.container.querySelector('#inbox-problem')).toHaveTextContent('HTTP 500'));
++  });
++});
+diff --git a/dashboard/tests/unit/Sidebar.component.test.ts b/dashboard/tests/unit/Sidebar.component.test.ts
+index 1a951d33..0cc78ce3 100644
+--- a/dashboard/tests/unit/Sidebar.component.test.ts
++++ b/dashboard/tests/unit/Sidebar.component.test.ts
+@@ -63,6 +63,12 @@ describe('Sidebar (ATM-753)', () => {
+     expect(document.documentElement.style.getPropertyValue('--sidebar-offset')).toBe('240px');
+   });
+ 
++  it('Inbox: the items waiting in the project’s inbox, from its summary (ATM-762)', () => {
++    dashboard.projects = [{ ...project('a', 'Alpha', { ...summary(40), inbox: { open: 4 } }) }];
++    const { container } = render(Sidebar);
++    expect(container.querySelector('[data-item="inbox"] .app-sidebar-badge')).toHaveTextContent('4');
++  });
++
+   it('on All projects’ page: All, its four items, the reviews waiting summed over the projects', async () => {
+     dashboard.route = { page: 'overview' };
+     dashboard.overviewTab = 'progress';
+diff --git a/dashboard/tests/unit/inbox.test.ts b/dashboard/tests/unit/inbox.test.ts
+new file mode 100644
+index 00000000..6074b383
+--- /dev/null
++++ b/dashboard/tests/unit/inbox.test.ts
+@@ -0,0 +1,169 @@
++import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
++import { inboxListOf, withInboxList } from '../../src/lib/address';
++import { inboxUrl, type Fetch } from '../../src/lib/api/http';
++import { addItem, discardItem, editItem, loadInbox, restoreItem } from '../../src/lib/api/inbox';
++import { callFor } from '../../src/lib/api/ipc';
++import { setApiWorkspace } from '../../src/lib/api/workspace';
++
++// The inbox's client (lib/api/inbox.ts, ATM-762), its address in the page's (lib/address.ts) and in the app's commands
++// (lib/api/ipc.ts). The transport is stubbed: fetch, the IPC.
++const where = vi.hoisted(() => ({ app: false }));
++vi.mock('../../src/lib/api/http', async (actual) => ({
++  ...(await actual()),
++  get inApp() {
++    return where.app;
++  },
++}));
++
++const TOKEN = 'b'.repeat(64);
++function withToken(token: string | null) {
++  document.head.querySelector('meta[name="atm-session"]')?.remove();
++  if (token === null) return;
++  const meta = document.createElement('meta');
++  meta.name = 'atm-session';
++  meta.content = token;
++  document.head.prepend(meta);
++}
++
++beforeEach(() => {
++  where.app = false;
++  withToken(TOKEN);
++});
++afterEach(() => {
++  vi.unstubAllGlobals();
++  clearMocks();
++  setApiWorkspace('default');
++  withToken(null);
++});
++
++describe('the inbox’s address', () => {
++  it('the route: the open items by default, a state and the archive when given', () => {
++    expect(inboxUrl('p1')).toBe('/api/v1/projects/p1/inbox');
++    expect(inboxUrl('p1', 'all', true)).toBe('/api/v1/projects/p1/inbox?state=all&archived=1');
++    setApiWorkspace('w');
++    expect(inboxUrl('p1', 'discarded')).toBe('/api/v2/workspaces/w/projects/p1/inbox?state=discarded');
++  });
++
++  it('the page’s filter: read with its defaults (an unknown state is Open), written without them', () => {
++    expect(inboxListOf('/projects/p1/inbox')).toEqual({ state: 'created', archived: false });
++    expect(inboxListOf('/projects/p1/inbox?state=injected&archived=1')).toEqual({ state: 'injected', archived: true });
++    expect(inboxListOf('/projects/p1/inbox?state=bogus&archived=2')).toEqual({ state: 'created', archived: false });
++    expect(withInboxList('/projects/p1/inbox?task=T-1', { state: 'all', archived: true })).toBe(
++      '/projects/p1/inbox?task=T-1&state=all&archived=1',
++    );
++    expect(withInboxList('/projects/p1/inbox?state=all&archived=1', { state: 'created', archived: false })).toBe(
++      '/projects/p1/inbox',
++    );
++  });
++
++  it('the app’s command for the route: its state and the archive', () => {
++    expect(callFor('/api/v1/projects/p1/inbox')).toEqual({
++      command: 'project_inbox',
++      args: { workspace: 'default', project: 'p1', which: undefined, archived: false },
++    });
++    expect(callFor('/api/v2/workspaces/w/projects/p1/inbox?state=all&archived=1')!.args).toEqual({
++      workspace: 'w',
++      project: 'p1',
++      which: 'all',
++      archived: true,
++    });
++  });
++});
++
++describe('loadInbox', () => {
++  const answering = (body: unknown, status = 200) =>
++    vi.fn(async () => new Response(JSON.stringify(body), { status, headers: { ETag: '"i1"' } })) as unknown as Fetch;
++
++  it('the items and the counts; anything unexpected left out', async () => {
++    const result = await loadInbox(
++      'p1',
++      'all',
++      false,
++      answering({
++        items: [{ id: 'IN-2', text: 'two', state: 'created' }, { id: 3 }, null, { id: 'IN-1', text: 'one' }],
++        created: 2,
++        discarded: -1,
++        injected: 'x',
++      }),
++    );
++    expect(result).toEqual({
++      unchanged: false,
++      listing: {
++        items: [
++          { id: 'IN-2', text: 'two', state: 'created' },
++          { id: 'IN-1', text: 'one' },
++        ],
++        created: 2,
++        discarded: 0,
++        injected: 0,
++      },
++      validators: { etag: '"i1"' },
++    });
++  });
++
++  it('asked again with its validators: a 304 is unchanged; an error rejects', async () => {
++    const fetch = vi.fn(async () => new Response(null, { status: 304 })) as unknown as Fetch;
++    expect(await loadInbox('p1', 'created', false, fetch, { etag: '"i1"' })).toEqual({ unchanged: true });
++    await expect(loadInbox('p1', 'created', false, answering({}, 500))).rejects.toThrow('HTTP 500');
++  });
++});
++
++describe('the inbox’s changes', () => {
++  it('in the browser, each is its route under the project’s inbox, with the page’s token, as JSON', async () => {
++    const fetch = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(
++      async () => new Response(JSON.stringify({ item: { id: 'IN-1' } }), { status: 200 }),
++    );
++    vi.stubGlobal('fetch', fetch);
++    await addItem('p1', 'A note');
++    await editItem('p1', 'IN-1', 'Better');
++    await discardItem('p1', 'IN-1', 'Not now.');
++    await restoreItem('p1', 'IN-1');
++    const inbox = '/api/v2/workspaces/default/projects/p1/inbox';
++    expect(fetch.mock.calls.map(([url, init]) => [url, init!.method, JSON.parse(String(init!.body))])).toEqual([
++      [inbox, 'POST', { text: 'A note' }],
++      [`${inbox}/IN-1`, 'PATCH', { text: 'Better' }],
++      [`${inbox}/IN-1/decisions`, 'POST', { decision: 'discarded', reason: 'Not now.' }],
++      [`${inbox}/IN-1/decisions`, 'POST', { decision: 'restored' }],
++    ]);
++    expect((fetch.mock.calls[0][1]!.headers as Record<string, string>)['X-Atm-Session']).toBe(TOKEN);
++  });
++
++  it('a refusal says why; without the page’s token nothing is sent', async () => {
++    vi.stubGlobal(
++      'fetch',
++      vi.fn(async () => new Response(JSON.stringify({ error: 'no such item' }), { status: 404 })),
++    );
++    expect(await editItem('p1', 'IN-9', 'x')).toEqual({ ok: false, message: 'no such item' });
++    withToken(null);
++    const fetch = vi.fn();
++    vi.stubGlobal('fetch', fetch);
++    expect(await addItem('p1', 'x')).toEqual({
++      ok: false,
++      message: 'This page wasn’t served by atm, so it can’t change the inbox.',
++    });
++    // Only the dev server asked for its token (a test runs as development does): no change sent
++    expect(fetch.mock.calls.map(([url]) => url)).toEqual(['/__dev/atm-session']);
++  });
++
++  it('in the app, each is the app’s command, with the workspace and project', async () => {
++    where.app = true;
++    const calls: [string, unknown][] = [];
++    mockIPC((command, args) => {
++      calls.push([command, args]);
++      return { item: { id: 'IN-1' } };
++    });
++    setApiWorkspace('w');
++    await addItem('p1', 'A note');
++    await editItem('p1', 'IN-1', 'Better');
++    await discardItem('p1', 'IN-1', 'Not now.');
++    await restoreItem('p1', 'IN-1');
++    const at = { workspace: 'w', project: 'p1' };
++    expect(calls).toEqual([
++      ['add_inbox_item', { ...at, item: { text: 'A note' } }],
++      ['edit_inbox_item', { ...at, id: 'IN-1', edit: { text: 'Better' } }],
++      ['decide_inbox_item', { ...at, id: 'IN-1', decision: { decision: 'discarded', reason: 'Not now.' } }],
++      ['decide_inbox_item', { ...at, id: 'IN-1', decision: { decision: 'restored' } }],
++    ]);
++  });
++});

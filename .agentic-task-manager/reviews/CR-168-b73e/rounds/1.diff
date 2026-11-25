@@ -1,0 +1,148 @@
+diff --git a/dashboard/src/lib/shell/Sidebar.svelte b/dashboard/src/lib/shell/Sidebar.svelte
+index 988f04e4..dfdfc464 100644
+--- a/dashboard/src/lib/shell/Sidebar.svelte
++++ b/dashboard/src/lib/shell/Sidebar.svelte
+@@ -195,55 +195,59 @@
+       <HistoryArrows />
+       <SidebarToggle />
+     </div>
+-    <!-- The scope (§2.1): All projects, then the workspace's projects; missing ones dimmed and not chosen -->
+-    <DropdownMenu.Root bind:open={menuOpen}>
+-      <DropdownMenu.Trigger>
+-        {#snippet child({ props })}
+-          <button
+-            {...props}
+-            class="app-sidebar-item app-sidebar-scope"
+-            id="app-sidebar-scope"
+-            data-scope={scope ?? ''}
+-            aria-label="Scope: {scope === null ? 'All projects' : (scoped?.name ?? scope)}; choose another"
+-            >{@render scopeLabel(scope === null ? null : scoped, false)}<span class="app-sidebar-chevron"
+-              ><Icon name="chevron-down" size={14} /></span
+-            ></button
+-          >
+-        {/snippet}
+-      </DropdownMenu.Trigger>
+-      <DropdownMenu.ContentStatic preventScroll={false} aria-label="Scopes">
+-        {#snippet child({ props })}
+-          <span {...props} class="menu app-sidebar-scopes" id="app-sidebar-scopes">
+-            <DropdownMenu.Item onSelect={() => choose(null)}>
+-              {#snippet child({ props })}
+-                <button
+-                  {...props}
+-                  class="app-sidebar-item"
+-                  class:current={scope === null}
+-                  aria-current={scope === null ? 'true' : undefined}
+-                  data-scope="">{@render scopeLabel(null, true)}</button
+-                >
+-              {/snippet}
+-            </DropdownMenu.Item>
+-            {#each dashboard.projects as project (project.id)}
+-              <DropdownMenu.Item disabled={project.missing} onSelect={() => choose(project.id)}>
++    <!-- The scope (§2.1): All projects, then the workspace's projects; missing ones dimmed and not chosen. Its list
++         is placed under the button (`.menu` is placed under its positioned parent: without this one, the sidebar's
++         whole height, below the window) -->
++    <div class="menu-anchor app-sidebar-scope-anchor">
++      <DropdownMenu.Root bind:open={menuOpen}>
++        <DropdownMenu.Trigger>
++          {#snippet child({ props })}
++            <button
++              {...props}
++              class="app-sidebar-item app-sidebar-scope"
++              id="app-sidebar-scope"
++              data-scope={scope ?? ''}
++              aria-label="Scope: {scope === null ? 'All projects' : (scoped?.name ?? scope)}; choose another"
++              >{@render scopeLabel(scope === null ? null : scoped, false)}<span class="app-sidebar-chevron"
++                ><Icon name="chevron-down" size={14} /></span
++              ></button
++            >
++          {/snippet}
++        </DropdownMenu.Trigger>
++        <DropdownMenu.ContentStatic preventScroll={false} aria-label="Scopes">
++          {#snippet child({ props })}
++            <span {...props} class="menu app-sidebar-scopes" id="app-sidebar-scopes">
++              <DropdownMenu.Item onSelect={() => choose(null)}>
+                 {#snippet child({ props })}
+                   <button
+                     {...props}
+                     class="app-sidebar-item"
+-                    class:current={scope === project.id}
+-                    class:missing={project.missing}
+-                    aria-current={scope === project.id ? 'true' : undefined}
+-                    title={project.missing ? `${project.path}: not found` : project.path}
+-                    data-scope={project.id}>{@render scopeLabel(project, true)}</button
++                    class:current={scope === null}
++                    aria-current={scope === null ? 'true' : undefined}
++                    data-scope="">{@render scopeLabel(null, true)}</button
+                   >
+                 {/snippet}
+               </DropdownMenu.Item>
+-            {/each}
+-          </span>
+-        {/snippet}
+-      </DropdownMenu.ContentStatic>
+-    </DropdownMenu.Root>
++              {#each dashboard.projects as project (project.id)}
++                <DropdownMenu.Item disabled={project.missing} onSelect={() => choose(project.id)}>
++                  {#snippet child({ props })}
++                    <button
++                      {...props}
++                      class="app-sidebar-item"
++                      class:current={scope === project.id}
++                      class:missing={project.missing}
++                      aria-current={scope === project.id ? 'true' : undefined}
++                      title={project.missing ? `${project.path}: not found` : project.path}
++                      data-scope={project.id}>{@render scopeLabel(project, true)}</button
++                    >
++                  {/snippet}
++                </DropdownMenu.Item>
++              {/each}
++            </span>
++          {/snippet}
++        </DropdownMenu.ContentStatic>
++      </DropdownMenu.Root>
++    </div>
+     <!-- The scope's items (§2.2): each a link to its page, opened in a new tab -->
+     <ul class="app-sidebar-list" aria-label="{scope === null ? 'All projects' : (scoped?.name ?? scope)}: pages">
+       {#each itemsOf(scope) as item (item)}
+@@ -356,8 +360,14 @@
+     grid-column: -2;
+     grid-row: 1;
+   }
++  /* Above the list of items it opens over */
++  .app-sidebar-scope-anchor {
++    z-index: 2;
++  }
+   .app-sidebar-scopes {
+     display: flex;
++    left: 0;
++    right: 0;
+     flex-direction: column;
+     gap: var(--space-1);
+     min-width: 220px;
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index 942ac46c..c4454d2e 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -914,6 +914,22 @@ test.describe('the dashboard in the atm app', () => {
+     const menu = page.locator('#app-sidebar-scopes');
+     await expect(menu.locator('[data-scope]')).toHaveCount(3);
+     await expect(menu.locator('.app-sidebar-bar')).toHaveCount(2);
++    // It opens just under its button, in the window, over the items: not under the sidebar's whole height, out of
++    // sight (where a click still scrolled to it)
++    const placed = await page.evaluate(() => {
++      const button = document.querySelector('#app-sidebar-scope')!.getBoundingClientRect();
++      const list = document.querySelector('#app-sidebar-scopes')!.getBoundingClientRect();
++      const top = document.elementFromPoint(list.left + list.width / 2, list.top + 8);
++      return {
++        gap: list.top - button.bottom,
++        inWindow: list.bottom <= window.innerHeight,
++        sidebarScrolled: document.querySelector('#app-sidebar')!.scrollTop,
++        onTop: !!top?.closest('#app-sidebar-scopes'),
++      };
++    });
++    expect(placed.gap).toBeGreaterThanOrEqual(0);
++    expect(placed.gap).toBeLessThan(16);
++    expect(placed).toMatchObject({ inWindow: true, sidebarScrolled: 0, onTop: true });
+     const colours = await page.evaluate(() => ({
+       sidebar: getComputedStyle(document.querySelector('#app-sidebar')!).backgroundColor,
+       tracks: [...document.querySelectorAll('#app-sidebar-scopes .app-sidebar-bar')].map(

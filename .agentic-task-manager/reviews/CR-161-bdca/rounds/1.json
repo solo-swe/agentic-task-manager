@@ -1,0 +1,47 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "0dec7e4862fb30da4391108a011c9ac6ce31c61f",
+    "head": "aad73af21686761abeb28e6c36165bab16d80e06"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/app.css",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/shell/ProjectTab.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/sprint-param.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/state.svelte.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/tabs.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/project.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/ProjectTab.component.test.ts",
+      "status": "added",
+      "binary": false
+    }
+  ],
+  "by": "claude:ba530ebb",
+  "at": "2026-11-24T16:02:54Z"
+}

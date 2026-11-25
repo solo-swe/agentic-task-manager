@@ -1,0 +1,816 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index db7fb3e4..65c463aa 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -102,6 +102,12 @@ unsafe_code = "forbid"
+ all = { level = "warn", priority = -1 }
+ pedantic = { level = "warn", priority = -1 }
+ 
++# Debug builds (`cargo run`, `cargo tauri dev`, the tests) with the dependencies optimized (ATM-776): serde_json and
++# the others otherwise run several times slower than users ever see (the app's start took 2.6 s against 1 s); atm's
++# own crates stay unoptimized, so they still build quickly and debug as before
++[profile.dev.package."*"]
++opt-level = 2
++
+ [profile.release]
+ lto = true
+ codegen-units = 1
+diff --git a/crates/atm-lib/src/workspaces.rs b/crates/atm-lib/src/workspaces.rs
+index bb6a2957..7df3a3db 100644
+--- a/crates/atm-lib/src/workspaces.rs
++++ b/crates/atm-lib/src/workspaces.rs
+@@ -265,14 +265,18 @@ impl Listing<'_> {
+     /// dashboard, when it has one).
+     #[must_use]
+     pub fn projects(&self) -> Vec<Value> {
++        // The summaries side by side (ATM-776): a cold start works out every project's, the slowest alone the wait
++        let indices: Vec<usize> = (0..self.entries.len()).collect();
++        let summaries = par_map(&indices, |&i| {
++            self.stamps[i]
++                .as_ref()
++                .map_or(Value::Null, |s| self.workspace.summary(&self.entries[i], s))
++        });
+         self.entries
+             .iter()
+-            .zip(&self.stamps)
++            .zip(summaries)
+             .zip(self.trees.iter().zip(&self.logos))
+-            .map(|((entry, stamp), (tree, logo))| {
+-                let summary = stamp
+-                    .as_ref()
+-                    .map_or(Value::Null, |s| self.workspace.summary(entry, s));
++            .map(|((entry, summary), (tree, logo))| {
+                 let shown = !summary.is_null();
+                 json!({
+                     "id": entry.get("id"),
+@@ -290,6 +294,27 @@ impl Listing<'_> {
+     }
+ }
+ 
++/// `f` of each of `items`, in their order, worked out on as many threads as the machine runs at once (ATM-776: a
++/// workspace's projects are read side by side, not one after another). One item, or one core: on this thread.
++pub(crate) fn par_map<T: Sync, U: Send>(items: &[T], f: impl Fn(&T) -> U + Sync) -> Vec<U> {
++    let threads = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
++    if items.len() < 2 || threads < 2 {
++        return items.iter().map(f).collect();
++    }
++    let size = items.len().div_ceil(threads);
++    let f = &f;
++    std::thread::scope(|scope| {
++        let parts: Vec<_> = items
++            .chunks(size)
++            .map(|part| scope.spawn(move || part.iter().map(f).collect::<Vec<U>>()))
++            .collect();
++        parts
++            .into_iter()
++            .flat_map(|part| part.join().unwrap_or_else(|e| std::panic::resume_unwind(e)))
++            .collect()
++    })
++}
++
+ /// A full git object ID: 40 hex digits (SHA-1) or 64 (SHA-256), in lower case as git writes them. Anything shorter
+ /// could name another object later; a name (`HEAD`, a branch) moves; an expression (`HEAD~1`, `:/fix`) is git's to
+ /// work out. A file is read at a revision a page names only by one (ATM-671, audit H6), the REST routes and the app's
+@@ -683,15 +708,19 @@ impl Workspace {
+ 
+     fn summary(&self, entry: &Value, stamp: &Value) -> Value {
+         let key = entry["path"].as_str().unwrap_or_default().to_string();
+-        let mut cache = self
+-            .summaries
+-            .lock()
+-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+-        if let Some(cached) = cache.get(&key)
+-            && cached.stamp == *stamp
+-            && foreign::version(&cached.others) == cached.version
++        // The cache is held only to look and to keep, never while a summary is worked out: the projects' summaries are
++        // worked out side by side (ATM-776, Listing::projects)
+         {
+-            return cached.summary.clone();
++            let cache = self
++                .summaries
++                .lock()
++                .unwrap_or_else(std::sync::PoisonError::into_inner);
++            if let Some(cached) = cache.get(&key)
++                && cached.stamp == *stamp
++                && foreign::version(&cached.others) == cached.version
++            {
++                return cached.summary.clone();
++            }
+         }
+         // An unreadable tasks.json or an unusable vocabulary: listed as missing
+         let project = Self::project(entry);
+@@ -704,15 +733,18 @@ impl Workspace {
+         let summary = project
+             .and_then(|p| project_summary(&p))
+             .unwrap_or(Value::Null);
+-        cache.insert(
+-            key,
+-            Summarized {
+-                stamp: stamp.clone(),
+-                others,
+-                version,
+-                summary: summary.clone(),
+-            },
+-        );
++        self.summaries
++            .lock()
++            .unwrap_or_else(std::sync::PoisonError::into_inner)
++            .insert(
++                key,
++                Summarized {
++                    stamp: stamp.clone(),
++                    others,
++                    version,
++                    summary: summary.clone(),
++                },
++            );
+         summary
+     }
+ 
+@@ -720,41 +752,39 @@ impl Workspace {
+     #[must_use]
+     pub fn listing(&self) -> Listing<'_> {
+         let entries = self.entries();
+-        let stamps: Vec<Option<Value>> = entries
+-            .iter()
+-            .map(|e| Self::data_stamp(e).map(|s| summary_stamp(&s)))
+-            .collect();
+-        let trees: Vec<Value> = entries
+-            .iter()
+-            .zip(&stamps)
+-            .map(|(e, s)| {
+-                let list = s
+-                    .as_ref()
+-                    .and_then(|_| Self::project(e).ok())
+-                    .map(|p| working_copies(&p))
+-                    .unwrap_or_default();
+-                Value::Array(list)
+-            })
+-            .collect();
+-        let logos: Vec<Option<(PathBuf, &'static str)>> = entries
+-            .iter()
+-            .zip(&stamps)
+-            .map(|(e, s)| s.as_ref().and_then(|_| Self::logo(e)))
+-            .collect();
+-        let logo_stamps: Vec<Value> = logos
+-            .iter()
+-            .map(|l| l.as_ref().map_or(Value::Null, |(file, _)| file_stamp(file)))
+-            .collect();
+-        // The other projects each one's tasks name: their summaries (waiting, next) show them
+-        let others: Vec<Value> = entries
+-            .iter()
+-            .zip(&stamps)
+-            .map(|(e, s)| {
+-                s.as_ref()
+-                    .and_then(|_| Self::project(e).ok())
+-                    .map_or(Value::Null, |p| foreign::named_version(&p))
+-            })
+-            .collect();
++        // Each project's parts read side by side (ATM-776): its stamp and, when it has data, its working copies, its
++        // logo and the other projects its tasks name (their summaries, waiting and next, show them)
++        let read = par_map(&entries, |e| {
++            let Some(stamp) = Self::data_stamp(e).map(|s| summary_stamp(&s)) else {
++                return (
++                    None,
++                    Value::Array(Vec::new()),
++                    None,
++                    Value::Null,
++                    Value::Null,
++                );
++            };
++            let project = Self::project(e).ok();
++            let tree = Value::Array(project.as_ref().map(working_copies).unwrap_or_default());
++            let logo = Self::logo(e);
++            let logo_stamp = logo
++                .as_ref()
++                .map_or(Value::Null, |(file, _)| file_stamp(file));
++            let other = project.as_ref().map_or(Value::Null, foreign::named_version);
++            (Some(stamp), tree, logo, logo_stamp, other)
++        });
++        let mut stamps = Vec::with_capacity(read.len());
++        let mut trees = Vec::with_capacity(read.len());
++        let mut logos = Vec::with_capacity(read.len());
++        let mut logo_stamps = Vec::with_capacity(read.len());
++        let mut others = Vec::with_capacity(read.len());
++        for (stamp, tree, logo, logo_stamp, other) in read {
++            stamps.push(stamp);
++            trees.push(tree);
++            logos.push(logo);
++            logo_stamps.push(logo_stamp);
++            others.push(other);
++        }
+         let stamp = json!([self.stamp(), stamps, trees, logo_stamps, others]);
+         Listing {
+             workspace: self,
+@@ -941,6 +971,86 @@ mod tests {
+         std::fs::remove_dir_all(&home).unwrap();
+     }
+ 
++    #[test]
++    fn par_map_keeps_the_order_for_none_one_and_more_than_the_threads() {
++        let threads = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
++        for n in [0, 1, 2, threads, threads * 3 + 1] {
++            let items: Vec<usize> = (0..n).collect();
++            let doubled = par_map(&items, |i| i * 2);
++            assert_eq!(
++                doubled,
++                (0..n).map(|i| i * 2).collect::<Vec<_>>(),
++                "{n} items"
++            );
++        }
++    }
++
++    #[test]
++    fn par_map_passes_a_panic_on_to_its_caller() {
++        let items: Vec<usize> = (0..8).collect();
++        let result = std::panic::catch_unwind(|| {
++            par_map(&items, |&i| {
++                assert!(i != 5, "item five");
++                i
++            })
++        });
++        assert!(result.is_err());
++    }
++
++    #[test]
++    fn a_listing_of_several_projects_read_side_by_side_keeps_each_ones_parts_with_it() {
++        let home = state("several");
++        let mut entries = Vec::new();
++        // Project i has i + 1 tasks; the third is missing
++        for i in 0..5usize {
++            let folder = home.join(format!("p{i}"));
++            if i != 2 {
++                let tasks: Vec<Value> = (0..=i)
++                    .map(|t| json!({"id": format!("T-{}", t + 1), "name": format!("Task {t}")}))
++                    .collect();
++                let file = folder.join(atm_common::TASK_DIR).join("tasks.json");
++                std::fs::create_dir_all(file.parent().unwrap()).unwrap();
++                std::fs::write(
++                    &file,
++                    json!({"meta": {"id": format!("p{i}")}, "tasks": tasks}).to_string(),
++                )
++                .unwrap();
++            }
++            entries.push(json!({"id": format!("p{i}"), "name": format!("P{i}"), "path": folder.to_string_lossy()}));
++        }
++        std::fs::create_dir_all(home.join("workspaces")).unwrap();
++        std::fs::write(
++            home.join("workspaces/default.json"),
++            json!({"version": 1, "projects": entries}).to_string(),
++        )
++        .unwrap();
++        let workspace = Workspaces::at(&home).default_workspace();
++        let projects = workspace.listing().projects();
++        let seen: Vec<(Value, Value, Value)> = projects
++            .iter()
++            .map(|p| {
++                (
++                    p["id"].clone(),
++                    p["missing"].clone(),
++                    p["summary"]["total"].clone(),
++                )
++            })
++            .collect();
++        assert_eq!(
++            seen,
++            vec![
++                (json!("p0"), json!(false), json!(1)),
++                (json!("p1"), json!(false), json!(2)),
++                (json!("p2"), json!(true), Value::Null),
++                (json!("p3"), json!(false), json!(4)),
++                (json!("p4"), json!(false), json!(5)),
++            ]
++        );
++        // Asked again with nothing changed: the same list, from the summaries kept
++        assert_eq!(workspace.listing().projects(), projects);
++        std::fs::remove_dir_all(&home).unwrap();
++    }
++
+     #[test]
+     fn task_data_is_too_large_to_show_only_past_the_limit() {
+         for (stamp, expected) in [
+diff --git a/dashboard/src/App.svelte b/dashboard/src/App.svelte
+index 4e076869..c9751c39 100644
+--- a/dashboard/src/App.svelte
++++ b/dashboard/src/App.svelte
+@@ -41,8 +41,8 @@
+     reloadedAt: dashboard.live ? dashboard.loadedAt : 0,
+   });
+ 
++  // The first load is the layout's (routes/+layout.svelte): in the app, once the address of the tab it starts on is in
+   onMount(() => {
+-    dashboard.load();
+     // "System" mode follows the OS setting while the page is open
+     const query = matchMedia('(prefers-color-scheme: light)');
+     const onChange = () => (dashboard.systemPrefersLight = query.matches);
+diff --git a/dashboard/src/lib/kept-projects.ts b/dashboard/src/lib/kept-projects.ts
+new file mode 100644
+index 00000000..1cc7b243
+--- /dev/null
++++ b/dashboard/src/lib/kept-projects.ts
+@@ -0,0 +1,36 @@
++// The workspaces' project lists as last loaded, kept for the app's next start (ATM-776): the page starts from them, so
++// its first paint names each tab's project and shows the page its address names, instead of project IDs and a default
++// view until atm has listed every project. The list is atm's answer as it was given, read back through the same rule
++// as a fresh answer (load.ts projectsFrom); its tag goes with the first ask, so an unchanged list costs atm no
++// summaries. A convenience: storage missing, blocked or full keeps nothing, and the page loads as without it.
++import type { Validators } from './api/http';
++import { projectsFrom, type ProjectEntry } from './load';
++import { readStored, writeStored } from './prefs';
++
++/** Where they are kept, by workspace */
++export const KEPT_PROJECTS_KEY = 'atm-kept-projects';
++
++export interface KeptProjects {
++  projects: ProjectEntry[];
++  validators: Validators;
++}
++
++const text = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined);
++
++/** Workspace `workspace`'s list as last kept, or none (nothing kept, or nothing usable) */
++export function keptProjects(workspace: string): KeptProjects | null {
++  const kept = readStored(KEPT_PROJECTS_KEY)[workspace];
++  if (!kept || typeof kept !== 'object') return null;
++  const { listed, etag, lastModified } = kept as Record<string, unknown>;
++  if (!Array.isArray(listed)) return null;
++  const validators: Validators = {};
++  if (text(etag)) validators.etag = text(etag);
++  if (text(lastModified)) validators.lastModified = text(lastModified);
++  return { projects: projectsFrom(listed), validators };
++}
++
++/** Keep workspace `workspace`'s list, as the answer gave it (`listed`), with its tag */
++export function keepProjects(workspace: string, listed: unknown, validators: Validators) {
++  const all = readStored(KEPT_PROJECTS_KEY);
++  writeStored(KEPT_PROJECTS_KEY, { ...all, [workspace]: { listed, ...validators } });
++}
+diff --git a/dashboard/src/lib/load.ts b/dashboard/src/lib/load.ts
+index bac180d2..cc2fe1fa 100644
+--- a/dashboard/src/lib/load.ts
++++ b/dashboard/src/lib/load.ts
+@@ -110,7 +110,14 @@ const isProject = (p: unknown): p is ProjectEntry =>
+   !!p && typeof p === 'object' && typeof (p as ProjectEntry).id === 'string' && !!(p as ProjectEntry).id;
+ 
+ export type ProjectsResult =
+-  { unchanged: true } | { unchanged: false; projects: ProjectEntry[]; validators: Validators };
++  | { unchanged: true }
++  | {
++      unchanged: false;
++      projects: ProjectEntry[];
++      validators: Validators;
++      /** The list as the answer gave it, before `projectsFrom`: what the app keeps for its next start (ATM-776) */
++      listed: unknown;
++    };
+ 
+ /**
+  * Fetches api/projects, conditionally when `since` is given. Entries without an id are left out; a missing name falls
+@@ -119,8 +126,14 @@ export type ProjectsResult =
+ export async function loadProjects(fetchFn: Fetch = browserFetch, since?: Validators): Promise<ProjectsResult> {
+   const file = await fetchFile(projectsUrl(), fetchFn, since);
+   if (file.unchanged) return file;
+-  const list = (file.data as { projects?: unknown } | null)?.projects;
+-  const projects = (Array.isArray(list) ? list : []).filter(isProject).map((p) => ({
++  const listed = (file.data as { projects?: unknown } | null)?.projects;
++  return { unchanged: false, projects: projectsFrom(listed), validators: file.validators, listed };
++}
++
++/** The projects of api/projects' list, as the page uses them: entries without an id left out, a missing name the id,
++ * only the server's own logo route kept. Anything else is no project: an empty list */
++export function projectsFrom(list: unknown): ProjectEntry[] {
++  return (Array.isArray(list) ? list : []).filter(isProject).map((p) => ({
+     id: p.id,
+     name: typeof p.name === 'string' && p.name ? p.name : p.id,
+     path: typeof p.path === 'string' ? p.path : '',
+@@ -134,7 +147,6 @@ export async function loadProjects(fetchFn: Fetch = browserFetch, since?: Valida
+     // Only the server's own route: never an address elsewhere (the dashboard makes no outside requests)
+     logo: typeof p.logo === 'string' && LOGO_URL.test(p.logo) ? `/${p.logo}` : null,
+   }));
+-  return { unchanged: false, projects, validators: file.validators };
+ }
+ 
+ /** The `default` workspace's search (another workspace's: api/http.ts searchUrl) */
+diff --git a/dashboard/src/lib/state.svelte.ts b/dashboard/src/lib/state.svelte.ts
+index e7a15505..e1e349a5 100644
+--- a/dashboard/src/lib/state.svelte.ts
++++ b/dashboard/src/lib/state.svelte.ts
+@@ -1,4 +1,5 @@
+ import { browserFetch, inApp } from './api/http';
++import { keepProjects, keptProjects } from './kept-projects';
+ import {
+   checkAppUpdate,
+   installAppUpdate,
+@@ -528,7 +529,28 @@ export class DashboardState {
+     if (!result.unchanged) {
+       this.#projectsValidators = result.validators;
+       this.projects = result.projects;
++      if (inApp) keepProjects(workspace, result.listed, result.validators);
+     }
++    return this.showRoute();
++  }
++
++  /** The app's first load (ATM-776): the workspace's projects as kept at the last start, if any, shown at once, the page
++   * decided from them as from a fresh list; its tag asked with the fresh list, so an unchanged one costs atm nothing.
++   * The project to load, at once, beside the fresh list; null for a page without one; undefined when nothing was kept */
++  private showKeptProjects(): string | null | undefined {
++    if (!inApp || this.projectsLoaded) return undefined;
++    const workspace = workspaceOf(currentAddress());
++    if (workspace !== apiWorkspace()) return undefined;
++    const kept = keptProjects(workspace);
++    if (!kept) return undefined;
++    this.workspace = workspace;
++    this.projects = kept.projects;
++    this.#projectsValidators = kept.validators;
++    return this.showRoute();
++  }
++
++  /** The page the address names, with the projects listed now: the project to load, or null for a page without one */
++  private showRoute(): string | null {
+     this.projectsLoaded = true;
+     this.route = routeFor(this.projects, currentAddress());
+     if (this.route.page !== 'project') {
+@@ -810,6 +832,12 @@ export class DashboardState {
+     if (this.projectsLoaded) void this.refreshWorkspaces();
+     else await this.refreshWorkspaces();
+     if (!ticket.current()) return;
++    // The app's start (ATM-776): from the projects kept at the last one, the page at once, and its project's data first,
++    // shown as soon as it is in; the fresh list after it, not before (asked together, they slowed each other down)
++    const early = this.showKeptProjects();
++    const shownEarly = early ? await this.loadProjectData(early, ticket) : false;
++    if (shownEarly) this.showProjectData();
++    if (!ticket.current()) return;
+     const project = await this.refreshProjects(ticket);
+     // A newer load was asked for meanwhile: its answers are the page's
+     if (project === undefined) return;
+@@ -822,8 +850,15 @@ export class DashboardState {
+       if (ticket.current()) this.loadedAt = Date.now();
+       return;
+     }
++    // The kept list's project, when the fresh list names the same page: shown already
++    if (shownEarly && project === early) return;
+     // Another project by now, or a newer load: that load shows it
+     if (!(await this.loadProjectData(project, ticket))) return;
++    this.showProjectData();
++  }
++
++  /** The project's data is in: its page shown, with its saved view the first time */
++  private showProjectData() {
+     const first = !this.loaded;
+     if (first) this.restoreView();
+     if (this.#pendingNeedsYou) {
+@@ -1031,8 +1066,10 @@ export class DashboardState {
+   }
+ 
+   /** The address of task `task`'s details over this page (ATM-698): a card's and a row's link, for Copy Link and a new
+-   * tab; reads the page's tab so a card's link follows it */
++   * tab; reads the page's address and tab so a card's link follows them (a Sprint filter written after the card was
++   * drawn, ATM-776) */
+   taskAddress(task: Task): string {
++    void this.address;
+     void this.tab;
+     void this.projectId;
+     return withTask(currentAddress(), taskLabel(task));
+diff --git a/dashboard/src/routes/+layout.svelte b/dashboard/src/routes/+layout.svelte
+index 71a0fe51..fef0587e 100644
+--- a/dashboard/src/routes/+layout.svelte
++++ b/dashboard/src/routes/+layout.svelte
+@@ -90,8 +90,25 @@
+     if (legacyParams(location.hash) || addressOf(location) !== shown) navigate(addressOf(location), { replace: true });
+   }
+ 
++  /** In the app, whether the address of the tab the window starts on is in: until then nothing is drawn or loaded, so
++   * the window's own address (the app's root) is never shown before it (ATM-776) */
++  let started = $state(!inApp);
++  /** The address the app starts on, until the router is there: the page (`page.url`) names it only then */
++  let startingAt: string | null = null;
++  /** Never a blank window: drawn after this long even if the router's arrival was missed */
++  const START_LATEST_MS = 1000;
++  /** atm hasn't answered by now: the page is drawn anyway, as it is, rather than an empty window */
++  let waitedLong = $state(false);
++  const DRAWN_LATEST_MS = 5000;
++  if (inApp) setTimeout(() => (waitedLong = true), DRAWN_LATEST_MS);
++  /** In the app, the page is drawn once it knows what to show (ATM-776): at the tab's address, with the projects listed
++   * (kept from the last start, or atm's first answer), so no tab is named by a project's ID and no page is a guess;
++   * or when the load failed, to say so */
++  const drawn = $derived(started && (!inApp || dashboard.projectsLoaded || dashboard.loadError !== null || waitedLong));
++
+   onMount(() => {
+     settle();
++    if (!inApp) void dashboard.load();
+     // In the atm app: the window's tabs, from the page shown (T-514); its atm:// links open their page, the one it was
+     // started with here, later ones in a new tab (T-459); its menu's items do what their controls do (T-512)
+     if (inApp) {
+@@ -99,7 +116,15 @@
+       // link the app was started with opens in a new tab of them
+       void restoredTabs().then((restored) => {
+         const back = appTabs.start(addressOf(location), restored);
++        // Drawn once the router is at the active tab's address (afterNavigate), so the root's page never shows first
++        if (back && back !== currentAddress()) {
++          startingAt = back;
++          setTimeout(() => (started = true), START_LATEST_MS);
++        } else started = true;
+         if (back) navigate(back, { replace: true });
++        // The first load, at the active tab's address (navigate writes it at once): a page that needs its route
++        // settled (a review) shows at once, not after a load of the root and a second one for it
++        void dashboard.load();
+         void listenForLinks(
+           // The link the app was started with is where its first tab starts (ATM-694: no Back to the app's root)
+           (address) => (back ? tabs.open(address) : navigate(address, { replace: true })),
+@@ -155,6 +180,10 @@
+ 
+   afterNavigate(({ type }) => {
+     arrived();
++    if (startingAt !== null && currentAddress() === startingAt) {
++      startingAt = null;
++      started = true;
++    }
+     if (type === 'link' && leaving && leaving.address !== currentAddress() && !(page.state as EntryState).atmFrom)
+       replaceState('', { ...page.state, ...originOf(currentAddress(), leaving.address, leaving.state) });
+     leaving = null;
+@@ -174,7 +203,9 @@
+   onmouseup={mouseBackForward}
+ />
+ 
+-<App />
+-<!-- atm's right-click menus, the app only (ATM-699): the browser keeps its own -->
+-{#if inApp}<AppContextMenu />{/if}
++{#if drawn}
++  <App />
++  <!-- atm's right-click menus, the app only (ATM-699): the browser keeps its own -->
++  {#if inApp}<AppContextMenu />{/if}
++{/if}
+ {@render children()}
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index 0e5cc0b4..561a4102 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -1379,6 +1379,133 @@ test.describe('the dashboard in the atm app', () => {
+     await expect(page.locator('.title-bar-tab').nth(3)).toContainText('Standard Project');
+   });
+ 
++  test('the app starts on a review tab at once: no project page is drawn before it, and the list is asked once (ATM-776)', async ({
++    page,
++    tasksServer,
++  }) => {
++    await tasksServer.asApp();
++    tasksServer.addProject('second', 'minimal', 'Second Project');
++    tasksServer.use('standard');
++    const header = {
++      id: 'r2',
++      reference: 'CR-2',
++      number: 2,
++      title: 'Trim the names',
++      status: 'waiting',
++      tasks: [],
++      author: 'claude:a',
++      reviewers: [],
++      created: '2026-11-17T10:00:00Z',
++      updated: '2026-11-17T10:00:00Z',
++    };
++    tasksServer
++      .setReviews({ reviews: [{ review: header, branch: null, chains: 0, open: 0, needs_you: true }], you: 'Ana' })
++      .setReview('CR-2', {
++        review: header,
++        summary: '',
++        branch: null,
++        rounds: [{ number: 1, kind: { kind: 'files' }, files: [], by: 'claude:a', at: '' }],
++        chains: [],
++        view: { round: 1, against: null, files: [] },
++        needs_you: true,
++        you: 'Ana',
++      });
++    tasksServer.restoredTabs = {
++      addresses: [
++        `/projects/${tasksServer.projectId}/kanban`,
++        '/board',
++        `/projects/${tasksServer.projectId}/reviews/CR-2`,
++      ],
++      active: 2,
++    };
++    // Every page drawn, from the first frame: a project's views, All projects', the landing page, the review
++    await page.addInitScript(() => {
++      const w = window as unknown as { __drawn: string[] };
++      w.__drawn = [];
++      const pages = ['#graph-section', '#projects-overview', '#landing', '#review-page'];
++      new MutationObserver(() => {
++        for (const p of pages) if (document.querySelector(p) && !w.__drawn.includes(p)) w.__drawn.push(p);
++      }).observe(document, { subtree: true, childList: true });
++    });
++    await page.goto('/');
++    await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
++    await page.waitForTimeout(300);
++    expect(await page.evaluate(() => (window as unknown as { __drawn: string[] }).__drawn)).toEqual(['#review-page']);
++    // One load, at the review's address: not one of the root and another for the review
++    expect(tasksServer.commands.filter((c) => c.command === 'list_projects')).toHaveLength(1);
++  });
++
++  test('the app’s first start draws nothing until atm has listed the projects: no tab named by an ID, no page guessed (ATM-776)', async ({
++    page,
++    tasksServer,
++  }) => {
++    await tasksServer.asApp();
++    tasksServer.addProject('second', 'minimal', 'Second Project');
++    tasksServer.use('standard');
++    tasksServer.restoredTabs = {
++      addresses: ['/projects/second/list', `/projects/${tasksServer.projectId}/kanban`],
++      active: 1,
++    };
++    let answer = () => {};
++    tasksServer.listProjectsHeld = new Promise<void>((resolve) => (answer = resolve));
++    await page.goto('/');
++    await expect.poll(() => tasksServer.commands.some((c) => c.command === 'list_projects')).toBe(true);
++    await page.waitForTimeout(300);
++    // Nothing to show yet that would be right: nothing at all
++    await expect(page.locator('#app-titlebar')).toHaveCount(0);
++    await expect(page.locator('#app-main')).toHaveCount(0);
++    answer();
++    await expect(page.locator('#panel-kanban')).toBeVisible();
++    await expect(page.locator('.title-bar-tab').nth(0)).toContainText('Second Project - Tasks');
++  });
++
++  test('the app starts from the projects it kept: the right tabs and page at once, its tasks asked before the list (ATM-776)', async ({
++    page,
++    tasksServer,
++  }) => {
++    await tasksServer.asApp();
++    tasksServer.addProject('second', 'minimal', 'Second Project');
++    tasksServer.use('standard');
++    const tabs = { addresses: ['/projects/second/list', `/projects/${tasksServer.projectId}/kanban`], active: 1 };
++    // A first start, which keeps the list
++    tasksServer.restoredTabs = tabs;
++    await page.goto('/');
++    await expect(page.locator('#panel-kanban .kanban-card').first()).toBeVisible();
++
++    // The next start, with atm still listing the projects: from what was kept
++    tasksServer.restoredTabs = tabs;
++    tasksServer.commands = [];
++    tasksServer.reloads = [];
++    let answer = () => {};
++    tasksServer.listProjectsHeld = new Promise<void>((resolve) => (answer = resolve));
++    await page.addInitScript(() => {
++      const w = window as unknown as { __titles: string[] };
++      w.__titles = [];
++      new MutationObserver(() => {
++        for (const t of document.querySelectorAll('.title-bar-tab'))
++          if (t.textContent && !w.__titles.includes(t.textContent.trim())) w.__titles.push(t.textContent.trim());
++      }).observe(document, { subtree: true, childList: true, characterData: true });
++    });
++    await page.goto('/');
++    await expect(page.locator('#panel-kanban .kanban-card').first()).toBeVisible();
++    const tabTitles = page.locator('.title-bar-tab');
++    await expect(tabTitles.nth(0)).toContainText('Second Project - Tasks');
++    await expect(tabTitles.nth(1)).toContainText('Standard Project - Tasks');
++    // The project's tasks first; the list asked once they were in, its answer still held
++    const asked = tasksServer.commands.map((c) => c.command);
++    expect(asked.indexOf('project_tasks')).toBeGreaterThanOrEqual(0);
++    expect(asked.indexOf('project_tasks')).toBeLessThan(asked.indexOf('list_projects'));
++    // With the tag it was kept with: an unchanged list costs atm nothing
++    answer();
++    await expect.poll(() => tasksServer.reloads.find((r) => r.command === 'list_projects')?.body).toBe(false);
++    // No tab was ever named by a project's ID
++    const titles = await page.evaluate(() => (window as unknown as { __titles: string[] }).__titles);
++    expect(
++      titles.filter((t) => /\bsecond - |\bfixture - /.test(t)),
++      titles.join(' | '),
++    ).toEqual([]);
++  });
++
+   test('Reload (ATM-584) loads the window again through the app, back at its tabs and the one it showed', async ({
+     page,
+     tasksServer,
+diff --git a/dashboard/tests/e2e/helpers.ts b/dashboard/tests/e2e/helpers.ts
+index 9e2e9381..381cc1de 100644
+--- a/dashboard/tests/e2e/helpers.ts
++++ b/dashboard/tests/e2e/helpers.ts
+@@ -984,6 +984,9 @@ export class TasksServer {
+   updateInstallHeld: Promise<unknown> = Promise.resolve();
+   /** The update commands the page called, in order */
+   updateCalls: string[] = [];
++  /** `list_projects` answers once this settles: a test holds it to look at the page before atm has listed the
++   * projects (ATM-776) */
++  listProjectsHeld: Promise<unknown> = Promise.resolve();
+ 
+   /** The app's agent commands the page called, in order (`agents_status`, `connect_agents <harness>`) */
+   agentCalls: string[] = [];
+@@ -1049,9 +1052,13 @@ export class TasksServer {
+       const { pathname } = new URL(r.url());
+       if (/^\/(api|p)\//.test(pathname)) this.httpRequests.push(pathname);
+     });
+-    await this.page.exposeFunction('__atmInvoke', (command: string, args: Record<string, unknown>) =>
+-      command === 'install_update' ? this.answerInstall(args) : this.reload(command, args),
+-    );
++    await this.page.exposeFunction('__atmInvoke', async (command: string, args: Record<string, unknown>) => {
++      // As the page asks, before any answer is held
++      this.commands.push({ command, project: typeof args.project === 'string' ? args.project : null });
++      if (command === 'install_update') return this.answerInstall(args);
++      if (command === 'list_projects') await this.listProjectsHeld;
++      return this.reload(command, args);
++    });
+     await this.page.addInitScript((version) => {
+       const w = window as unknown as Record<string, unknown> & {
+         __atmInvoke: (command: string, args: unknown) => Promise<{ ok?: unknown; error?: unknown }>;
+@@ -1142,7 +1149,6 @@ export class TasksServer {
+   /** A command's answer, a reload command's as the app's `Fresh` (ATM-768): its tag (a hash of the answer and what
+    * asked for it) and its body, or none when the page's `known` tag is still it */
+   private reload(command: string, args: Record<string, unknown>): { ok?: unknown; error?: unknown } {
+-    this.commands.push({ command, project: typeof args.project === 'string' ? args.project : null });
+     const answer = this.answerCommand(command, args);
+     if (!['list_projects', 'project_tasks', 'claims', 'worktrees'].includes(command) || !('ok' in answer))
+       return answer;
+diff --git a/dashboard/tests/unit/kept-projects.test.ts b/dashboard/tests/unit/kept-projects.test.ts
+new file mode 100644
+index 00000000..d5993d9b
+--- /dev/null
++++ b/dashboard/tests/unit/kept-projects.test.ts
+@@ -0,0 +1,78 @@
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
++import { KEPT_PROJECTS_KEY, keepProjects, keptProjects } from '../../src/lib/kept-projects';
++
++/** A project as atm's api/projects lists it */
++const listed = (id: string, extra: Record<string, unknown> = {}) => ({
++  id,
++  name: `Project ${id}`,
++  path: `/work/${id}`,
++  missing: false,
++  summary: { key: id.toUpperCase() },
++  worktrees: [],
++  logo: `p/${id}/logo`,
++  ...extra,
++});
++
++describe('kept projects (ATM-776)', () => {
++  beforeEach(() => localStorage.clear());
++  afterEach(() => vi.restoreAllMocks());
++
++  it('nothing kept: none', () => {
++    expect(keptProjects('default')).toBeNull();
++  });
++
++  it('kept: read back through the fresh answer’s rule, with its tag', () => {
++    keepProjects('default', [listed('a'), listed('b')], { etag: '"t1"' });
++    const kept = keptProjects('default')!;
++    expect(kept.validators).toEqual({ etag: '"t1"' });
++    expect(kept.projects.map((p) => [p.id, p.name, p.logo, p.summary?.key])).toEqual([
++      ['a', 'Project a', '/p/a/logo', 'A'],
++      ['b', 'Project b', '/p/b/logo', 'B'],
++    ]);
++  });
++
++  it('an empty list is kept as one: a workspace with no projects', () => {
++    keepProjects('default', [], {});
++    expect(keptProjects('default')).toEqual({ projects: [], validators: {} });
++  });
++
++  it('each workspace its own; keeping one leaves the others', () => {
++    keepProjects('default', [listed('a')], { etag: '"d"' });
++    keepProjects('work', [listed('w')], { etag: '"w"' });
++    keepProjects('default', [listed('a2')], { etag: '"d2"' });
++    expect(keptProjects('default')!.projects.map((p) => p.id)).toEqual(['a2']);
++    expect(keptProjects('work')!.projects.map((p) => p.id)).toEqual(['w']);
++    expect(keptProjects('other')).toBeNull();
++  });
++
++  it('what a fresh answer would refuse, refused when read back: no ID, another site’s logo', () => {
++    keepProjects('default', [listed(''), { name: 'no id' }, listed('a', { logo: 'https://elsewhere/logo' })], {});
++    expect(keptProjects('default')!.projects.map((p) => [p.id, p.logo])).toEqual([['a', null]]);
++  });
++
++  it.each([
++    ['not JSON', '{ not json'],
++    ['not an object', '[1, 2]'],
++    ['the workspace not an object', JSON.stringify({ default: 'x' })],
++    ['its list not a list', JSON.stringify({ default: { listed: { id: 'a' } } })],
++  ])('stored %s: none', (_, raw) => {
++    localStorage.setItem(KEPT_PROJECTS_KEY, raw);
++    expect(keptProjects('default')).toBeNull();
++  });
++
++  it('a tag that isn’t text is no tag', () => {
++    localStorage.setItem(KEPT_PROJECTS_KEY, JSON.stringify({ default: { listed: [], etag: 7, lastModified: '' } }));
++    expect(keptProjects('default')!.validators).toEqual({});
++  });
++
++  it('storage that throws: nothing kept, nothing thrown', () => {
++    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
++      throw new Error('blocked');
++    });
++    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
++      throw new Error('full');
++    });
++    expect(() => keepProjects('default', [listed('a')], {})).not.toThrow();
++    expect(keptProjects('default')).toBeNull();
++  });
++});
+diff --git a/dashboard/tests/unit/load.test.ts b/dashboard/tests/unit/load.test.ts
+index 92a854e8..1066b5a9 100644
+--- a/dashboard/tests/unit/load.test.ts
++++ b/dashboard/tests/unit/load.test.ts
+@@ -184,6 +184,8 @@ describe('loadProjects', () => {
+       unchanged: false,
+       projects: [{ ...body.projects[0], worktrees: [], logo: null }],
+       validators: { etag: '"p1"' },
++      // The list as given, for the app to keep (ATM-776)
++      listed: body.projects,
+     });
+     const again = vi.fn().mockResolvedValue(new Response(null, { status: 304 }));
+     expect(await loadProjects(again, { etag: '"p1"' })).toEqual({ unchanged: true });

@@ -1,0 +1,22 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "cda50484f0b285d4c766db0461b29319525d854b",
+    "head": "384ba962d25df2c439e8178a8c1167f23e85f070"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/lib/progress/ProgressTab.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/app.spec.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:ba530ebb",
+  "at": "2026-11-24T20:30:37Z"
+}

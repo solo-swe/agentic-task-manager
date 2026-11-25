@@ -1,0 +1,1271 @@
+diff --git a/dashboard/src/app.css b/dashboard/src/app.css
+index 6001a031..9b54eaea 100644
+--- a/dashboard/src/app.css
++++ b/dashboard/src/app.css
+@@ -3170,12 +3170,6 @@ a.detail-dep-item {
+   outline: 2px solid var(--accent);
+   outline-offset: -2px;
+ }
+-/* Inbox and Documents until their pages come (ATM-762, ATM-766) */
+-.view-placeholder {
+-  color: var(--text-muted);
+-  padding: var(--space-6);
+-  font-size: var(--text-lg);
+-}
+ .view-tab {
+   display: inline-flex;
+   align-items: center;
+diff --git a/dashboard/src/lib/api/documents.ts b/dashboard/src/lib/api/documents.ts
+new file mode 100644
+index 00000000..0aa0cc45
+--- /dev/null
++++ b/dashboard/src/lib/api/documents.ts
+@@ -0,0 +1,59 @@
++// A project's documents (docs/documents-design.md §5, ATM-765, ATM-766): the listing the Documents page shows, read as
++// the other routes are (conditionally, by `ETag`); anything unexpected in the answer left out.
++import { browserFetch, documentsUrl, fetchFile, type Fetch, type Validators } from './http';
++
++/** A document, as atm lists it: its path from the project's root, its title, size, last change, and whether git
++ * tracks it (an untracked one is *new*) */
++export interface DocumentEntry {
++  path: string;
++  title: string;
++  bytes: number;
++  modified_at: string | null;
++  tracked: boolean;
++}
++
++/** A submodule of the project: its documents are among the listing's, by their path from the project's root */
++export interface Submodule {
++  path: string;
++  checked_out: boolean;
++}
++
++/** The listing: the documents (at most 500), the submodules, how many more there were past the cap, and whether the
++ * project is in git (outside it, atm lists none) */
++export interface DocumentsListing {
++  documents: DocumentEntry[];
++  submodules: Submodule[];
++  more: number;
++  git: boolean;
++}
++
++export type DocumentsResult =
++  { unchanged: true } | { unchanged: false; listing: DocumentsListing; validators: Validators };
++
++const isEntry = (d: unknown): d is Record<string, unknown> =>
++  !!d && typeof d === 'object' && typeof (d as { path?: unknown }).path === 'string';
++
++/** The project's documents, those `q` names (titles and paths), every one without */
++export async function loadDocuments(
++  project: string,
++  q = '',
++  fetchFn: Fetch = browserFetch,
++  since?: Validators,
++): Promise<DocumentsResult> {
++  const file = await fetchFile(documentsUrl(project, q), fetchFn, since);
++  if (file.unchanged) return file;
++  const data = (file.data ?? {}) as Partial<Record<keyof DocumentsListing, unknown>>;
++  const git = data.git !== false;
++  const documents = (Array.isArray(data.documents) ? data.documents : []).filter(isEntry).map((d): DocumentEntry => ({
++    path: d.path as string,
++    title: typeof d.title === 'string' && d.title ? d.title : (d.path as string).split('/').pop()!,
++    bytes: typeof d.bytes === 'number' ? d.bytes : 0,
++    modified_at: typeof d.modified_at === 'string' ? d.modified_at : null,
++    tracked: d.tracked !== false,
++  }));
++  const submodules = (Array.isArray(data.submodules) ? data.submodules : [])
++    .filter(isEntry)
++    .map((s): Submodule => ({ path: s.path as string, checked_out: s.checked_out !== false }));
++  const more = typeof data.more === 'number' && data.more > 0 ? data.more : 0;
++  return { unchanged: false, listing: { documents, submodules, more, git }, validators: file.validators };
++}
+diff --git a/dashboard/src/lib/api/http.ts b/dashboard/src/lib/api/http.ts
+index 76bb49b9..adedd31d 100644
+--- a/dashboard/src/lib/api/http.ts
++++ b/dashboard/src/lib/api/http.ts
+@@ -81,6 +81,12 @@ export function inboxUrl(project: string, state: InboxState = 'created', archive
+   return projectRoute(project, 'inbox') + (text ? `?${text}` : '');
+ }
+ 
++/** A project's documents (GET …/projects/<id>/documents without a path, ATM-765): those `q` names, every one without */
++export function documentsUrl(project: string, q = ''): string {
++  const query = q.trim();
++  return projectRoute(project, 'documents') + (query ? `?q=${encodeURIComponent(query)}` : '');
++}
++
+ /** A file of the project for the document viewer: what it is, and the CompMD document to render (T-392) */
+ export function v1DocumentUrl(project: string, path: string): string {
+   return `${projectRoute(project, 'documents')}?path=${encodeURIComponent(path)}`;
+diff --git a/dashboard/src/lib/document-list.ts b/dashboard/src/lib/document-list.ts
+new file mode 100644
+index 00000000..2c593789
+--- /dev/null
++++ b/dashboard/src/lib/document-list.ts
+@@ -0,0 +1,95 @@
++// The Documents page's list (docs/documents-design.md §4, ATM-766): the listing as a tree of folders or by last
++// change, the search over titles and paths, and the page's address (`?list=recent&q=sidebar`: `list`, as `view` is
++// the address's own name for the project's page).
++import { addressParams, formatAddress } from './address';
++import type { DocumentEntry, Submodule } from './api/documents';
++
++export type DocumentsView = 'tree' | 'recent';
++
++/** The page's view and search, as its address has them */
++export interface DocumentsListAddress {
++  view: DocumentsView;
++  q: string;
++}
++
++/** The view and search an address names: the tree and no search by default (an unknown view is the tree) */
++export function documentsListOf(address: string): DocumentsListAddress {
++  const params = addressParams(address);
++  return { view: params.get('list') === 'recent' ? 'recent' : 'tree', q: params.get('q')?.trim() ?? '' };
++}
++
++/** `address` with the view and search, the defaults left out */
++export function withDocumentsList(address: string, list: DocumentsListAddress): string {
++  const params = addressParams(address);
++  params.delete('list');
++  params.delete('q');
++  if (list.view !== 'tree') params.set('list', list.view);
++  if (list.q.trim()) params.set('q', list.q.trim());
++  return formatAddress(params);
++}
++
++/** The documents whose title or path holds `q` (any case), as atm's route keeps them; every one without */
++export function matching(documents: readonly DocumentEntry[], q: string): DocumentEntry[] {
++  const query = q.trim().toLowerCase();
++  if (!query) return [...documents];
++  return documents.filter((d) => d.title.toLowerCase().includes(query) || d.path.toLowerCase().includes(query));
++}
++
++/** Every document by its last change, newest first (one without a time last), then by path */
++export function byRecent(documents: readonly DocumentEntry[]): DocumentEntry[] {
++  const at = (d: DocumentEntry) => (d.modified_at ? Date.parse(d.modified_at) : Number.NEGATIVE_INFINITY);
++  return [...documents].sort((a, b) => at(b) - at(a) || a.path.localeCompare(b.path));
++}
++
++/** A folder of the tree: its name and path, its folders then its files, how many documents are in it all, and
++ * whether it is a submodule (and checked out) */
++export interface Folder {
++  name: string;
++  path: string;
++  folders: Folder[];
++  files: DocumentEntry[];
++  count: number;
++  submodule: { checked_out: boolean } | null;
++}
++
++/** The file's name, the last part of its path */
++export const fileName = (path: string) => path.slice(path.lastIndexOf('/') + 1);
++
++/** The documents as a tree by folder, from the project's root: each folder's folders first, then its files, each by
++ * name; a submodule is a folder marked as one, there even when it holds no document (not checked out) */
++export function treeOf(documents: readonly DocumentEntry[], submodules: readonly Submodule[] = []): Folder {
++  const root: Folder = { name: '', path: '', folders: [], files: [], count: 0, submodule: null };
++  const folderAt = (path: string): Folder => {
++    let at = root;
++    let walked = '';
++    for (const name of path.split('/').filter(Boolean)) {
++      walked = walked ? `${walked}/${name}` : name;
++      let next = at.folders.find((f) => f.name === name);
++      if (!next) {
++        next = { name, path: walked, folders: [], files: [], count: 0, submodule: null };
++        at.folders.push(next);
++      }
++      at = next;
++    }
++    return at;
++  };
++  for (const sub of submodules) folderAt(sub.path).submodule = { checked_out: sub.checked_out };
++  for (const doc of documents) {
++    const slash = doc.path.lastIndexOf('/');
++    folderAt(slash < 0 ? '' : doc.path.slice(0, slash)).files.push(doc);
++  }
++  const settle = (folder: Folder): number => {
++    folder.folders.sort((a, b) => a.name.localeCompare(b.name));
++    folder.files.sort((a, b) => fileName(a.path).localeCompare(fileName(b.path)));
++    folder.count = folder.files.length + folder.folders.reduce((n, f) => n + settle(f), 0);
++    return folder.count;
++  };
++  settle(root);
++  return root;
++}
++
++/** The folders a document's path is under (`docs/adr/x.md`: `docs`, `docs/adr`), to open the way to it */
++export function foldersOf(path: string): string[] {
++  const parts = path.split('/').slice(0, -1);
++  return parts.map((_, i) => parts.slice(0, i + 1).join('/'));
++}
+diff --git a/dashboard/src/lib/documents-page/DocumentsPage.svelte b/dashboard/src/lib/documents-page/DocumentsPage.svelte
+new file mode 100644
+index 00000000..a5cfe0b7
+--- /dev/null
++++ b/dashboard/src/lib/documents-page/DocumentsPage.svelte
+@@ -0,0 +1,353 @@
++<script lang="ts">
++  // The Documents item's page (docs/documents-design.md §4, ATM-766): the project's documents, its Markdown files where
++  // git has them, as a tree by folder (the first view) or by last change (Recent). Each row is a document's title, its
++  // file name and how long ago it changed, *new* when git doesn't track it yet. The search is in the tab's header line,
++  // where a page's own search is: it filters the list in the page, or, when atm cut the list at 500, asks atm (`?q=`),
++  // which searches before it cuts. The view and the search are in the address; the open folders are kept per project
++  // in the preferences. A click opens the document in the viewer over this page (`?doc=`, a step Back undoes);
++  // ⌘-click a new tab. Asked again now and then while in view, by its `ETag`.
++  import { onDestroy, untrack } from 'svelte';
++  import { loadDocuments, type DocumentEntry, type DocumentsListing } from '../api/documents';
++  import { inApp, type Validators } from '../api/http';
++  import {
++    byRecent,
++    documentsListOf,
++    fileName,
++    matching,
++    treeOf,
++    withDocumentsList,
++    type DocumentsView,
++    type Folder,
++  } from '../document-list';
++  import { withDoc } from '../documents';
++  import { formatAgoOrDate } from '../format';
++  import { latest } from '../latest';
++  import { currentAddress, navigate } from '../navigation';
++  import { getPref, setPref } from '../prefs';
++  import { offerReviewSearch } from '../reviews/search.svelte';
++  import { dashboard } from '../state.svelte';
++  import { inBackground, tabActions, wantsNewTab } from '../tab-actions';
++  import Icon from '../ui/Icon.svelte';
++
++  const project = $derived(dashboard.projectId);
++  const list = $derived(documentsListOf(dashboard.address));
++  const tabs = tabActions();
++
++  // The whole listing (every document atm lists, at most 500), asked again by its validators
++  let listing = $state.raw<DocumentsListing | null>(null);
++  let problem = $state<string | null>(null);
++  let validators: Validators | undefined;
++  let listed: string | null = null;
++  const loads = latest();
++
++  async function load() {
++    const id = project;
++    if (!id) return;
++    // Another project: asked afresh, not by the last one's validators
++    if (id !== listed) [validators, listing] = [undefined, null];
++    listed = id;
++    const ask = loads.ask();
++    try {
++      const result = await loadDocuments(id, '', undefined, validators);
++      if (!ask.current()) return;
++      problem = null;
++      if (!result.unchanged) [listing, validators] = [result.listing, result.validators];
++    } catch (e) {
++      if (ask.current()) problem = `The documents couldn’t be read: ${(e as Error).message}`;
++    } finally {
++      ask.done();
++    }
++  }
++  $effect(() => {
++    void project;
++    untrack(() => void load());
++  });
++  // Asked again every 10 s while the page is in view: a document written or committed shows
++  const timer = setInterval(() => document.visibilityState === 'visible' && void load(), 10_000);
++  onDestroy(() => clearInterval(timer));
++
++  // A search when atm cut the list at 500: atm's answer for it, which searches every document
++  let searched = $state.raw<{ q: string; listing: DocumentsListing } | null>(null);
++  const searches = latest();
++  async function searchAtm(id: string, q: string) {
++    const ask = searches.ask();
++    try {
++      const result = await loadDocuments(id, q);
++      if (ask.current() && !result.unchanged) searched = { q, listing: result.listing };
++    } catch (e) {
++      if (ask.current()) problem = `The search couldn’t be made: ${(e as Error).message}`;
++    } finally {
++      ask.done();
++    }
++  }
++  const cut = $derived(!!listing && listing.more > 0);
++  $effect(() => {
++    const [id, q] = [project, list.q];
++    if (!id || !q || !cut) return;
++    untrack(() => {
++      if (searched?.q !== q) void searchAtm(id, q);
++    });
++  });
++
++  // What is shown: the documents the search keeps (atm's answer when the list was cut), or none while it is asked
++  const shown = $derived.by((): DocumentEntry[] | null => {
++    if (!listing) return null;
++    if (!list.q) return listing.documents;
++    if (cut) return searched?.q === list.q ? searched.listing.documents : null;
++    return matching(listing.documents, list.q);
++  });
++  // The tree: with a search, its matches, every folder open; else every document, the submodules among the folders
++  const tree = $derived(shown ? treeOf(shown, list.q ? [] : (listing?.submodules ?? [])) : null);
++  const recent = $derived(shown ? byRecent(shown) : []);
++
++  // The open folders, per project, kept in the preferences
++  function openOf(id: string | null): ReadonlySet<string> {
++    const kept = id ? getPref('documentFolders', {})[id] : undefined;
++    return new Set(Array.isArray(kept) ? kept.filter((p): p is string => typeof p === 'string') : []);
++  }
++  let open = $state.raw<ReadonlySet<string>>(new Set());
++  $effect(() => {
++    const id = project;
++    untrack(() => (open = openOf(id)));
++  });
++  function toggle(folder: Folder) {
++    if (!project) return;
++    // A new set each time, never changed in place: `open` is read as a whole ($state.raw)
++    const next = open.has(folder.path) ? [...open].filter((p) => p !== folder.path) : [...open, folder.path];
++    open = new Set(next);
++    setPref('documentFolders', { ...getPref('documentFolders', {}), [project]: next });
++  }
++  const isOpen = (folder: Folder) => !!list.q || open.has(folder.path);
++
++  // The search, in the tab's header line (Header shows the field while it is offered)
++  $effect(() =>
++    offerReviewSearch({
++      get q() {
++        return list.q;
++      },
++      search: (q) => navigate(withDocumentsList(currentAddress(), { ...list, q }), { replace: true }),
++      placeholder: 'Search documents',
++      title: 'Search the documents’ titles and paths (/)',
++    }),
++  );
++
++  function show(view: DocumentsView) {
++    navigate(withDocumentsList(currentAddress(), { ...list, view }));
++  }
++
++  /** A document over this page, in the viewer: in place (a step Back undoes), or ⌘-click a new tab */
++  const hrefOf = (path: string) => withDoc(currentAddress(), { path });
++  function openDocument(e: MouseEvent, path: string) {
++    if (e.button !== 0 && e.button !== 1) return;
++    // In the browser a new tab is the browser's own, from the link
++    if (!inApp && wantsNewTab(e)) return;
++    e.preventDefault();
++    if (inApp && wantsNewTab(e)) tabs.open(hrefOf(path), inBackground(e));
++    else navigate(hrefOf(path));
++  }
++
++  const ago = (at: string | null) => (at ? formatAgoOrDate(at, Date.now()) : '');
++</script>
++
++{#snippet documentRow(doc: DocumentEntry, depth: number)}
++  <li class="documents-row" style:--depth={depth}>
++    <a
++      class="documents-link"
++      href={hrefOf(doc.path)}
++      data-path={doc.path}
++      onclick={(e) => openDocument(e, doc.path)}
++      onauxclick={(e) => openDocument(e, doc.path)}
++    >
++      <span class="documents-icon"><Icon name="file-text" size={14} /></span>
++      <span class="documents-title">{doc.title}</span>
++      <span class="documents-file" title={doc.path}>{list.view === 'recent' ? doc.path : fileName(doc.path)}</span>
++      <span class="documents-mark"
++        >{#if !doc.tracked}<span class="documents-new" title="Not committed yet">new</span>{/if}</span
++      >
++      <span class="documents-ago" title={doc.modified_at ?? ''}>{ago(doc.modified_at)}</span>
++    </a>
++  </li>
++{/snippet}
++
++{#snippet folderRows(folder: Folder, depth: number)}
++  {#each folder.folders as sub (sub.path)}
++    {@const opened = isOpen(sub)}
++    <li class="documents-row documents-folder-row" style:--depth={depth}>
++      <button
++        class="documents-folder"
++        data-folder={sub.path}
++        aria-expanded={opened}
++        disabled={!!list.q}
++        onclick={() => toggle(sub)}
++      >
++        <span class="documents-icon"><Icon name={opened ? 'chevron-down' : 'chevron-right'} size={14} /></span><span
++          class="documents-icon"><Icon name={sub.submodule ? 'git-branch' : 'folder'} size={14} /></span
++        >
++        <span class="documents-title">{sub.name}</span>
++        <span class="documents-mark"
++          >{#if sub.submodule}<span class="documents-submodule"
++              >{sub.submodule.checked_out ? 'submodule' : 'submodule, not checked out'}</span
++            >{/if}</span
++        >
++        <span class="documents-count">{sub.count}</span>
++      </button>
++    </li>
++    {#if opened}{@render folderRows(sub, depth + 1)}{/if}
++  {/each}
++  {#each folder.files as doc (doc.path)}{@render documentRow(doc, depth)}{/each}
++{/snippet}
++
++<div class="documents-page" id="documents-page">
++  <div class="documents-views" role="group" aria-label="How the documents are listed">
++    <button class="documents-view" data-view="tree" aria-pressed={list.view === 'tree'} onclick={() => show('tree')}
++      >Tree</button
++    >
++    <button
++      class="documents-view"
++      data-view="recent"
++      aria-pressed={list.view === 'recent'}
++      onclick={() => show('recent')}>Recent</button
++    >
++  </div>
++
++  {#if problem}<p class="documents-note" role="alert" id="documents-problem">{problem}</p>{/if}
++
++  {#if !listing}
++    {#if !problem}<p class="documents-note" id="documents-loading">Reading the documents…</p>{/if}
++  {:else if !listing.git}
++    <p class="documents-note" id="documents-no-git">
++      The project isn’t in git: atm lists a project’s documents from its git repository.
++    </p>
++  {:else if !listing.documents.length}
++    <p class="documents-note" id="documents-empty">No documents yet: Markdown files (.md) in the project show here.</p>
++  {:else if !shown}
++    <p class="documents-note" id="documents-searching">Searching every document…</p>
++  {:else if !shown.length}
++    <p class="documents-note" id="documents-none">No document’s title or path holds “{list.q}”.</p>
++  {:else}
++    <ul class="documents-list" id="documents-list" data-view={list.view}>
++      {#if list.view === 'recent'}
++        {#each recent as doc (doc.path)}{@render documentRow(doc, 0)}{/each}
++      {:else if tree}
++        {@render folderRows(tree, 0)}
++      {/if}
++    </ul>
++    {#if cut && !list.q}
++      <p class="documents-note" id="documents-more">
++        And {listing.more} more: search to find any of them.
++      </p>
++    {/if}
++  {/if}
++</div>
++
++<style>
++  .documents-page {
++    display: flex;
++    flex-direction: column;
++    gap: var(--space-5);
++    max-width: 960px;
++    padding: var(--space-7) var(--space-6);
++  }
++  .documents-views {
++    display: flex;
++    gap: var(--space-3);
++  }
++  .documents-view {
++    height: 28px;
++    padding: 0 var(--space-5);
++    border: 1px solid var(--border);
++    border-radius: var(--radius-pill);
++    background: var(--surface);
++    color: var(--text);
++    font: inherit;
++    font-size: var(--text-sm);
++    cursor: pointer;
++  }
++  .documents-view[aria-pressed='true'] {
++    border-color: var(--accent);
++    color: var(--accent);
++    font-weight: 600;
++  }
++  .documents-list {
++    list-style: none;
++    margin: 0;
++    padding: var(--space-2) 0;
++    border: 1px solid var(--border);
++    border-radius: var(--radius-lg);
++    background: var(--surface);
++  }
++  .documents-link,
++  .documents-folder {
++    align-items: center;
++    background: none;
++    border: none;
++    color: var(--text);
++    display: grid;
++    font: inherit;
++    font-size: var(--text-sm);
++    gap: var(--space-4);
++    grid-template-columns: auto minmax(0, 1fr) minmax(0, auto) auto auto;
++    padding: var(--space-2) var(--space-6);
++    padding-left: calc(var(--space-6) + var(--depth, 0) * var(--space-7));
++    text-align: left;
++    text-decoration: none;
++    width: 100%;
++  }
++  .documents-folder {
++    cursor: pointer;
++    grid-template-columns: auto auto minmax(0, 1fr) auto auto;
++  }
++  .documents-folder:disabled {
++    cursor: default;
++  }
++  .documents-link:hover,
++  .documents-folder:hover:not(:disabled) {
++    background: var(--surface2);
++  }
++  .documents-icon {
++    color: var(--text-muted);
++    display: inline-flex;
++  }
++  .documents-title {
++    min-width: 0;
++    overflow: hidden;
++    text-overflow: ellipsis;
++    white-space: nowrap;
++  }
++  .documents-folder .documents-title {
++    font-weight: 600;
++  }
++  .documents-file {
++    color: var(--text-muted);
++    font-family: 'SF Mono', Menlo, Consolas, monospace;
++    font-size: var(--text-xs);
++    min-width: 0;
++    overflow: hidden;
++    text-overflow: ellipsis;
++    white-space: nowrap;
++  }
++  .documents-mark {
++    display: inline-flex;
++  }
++  .documents-new,
++  .documents-submodule {
++    border: 1px solid var(--border);
++    border-radius: var(--radius-pill);
++    color: var(--accent);
++    font-size: var(--text-2xs);
++    padding: 0 var(--space-3);
++  }
++  .documents-submodule {
++    color: var(--text-muted);
++  }
++  .documents-ago,
++  .documents-count {
++    color: var(--text-muted);
++    font-size: var(--text-xs);
++    text-align: right;
++    white-space: nowrap;
++  }
++  .documents-note {
++    color: var(--text-muted);
++  }
++</style>
+diff --git a/dashboard/src/lib/prefs.ts b/dashboard/src/lib/prefs.ts
+index b6190cb8..1ca7f637 100644
+--- a/dashboard/src/lib/prefs.ts
++++ b/dashboard/src/lib/prefs.ts
+@@ -43,6 +43,8 @@ export interface Prefs {
+   needsYouBadge: boolean;
+   /** The app notifies when a project's needs-you count goes up (T-520) */
+   needsYouNotify: boolean;
++  /** The Documents page's open folders, by project id (ATM-766): their paths */
++  documentFolders: Record<string, string[]>;
+ }
+ 
+ function storage(): Storage | null {
+diff --git a/dashboard/src/lib/reviews/ReviewSearch.svelte b/dashboard/src/lib/reviews/ReviewSearch.svelte
+index b701fc00..27ea5c79 100644
+--- a/dashboard/src/lib/reviews/ReviewSearch.svelte
++++ b/dashboard/src/lib/reviews/ReviewSearch.svelte
+@@ -45,9 +45,9 @@
+   <input
+     class="review-search"
+     type="search"
+-    placeholder="Search reviews"
+-    aria-label="Search reviews"
+-    title="Search the reviews’ titles, summaries and comments (/)"
++    placeholder={offered.placeholder ?? 'Search reviews'}
++    aria-label={offered.placeholder ?? 'Search reviews'}
++    title={offered.title ?? 'Search the reviews’ titles, summaries and comments (/)'}
+     bind:this={input}
+     value={text}
+     oninput={(e) => typed(e.currentTarget.value)}
+diff --git a/dashboard/src/lib/reviews/search.svelte.ts b/dashboard/src/lib/reviews/search.svelte.ts
+index da0bd07d..c9a40320 100644
+--- a/dashboard/src/lib/reviews/search.svelte.ts
++++ b/dashboard/src/lib/reviews/search.svelte.ts
+@@ -1,7 +1,7 @@
+-// The reviews list's search, which the title bar shows (ATM-738, docs/sidebar-overhaul-design.md §6): where a
+-// project's search is, the same field in the same place on every page that searches. The list (ReviewList) offers
+-// its search while it is shown; the title bar (Header) shows the field while one is offered, and what is typed goes
+-// to the list's query.
++// A page's own search, which the title bar shows (ATM-738, docs/sidebar-overhaul-design.md §6): where a project's
++// search is, the same field in the same place on every page that searches. A list (the reviews', ReviewList; the
++// Documents page's, ATM-766) offers its search while it is shown; the title bar (Header) shows the field while one is
++// offered, and what is typed goes to the list's query.
+ 
+ import type { Snippet } from 'svelte';
+ 
+@@ -11,6 +11,9 @@ export interface OfferedSearch {
+   readonly q: string;
+   search: (q: string) => void;
+   readonly aside?: Snippet;
++  /** What the field says it searches (the Documents page's, ATM-766): the reviews' by default */
++  readonly placeholder?: string;
++  readonly title?: string;
+ }
+ 
+ let offered = $state.raw<OfferedSearch | null>(null);
+diff --git a/dashboard/src/lib/shell/ViewPanel.svelte b/dashboard/src/lib/shell/ViewPanel.svelte
+index 4b64087a..62a2f8bd 100644
+--- a/dashboard/src/lib/shell/ViewPanel.svelte
++++ b/dashboard/src/lib/shell/ViewPanel.svelte
+@@ -13,6 +13,7 @@
+   import ProgressTab from '../progress/ProgressTab.svelte';
+   import ProjectTab from './ProjectTab.svelte';
+   import ReviewsTab from './ReviewsTab.svelte';
++  import DocumentsPage from '../documents-page/DocumentsPage.svelte';
+   import InboxPage from '../inbox/InboxPage.svelte';
+   import ScopeBar from './ScopeBar.svelte';
+   import SubTabs from './SubTabs.svelte';
+@@ -110,7 +111,6 @@
+       <!-- Mounted only while selected: it asks the server for the inbox, and again now and then (ATM-762) -->
+       {#if view === 'inbox'}<InboxPage />{/if}
+     </div>
+-    <!-- The Documents page (docs/documents-design.md) comes with its own task -->
+     <div
+       class="view-panel"
+       id="panel-documents"
+@@ -118,11 +118,8 @@
+       aria-labelledby="item-documents"
+       hidden={view !== 'documents'}
+     >
+-      {#if view === 'documents'}
+-        <p class="view-placeholder" id="documents-placeholder">
+-          Documents are coming: the project’s documents, listed and searchable, to open in the viewer.
+-        </p>
+-      {/if}
++      <!-- Mounted only while selected: it asks the server for the documents, and again now and then (ATM-766) -->
++      {#if view === 'documents'}<DocumentsPage />{/if}
+     </div>
+   </div>
+ </div>
+diff --git a/dashboard/tests/e2e/documents-page.spec.ts b/dashboard/tests/e2e/documents-page.spec.ts
+new file mode 100644
+index 00000000..616ef9ba
+--- /dev/null
++++ b/dashboard/tests/e2e/documents-page.spec.ts
+@@ -0,0 +1,65 @@
++import type { Page } from '@playwright/test';
++import { addressOf, expect, openDashboard, projectDocument, test } from './helpers';
++
++// The Documents page (ATM-766, docs/documents-design.md §4): the project's documents from atm's listing, as a tree or
++// by last change, searched in the header line, each opening in the viewer over the page.
++const PROJECT = {
++  meta: { project: 'Docs', repository: 'https://github.com/o/r' },
++  tasks: [{ id: 'T-1', name: 'Write the design', type: 'docs', status: 'todo' }],
++};
++
++const list = (page: Page) => page.locator('#documents-list');
++const rows = (page: Page) =>
++  list(page)
++    .locator('.documents-link, .documents-folder')
++    .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.path ?? `[${(e as HTMLElement).dataset.folder}]`));
++
++test.describe('the Documents page', () => {
++  test.beforeEach(async ({ page, tasksServer }) => {
++    tasksServer.setDocument(projectDocument('README.md', '# Agentic Task Manager\n'));
++    tasksServer.setDocument(projectDocument('docs/design.md', '# The design\n\nIt has **two** parts.\n'));
++    tasksServer.setDocument(projectDocument('docs/adr/ADR-003.md', '# Layered crates\n'));
++    await openDashboard(page, tasksServer, PROJECT, { tab: 'documents' });
++    await expect(list(page)).toBeVisible();
++  });
++
++  test('the tree: folders, then files; a click opens the document over the page, and Back returns to the list', async ({
++    page,
++    tasksServer,
++  }) => {
++    expect(await rows(page)).toEqual(['[docs]', 'README.md']);
++    await page.locator('[data-folder="docs"]').click();
++    expect(await rows(page)).toEqual(['[docs]', '[docs/adr]', 'docs/design.md', 'README.md']);
++    await expect(page.locator('[data-path="docs/design.md"] .documents-title')).toHaveText('The design');
++    // Opened in the viewer, over the page, a step in the history
++    await page.locator('[data-path="docs/design.md"]').click();
++    await expect.poll(() => addressOf(page)).toMatch(/^\/projects\/fixture\/documents\?doc=docs(\/|%2F)design\.md$/);
++    await expect(page.locator('#doc-title')).toHaveText('The design');
++    await expect(page.locator('#doc-viewer .compmd-page strong')).toHaveText('two');
++    await page.goBack();
++    await expect(page.locator('#doc-viewer')).toHaveCount(0);
++    await expect.poll(() => addressOf(page)).toBe('/projects/fixture/documents');
++    // The folder is still open: kept for the project, a reload too
++    await page.reload();
++    await expect(page.locator('[data-folder="docs"]')).toHaveAttribute('aria-expanded', 'true');
++    expect(tasksServer.documentListRequests.every((q) => q === '')).toBe(true);
++  });
++
++  test('the header line’s search filters titles and paths in the page; Recent lists by last change; both in the address', async ({
++    page,
++  }) => {
++    const search = page.getByRole('searchbox', { name: 'Search documents' });
++    await expect(search).toBeVisible();
++    await search.fill('crates');
++    await expect.poll(() => rows(page)).toEqual(['[docs]', '[docs/adr]', 'docs/adr/ADR-003.md']);
++    await expect.poll(() => addressOf(page)).toBe('/projects/fixture/documents?q=crates');
++    await page.locator('[data-view="recent"]').click();
++    await expect.poll(() => addressOf(page)).toBe('/projects/fixture/documents?list=recent&q=crates');
++    expect(await rows(page)).toEqual(['docs/adr/ADR-003.md']);
++    await search.fill('');
++    await expect.poll(() => rows(page).then((r) => r.length)).toBe(3);
++    // A reload keeps the view
++    await page.reload();
++    await expect(page.locator('[data-view="recent"]')).toHaveAttribute('aria-pressed', 'true');
++  });
++});
+diff --git a/dashboard/tests/e2e/helpers.ts b/dashboard/tests/e2e/helpers.ts
+index 9f905291..9e2e9381 100644
+--- a/dashboard/tests/e2e/helpers.ts
++++ b/dashboard/tests/e2e/helpers.ts
+@@ -27,7 +27,8 @@ const AGENT_SKILLS = ['atm-do-task', 'atm-serve'];
+ const WORKSPACE_PROJECTS = /\/api\/v2\/workspaces\/[^/]+\/projects(\?.*)?$/;
+ const V1_TASKS = /\/api\/v1\/projects\/([^/]+)\/tasks(\?.*)?$/;
+ const V1_STATS = /\/api\/v1\/projects\/([^/]+)\/stats(\?.*)?$/;
+-const V1_DOCUMENTS = /\/api\/v1\/projects\/([^/]+)\/documents\?/;
++/** A project's documents route: a file (`?path=`), or without a path its documents' listing (ATM-766) */
++const V1_DOCUMENTS = /\/api\/v1\/projects\/([^/]+)\/documents(\?|$)/;
+ const V1_FILES = /\/api\/v1\/projects\/([^/]+)\/files\?/;
+ /** A project's reviews, or one review's page (ATM-574) */
+ const V1_REVIEWS = /\/api\/v1\/projects\/([^/]+)\/reviews(?:\/([^/?]+))?(?:\?.*)?$/;
+@@ -423,6 +424,41 @@ export class TasksServer {
+     this.images.set(at ? `${at}:${path}` : path, { contentType, body });
+   }
+ 
++  /** The default project's documents' listing (the documents route without a path, ATM-766): the one a test sets,
++   * else made from the documents set (`setDocument`), each by its title or file name, tracked; the searches it was
++   * asked for, in order ('' for every document) */
++  private documentList: { documents: unknown[]; submodules: unknown[]; more: number; git?: boolean } | null = null;
++  documentListRequests: string[] = [];
++  setDocumentList(listing: { documents: unknown[]; submodules?: unknown[]; more?: number; git?: boolean }) {
++    this.documentList = { submodules: [], more: 0, ...listing };
++  }
++  private listedDocuments(q: string) {
++    const all = this.documentList ?? {
++      documents: [...this.documents.entries()]
++        .filter(([, d]) => d.status === 200 && /\.(md|markdown)$/.test((d.body as { path: string }).path))
++        .map(([path, d]) => {
++          const body = d.body as { title?: string; document?: string; modified_at?: string; tracked?: boolean };
++          const heading = /^#\s+(.+)$/m.exec(body.document ?? '')?.[1];
++          return {
++            path,
++            title: body.title ?? heading ?? path.split('/').pop(),
++            bytes: (body.document ?? '').length,
++            modified_at: body.modified_at ?? '2026-11-20T10:00:00Z',
++            tracked: body.tracked ?? true,
++          };
++        }),
++      submodules: [],
++      more: 0,
++    };
++    const query = q.toLowerCase();
++    const documents = query
++      ? (all.documents as { path: string; title: string }[]).filter(
++          (d) => d.path.toLowerCase().includes(query) || d.title.toLowerCase().includes(query),
++        )
++      : all.documents;
++    return { ...all, documents, more: query ? 0 : all.more };
++  }
++
+   /** Answer the documents route for `path` with an error, as atm serve refuses a file */
+   refuseDocument(path: string, status: number, error: string) {
+     this.documents.set(path, { status, body: { error }, version: 0 });
+@@ -770,6 +806,18 @@ export class TasksServer {
+       const url = new URL(route.request().url());
+       const path = url.searchParams.get('path') ?? '';
+       const revision = url.searchParams.get('at');
++      // No path: the documents' listing (ATM-766), tagged by what it answers
++      if (!path && !revision) {
++        const q = url.searchParams.get('q') ?? '';
++        this.documentListRequests.push(q);
++        if (!isDefault(route.request().url(), V1_DOCUMENTS))
++          return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error": "unknown project"}' });
++        const body = JSON.stringify(this.listedDocuments(q));
++        const etag = `"l${createHash('sha1').update(body).digest('hex').slice(0, 12)}"`;
++        if (route.request().headers()['if-none-match'] === etag)
++          return route.fulfill({ status: 304, headers: { ETag: etag } });
++        return route.fulfill({ status: 200, contentType: 'application/json', body, headers: { ETag: etag } });
++      }
+       if (revision) {
+         this.documentRequests.push(`${path}@${revision}`);
+         const doc = this.revisionDocuments.get(`${revision}:${path}`);
+diff --git a/dashboard/tests/e2e/tabs.spec.ts b/dashboard/tests/e2e/tabs.spec.ts
+index a5a10bc9..d27b22e9 100644
+--- a/dashboard/tests/e2e/tabs.spec.ts
++++ b/dashboard/tests/e2e/tabs.spec.ts
+@@ -69,7 +69,7 @@ test.describe('the page by item', () => {
+     await expect(panel(page, 'project')).toHaveAttribute('aria-labelledby', 'item-overview');
+   });
+ 
+-  test('the Inbox is its page (ATM-762); Documents says its page is coming', async ({ page, tasksServer }) => {
++  test('the Inbox is its page (ATM-762); so is Documents (ATM-766)', async ({ page, tasksServer }) => {
+     await openDashboard(page, tasksServer, 'standard');
+     await item(page, 'inbox').click();
+     await expectSelected(page, 'inbox');
+@@ -77,7 +77,8 @@ test.describe('the page by item', () => {
+     await expect(page.locator('#inbox-page')).toBeVisible();
+     await item(page, 'documents').click();
+     await expectSelected(page, 'documents');
+-    await expect(page.locator('#documents-placeholder')).toContainText('Documents are coming');
++    await expect(page).toHaveURL(/\/projects\/[^/]+\/documents(\?|$)/);
++    await expect(page.locator('#documents-page')).toBeVisible();
+   });
+ 
+   test('a project’s address without a tab is its Overview, whatever tab was seen last (ATM-751)', async ({
+diff --git a/dashboard/tests/unit/DocumentsPage.component.test.ts b/dashboard/tests/unit/DocumentsPage.component.test.ts
+new file mode 100644
+index 00000000..726fdaa7
+--- /dev/null
++++ b/dashboard/tests/unit/DocumentsPage.component.test.ts
+@@ -0,0 +1,209 @@
++import { fireEvent, render, waitFor } from '@testing-library/svelte';
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
++import type { DocumentEntry, DocumentsListing } from '../../src/lib/api/documents';
++import DocumentsPage from '../../src/lib/documents-page/DocumentsPage.svelte';
++import { getPref, setPref } from '../../src/lib/prefs';
++import { offeredReviewSearch } from '../../src/lib/reviews/search.svelte';
++import { dashboard } from '../../src/lib/state.svelte';
++import standard from '../fixtures/standard.json';
++import { loadIntoDashboard } from './components.helpers';
++
++// The Documents page (lib/documents-page/DocumentsPage.svelte, ATM-766): the client (api/documents.ts) is a stub here, as
++// are the address, the navigation and where the page runs
++
++const where = vi.hoisted(() => ({ address: '/projects/fixture/documents', app: false }));
++const navigate = vi.hoisted(() => vi.fn());
++vi.mock('../../src/lib/navigation', async (actual) => ({
++  ...(await actual()),
++  navigate,
++  currentAddress: () => where.address,
++}));
++vi.mock('../../src/lib/api/http', async (actual) => ({
++  ...(await actual()),
++  get inApp() {
++    return where.app;
++  },
++}));
++const api = vi.hoisted(() => ({ loadDocuments: vi.fn() }));
++vi.mock('../../src/lib/api/documents', () => api);
++const tabs = vi.hoisted(() => ({ open: vi.fn() }));
++vi.mock('../../src/lib/tab-actions', async (actual) => ({
++  ...(await actual()),
++  tabActions: () => tabs,
++}));
++
++const doc = (path: string, title: string, modified_at: string | null, tracked = true): DocumentEntry => ({
++  path,
++  title,
++  bytes: 10,
++  modified_at,
++  tracked,
++});
++const DOCS: DocumentEntry[] = [
++  doc('README.md', 'Agentic Task Manager', '2026-11-20T10:00:00Z'),
++  doc('docs/sidebar.md', 'The sidebar overhaul', '2026-11-24T08:00:00Z'),
++  doc('docs/adr/ADR-003.md', 'Layered crates', '2026-11-01T10:00:00Z'),
++  doc('docs/draft.md', 'A draft', '2026-11-24T09:00:00Z', false),
++];
++const listing = (over: Partial<DocumentsListing> = {}): DocumentsListing => ({
++  documents: DOCS,
++  submodules: [{ path: 'vendor/compmd', checked_out: false }],
++  more: 0,
++  git: true,
++  ...over,
++});
++const answer = (l: DocumentsListing) => ({ unchanged: false, listing: l, validators: { etag: '"d1"' } });
++
++const at = (address: string) => {
++  where.address = address;
++  dashboard.address = address;
++};
++const rows = (c: HTMLElement) =>
++  [...c.querySelectorAll<HTMLElement>('.documents-link, .documents-folder')].map(
++    (r) => r.dataset.path ?? `[${r.dataset.folder}]`,
++  );
++
++describe('DocumentsPage', () => {
++  beforeEach(() => {
++    localStorage.clear();
++    loadIntoDashboard(standard);
++    dashboard.projectId = 'fixture';
++    at('/projects/fixture/documents');
++    where.app = false;
++    api.loadDocuments.mockReset();
++    api.loadDocuments.mockResolvedValue(answer(listing()));
++    navigate.mockClear();
++    tabs.open.mockClear();
++  });
++  afterEach(() => {
++    dashboard.projectId = null;
++  });
++
++  it('the tree: folders closed by default, then the root’s files; a submodule marked, one not checked out says so', async () => {
++    const { container } = render(DocumentsPage);
++    await waitFor(() => expect(container.querySelector('#documents-list')).not.toBeNull());
++    expect(api.loadDocuments).toHaveBeenCalledWith('fixture', '', undefined, undefined);
++    expect(rows(container)).toEqual(['[docs]', '[vendor]', 'README.md']);
++    const docs = container.querySelector<HTMLElement>('[data-folder="docs"]')!;
++    expect(docs).toHaveAttribute('aria-expanded', 'false');
++    expect(docs.querySelector('.documents-count')).toHaveTextContent('3');
++    // Each row: its title, file name and how long ago it changed
++    const readme = container.querySelector('[data-path="README.md"]')!;
++    expect(readme.querySelector('.documents-title')).toHaveTextContent('Agentic Task Manager');
++    expect(readme.querySelector('.documents-file')).toHaveTextContent('README.md');
++    expect(readme.querySelector('.documents-ago')?.textContent).toMatch(/ago|20 Nov|Nov/);
++    // Opening a folder: its folders, then its files; the untracked one is new; kept for the project
++    await fireEvent.click(docs);
++    expect(rows(container)).toEqual([
++      '[docs]',
++      '[docs/adr]',
++      'docs/draft.md',
++      'docs/sidebar.md',
++      '[vendor]',
++      'README.md',
++    ]);
++    expect(container.querySelector('[data-path="docs/draft.md"] .documents-new')).toHaveTextContent('new');
++    expect(container.querySelector('[data-path="docs/sidebar.md"] .documents-new')).toBeNull();
++    expect(getPref('documentFolders', {})).toEqual({ fixture: ['docs'] });
++    await fireEvent.click(container.querySelector('[data-folder="vendor"]')!);
++    expect(container.querySelector('[data-folder="vendor/compmd"] .documents-submodule')).toHaveTextContent(
++      'submodule, not checked out',
++    );
++    // Closed again
++    await fireEvent.click(docs);
++    expect(rows(container)).not.toContain('docs/sidebar.md');
++  });
++
++  it('the open folders come back from the preferences, per project', async () => {
++    setPref('documentFolders', { fixture: ['docs', 'docs/adr'], other: ['vendor'] });
++    const { container } = render(DocumentsPage);
++    await waitFor(() => expect(container.querySelector('[data-path="docs/adr/ADR-003.md"]')).not.toBeNull());
++    expect(container.querySelector('[data-folder="vendor"]')).toHaveAttribute('aria-expanded', 'false');
++  });
++
++  it('Recent: every document by last change, newest first, with its path; the view is a step in the address', async () => {
++    at('/projects/fixture/documents?list=recent');
++    const { container } = render(DocumentsPage);
++    await waitFor(() => expect(container.querySelector('#documents-list')).not.toBeNull());
++    expect(rows(container)).toEqual(['docs/draft.md', 'docs/sidebar.md', 'README.md', 'docs/adr/ADR-003.md']);
++    expect(container.querySelector('[data-path="docs/adr/ADR-003.md"] .documents-file')).toHaveTextContent(
++      'docs/adr/ADR-003.md',
++    );
++    expect(container.querySelector('[data-view="recent"]')).toHaveAttribute('aria-pressed', 'true');
++    await fireEvent.click(container.querySelector('[data-view="tree"]')!);
++    expect(navigate).toHaveBeenCalledWith('/projects/fixture/documents');
++  });
++
++  it('the search is the header line’s: it filters titles and paths in the page, folders open, in the address', async () => {
++    const { container } = render(DocumentsPage);
++    await waitFor(() => expect(offeredReviewSearch()).not.toBeNull());
++    expect(offeredReviewSearch()?.placeholder).toBe('Search documents');
++    offeredReviewSearch()!.search('crates');
++    expect(navigate).toHaveBeenCalledWith('/projects/fixture/documents?q=crates', { replace: true });
++    at('/projects/fixture/documents?q=crates');
++    await waitFor(() => expect(rows(container)).toEqual(['[docs]', '[docs/adr]', 'docs/adr/ADR-003.md']));
++    // Every folder open while searching, and not to be closed; the submodules aren't shown
++    expect(container.querySelector('[data-folder="docs"]')).toBeDisabled();
++    // Nothing found
++    at('/projects/fixture/documents?q=nothing');
++    await waitFor(() => expect(container.querySelector('#documents-none')).toHaveTextContent('“nothing”'));
++    // Only the first listing was asked of atm: the search is the page's
++    expect(api.loadDocuments).toHaveBeenCalledTimes(1);
++  });
++
++  it('a list atm cut at 500: says how many more, and a search asks atm, which searches every document', async () => {
++    api.loadDocuments.mockImplementation(async (_p: string, q: string) =>
++      answer(q ? listing({ documents: [doc('far/away.md', 'Far away', null)], more: 0 }) : listing({ more: 12 })),
++    );
++    const { container } = render(DocumentsPage);
++    await waitFor(() => expect(container.querySelector('#documents-more')).toHaveTextContent('And 12 more'));
++    at('/projects/fixture/documents?q=away');
++    await waitFor(() => expect(rows(container)).toEqual(['[far]', 'far/away.md']));
++    expect(api.loadDocuments).toHaveBeenCalledWith('fixture', 'away');
++    expect(container.querySelector('#documents-more')).toBeNull();
++  });
++
++  it('a click opens the document over the page, a step in its history; ⌘-click: a new tab in the app, the browser’s own outside', async () => {
++    const { container } = render(DocumentsPage);
++    await waitFor(() => expect(container.querySelector('[data-path="README.md"]')).not.toBeNull());
++    const link = container.querySelector<HTMLAnchorElement>('[data-path="README.md"]')!;
++    expect(link).toHaveAttribute('href', '/projects/fixture/documents?doc=README.md');
++    await fireEvent.click(link);
++    expect(navigate).toHaveBeenCalledWith('/projects/fixture/documents?doc=README.md');
++    // The browser: a ⌘-click is the link's, a tab of the browser's
++    navigate.mockClear();
++    expect(await fireEvent.click(link, { metaKey: true })).toBe(true);
++    expect(navigate).not.toHaveBeenCalled();
++    expect(tabs.open).not.toHaveBeenCalled();
++    // The app: a tab of its own, in the background
++    where.app = true;
++    await fireEvent.click(link, { metaKey: true });
++    expect(tabs.open).toHaveBeenCalledWith('/projects/fixture/documents?doc=README.md', true);
++    expect(navigate).not.toHaveBeenCalled();
++  });
++
++  it('none yet, a project outside git, and a listing that can’t be read each say so', async () => {
++    api.loadDocuments.mockResolvedValue(answer(listing({ documents: [], submodules: [] })));
++    const empty = render(DocumentsPage);
++    await waitFor(() => expect(empty.container.querySelector('#documents-empty')).not.toBeNull());
++    empty.unmount();
++    api.loadDocuments.mockResolvedValue(answer(listing({ documents: [], submodules: [], git: false })));
++    const noGit = render(DocumentsPage);
++    await waitFor(() => expect(noGit.container.querySelector('#documents-no-git')).not.toBeNull());
++    noGit.unmount();
++    api.loadDocuments.mockRejectedValue(new Error('HTTP 500'));
++    const broken = render(DocumentsPage);
++    await waitFor(() => expect(broken.container.querySelector('#documents-problem')).toHaveTextContent('HTTP 500'));
++  });
++
++  it('asked again by its validators: unchanged keeps what is shown', async () => {
++    vi.useFakeTimers();
++    const { container } = render(DocumentsPage);
++    await vi.waitFor(() => expect(container.querySelector('#documents-list')).not.toBeNull());
++    api.loadDocuments.mockResolvedValue({ unchanged: true });
++    await vi.advanceTimersByTimeAsync(10_000);
++    vi.useRealTimers();
++    expect(api.loadDocuments).toHaveBeenLastCalledWith('fixture', '', undefined, { etag: '"d1"' });
++    expect(rows(container)).toEqual(['[docs]', '[vendor]', 'README.md']);
++  });
++});
+diff --git a/dashboard/tests/unit/api-documents.test.ts b/dashboard/tests/unit/api-documents.test.ts
+new file mode 100644
+index 00000000..64837f71
+--- /dev/null
++++ b/dashboard/tests/unit/api-documents.test.ts
+@@ -0,0 +1,76 @@
++import { afterEach, describe, expect, it, vi } from 'vitest';
++import { loadDocuments } from '../../src/lib/api/documents';
++import { documentsUrl, type Fetch } from '../../src/lib/api/http';
++import { callFor } from '../../src/lib/api/ipc';
++import { setApiWorkspace } from '../../src/lib/api/workspace';
++
++// The documents' listing client (lib/api/documents.ts, ATM-766), its route and the app's command for it. The
++// transport is stubbed: fetch.
++
++afterEach(() => setApiWorkspace('default'));
++
++const answering = (body: unknown, status = 200) =>
++  vi.fn(async () => new Response(JSON.stringify(body), { status, headers: { ETag: '"d1"' } })) as unknown as Fetch;
++
++describe('the listing’s route', () => {
++  it('every document, or those a search names (trimmed, encoded); another workspace’s v2 route', () => {
++    expect(documentsUrl('p1')).toBe('/api/v1/projects/p1/documents');
++    expect(documentsUrl('p1', '  ')).toBe('/api/v1/projects/p1/documents');
++    expect(documentsUrl('p1', ' the design & more ')).toBe('/api/v1/projects/p1/documents?q=the%20design%20%26%20more');
++    setApiWorkspace('w');
++    expect(documentsUrl('p1', 'x')).toBe('/api/v2/workspaces/w/projects/p1/documents?q=x');
++  });
++
++  it('in the app, the project_documents command with the search', () => {
++    expect(callFor(documentsUrl('p1', 'adr'))).toEqual({
++      command: 'project_documents',
++      args: { workspace: 'default', project: 'p1', q: 'adr' },
++    });
++  });
++});
++
++describe('loadDocuments', () => {
++  it('the documents, submodules and how many more, with its validators; anything unexpected left out', async () => {
++    const fetch = answering({
++      documents: [
++        { path: 'README.md', title: 'Read me', bytes: 12, modified_at: '2026-11-24T10:00:00Z', tracked: true },
++        { path: 'docs/new.md', title: '', bytes: 'x', tracked: false },
++        { title: 'no path' },
++        null,
++      ],
++      submodules: [{ path: 'vendor/lib', checked_out: false }, { checked_out: true }],
++      more: 3,
++    });
++    const result = await loadDocuments('p1', 'read', fetch);
++    expect((fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls[0][0]).toBe(
++      '/api/v1/projects/p1/documents?q=read',
++    );
++    expect(result).toEqual({
++      unchanged: false,
++      listing: {
++        documents: [
++          { path: 'README.md', title: 'Read me', bytes: 12, modified_at: '2026-11-24T10:00:00Z', tracked: true },
++          // No title: its file's name
++          { path: 'docs/new.md', title: 'new.md', bytes: 0, modified_at: null, tracked: false },
++        ],
++        submodules: [{ path: 'vendor/lib', checked_out: false }],
++        more: 3,
++        git: true,
++      },
++      validators: { etag: '"d1"' },
++    });
++  });
++
++  it('a project outside git says so; a body of no shape is an empty listing', async () => {
++    const none = await loadDocuments('p1', '', answering({ git: false, documents: [], submodules: [], more: 0 }));
++    expect(none.unchanged ? null : none.listing.git).toBe(false);
++    const odd = await loadDocuments('p1', '', answering({ documents: 'x', more: -2 }));
++    expect(odd.unchanged ? null : odd.listing).toEqual({ documents: [], submodules: [], more: 0, git: true });
++  });
++
++  it('asked again with its validators: a 304 is unchanged; an error rejects', async () => {
++    const fetch = vi.fn(async () => new Response(null, { status: 304 })) as unknown as Fetch;
++    expect(await loadDocuments('p1', '', fetch, { etag: '"d1"' })).toEqual({ unchanged: true });
++    await expect(loadDocuments('p1', '', answering({ error: 'refused' }, 400))).rejects.toThrow('HTTP 400');
++  });
++});
+diff --git a/dashboard/tests/unit/document-list.test.ts b/dashboard/tests/unit/document-list.test.ts
+new file mode 100644
+index 00000000..34eb219a
+--- /dev/null
++++ b/dashboard/tests/unit/document-list.test.ts
+@@ -0,0 +1,136 @@
++import { describe, expect, it } from 'vitest';
++import type { DocumentEntry } from '../../src/lib/api/documents';
++import {
++  byRecent,
++  documentsListOf,
++  fileName,
++  foldersOf,
++  matching,
++  treeOf,
++  withDocumentsList,
++  type Folder,
++} from '../../src/lib/document-list';
++
++// The Documents page's list (lib/document-list.ts, ATM-766): its address, the search, Recent and the tree
++
++const doc = (
++  path: string,
++  title = fileName(path),
++  modified_at: string | null = null,
++  tracked = true,
++): DocumentEntry => ({
++  path,
++  title,
++  bytes: 10,
++  modified_at,
++  tracked,
++});
++
++describe('the page’s address', () => {
++  it('the view and the search, with their defaults (the tree, no search; an unknown view is the tree)', () => {
++    expect(documentsListOf('/projects/p1/documents')).toEqual({ view: 'tree', q: '' });
++    expect(documentsListOf('/projects/p1/documents?list=recent&q=+side+')).toEqual({ view: 'recent', q: 'side' });
++    expect(documentsListOf('/projects/p1/documents?list=grid')).toEqual({ view: 'tree', q: '' });
++  });
++
++  it('written without the defaults, keeping the other parameters (a document open over the page) and the page', () => {
++    expect(withDocumentsList('/projects/p1/documents?doc=a.md', { view: 'recent', q: ' adr ' })).toBe(
++      '/projects/p1/documents?doc=a.md&list=recent&q=adr',
++    );
++    expect(withDocumentsList('/projects/p1/documents?list=recent&q=x', { view: 'tree', q: '' })).toBe(
++      '/projects/p1/documents',
++    );
++  });
++});
++
++describe('the search', () => {
++  const docs = [doc('docs/adr/ADR-003.md', 'Layered crates'), doc('README.md', 'Agentic Task Manager')];
++
++  it('keeps those whose title or path holds it, in any case; none given keeps every one', () => {
++    expect(matching(docs, 'LAYERED').map((d) => d.path)).toEqual(['docs/adr/ADR-003.md']);
++    expect(matching(docs, 'adr/').map((d) => d.path)).toEqual(['docs/adr/ADR-003.md']);
++    expect(matching(docs, 'readme').map((d) => d.path)).toEqual(['README.md']);
++    expect(matching(docs, '  ')).toEqual(docs);
++    expect(matching(docs, 'nothing')).toEqual([]);
++  });
++});
++
++describe('Recent', () => {
++  it('by last change, newest first; one without a time last; a tie by path', () => {
++    const docs = [
++      doc('b.md', 'B', '2026-11-20T10:00:00Z'),
++      doc('none.md', 'None', null),
++      doc('a.md', 'A', '2026-11-24T10:00:00Z'),
++      doc('c.md', 'C', '2026-11-20T10:00:00Z'),
++    ];
++    expect(byRecent(docs).map((d) => d.path)).toEqual(['a.md', 'b.md', 'c.md', 'none.md']);
++    // The listing as it was
++    expect(docs[0].path).toBe('b.md');
++  });
++});
++
++describe('the tree', () => {
++  const names = (folder: Folder): unknown => ({
++    folders: folder.folders.map((f) => [f.name, f.count, f.submodule, names(f)]),
++    files: folder.files.map((d) => d.path),
++  });
++
++  it('none: an empty root', () => {
++    expect(treeOf([])).toEqual({ name: '', path: '', folders: [], files: [], count: 0, submodule: null });
++  });
++
++  it('folders first, then files, each by name; each folder counts every document in it', () => {
++    const tree = treeOf([
++      doc('README.md'),
++      doc('docs/z.md'),
++      doc('docs/adr/ADR-002.md'),
++      doc('docs/adr/ADR-001.md'),
++      doc('CHANGELOG.md'),
++      doc('packaging/README.md'),
++    ]);
++    expect(tree.count).toBe(6);
++    expect(names(tree)).toEqual({
++      folders: [
++        [
++          'docs',
++          3,
++          null,
++          {
++            folders: [['adr', 2, null, { folders: [], files: ['docs/adr/ADR-001.md', 'docs/adr/ADR-002.md'] }]],
++            files: ['docs/z.md'],
++          },
++        ],
++        ['packaging', 1, null, { folders: [], files: ['packaging/README.md'] }],
++      ],
++      files: ['CHANGELOG.md', 'README.md'],
++    });
++    expect(tree.folders[0].folders[0].path).toBe('docs/adr');
++  });
++
++  it('a submodule is a folder marked as one, nested ones too; one not checked out is there, empty', () => {
++    const tree = treeOf(
++      [doc('vendor/lib/README.md'), doc('vendor/lib/deep/x.md')],
++      [
++        { path: 'vendor/lib', checked_out: true },
++        { path: 'vendor/lib/deep', checked_out: true },
++        { path: 'vendor/gone', checked_out: false },
++      ],
++    );
++    const vendor = tree.folders[0];
++    expect(vendor.submodule).toBeNull();
++    expect(vendor.folders.map((f) => [f.name, f.submodule, f.count])).toEqual([
++      ['gone', { checked_out: false }, 0],
++      ['lib', { checked_out: true }, 2],
++    ]);
++    expect(vendor.folders[1].folders[0].submodule).toEqual({ checked_out: true });
++  });
++});
++
++describe('the folders a document is under', () => {
++  it('each folder on its way from the root; none at the root', () => {
++    expect(foldersOf('docs/adr/x.md')).toEqual(['docs', 'docs/adr']);
++    expect(foldersOf('README.md')).toEqual([]);
++    expect(fileName('docs/adr/x.md')).toBe('x.md');
++    expect(fileName('README.md')).toBe('README.md');
++  });
++});
+diff --git a/docs/documents-design.md b/docs/documents-design.md
+index b7451aeb..12be9a35 100644
+--- a/docs/documents-design.md
++++ b/docs/documents-design.md
+@@ -59,7 +59,8 @@ and the listed files' sizes and mtimes), as the other routes' `ETag`s are.
+ 
+ - **Two views:** *Tree* (folders, open or closed, the root's files after its folders) and *Recent* (every document by
+   last change, newest first). The view and the search are in the address
+-  (`/projects/<id>/documents?view=recent&q=sidebar`); the open folders are kept per project in the preferences
++  (`/projects/<id>/documents?list=recent&q=sidebar`; `list`, as `view` is the address's own name for a project's
++  page, ATM-766); the open folders are kept per project in the preferences
+   (they would make the address long).
+ - **Each row** is its title, its file name, and how long ago it changed; an untracked one says *new*.
+ - **The search** filters by title and path as you type, in the page (the list is already loaded; when the route cut

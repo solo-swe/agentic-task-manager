@@ -1,0 +1,62 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "aad73af21686761abeb28e6c36165bab16d80e06",
+    "head": "234440db0e7cdffb90793d596bf67956d9eafc84"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/lib/address.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/overview/OverviewReviews.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/overview/ReviewProjects.svelte",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/reviews/ReviewList.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/reviews/ReviewSearch.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/reviews/search.svelte.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/overview-reviews.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/ReviewProjects.component.test.ts",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/address.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/multi-project-api.md",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:ba530ebb",
+  "at": "2026-11-24T16:13:23Z"
+}

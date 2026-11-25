@@ -1,0 +1,1771 @@
+diff --git a/app/src-tauri/build.rs b/app/src-tauri/build.rs
+index 26fd8d9b..ca05fc1c 100644
+--- a/app/src-tauri/build.rs
++++ b/app/src-tauri/build.rs
+@@ -46,6 +46,10 @@ fn main() {
+         "add_review_draft",
+         "update_review_draft",
+         "remove_review_draft",
++        "project_inbox",
++        "add_inbox_item",
++        "edit_inbox_item",
++        "decide_inbox_item",
+         "subscribe_links",
+         "check_update",
+         "install_update",
+diff --git a/app/src-tauri/capabilities/main.json b/app/src-tauri/capabilities/main.json
+index f5e16dad..79ad381f 100644
+--- a/app/src-tauri/capabilities/main.json
++++ b/app/src-tauri/capabilities/main.json
+@@ -1,7 +1,7 @@
+ {
+   "$schema": "../gen/schemas/desktop-schema.json",
+   "identifier": "main",
+-  "description": "The app's windows (main, and window-<n> it opens, T-511): the app's own commands, the reads (and their subscriptions), connecting agents, installing an update and writing to a project's reviews (as the user, ATM-572) on the user's action, the window's own shell, title and a new window at one of the dashboard's pages, its tabs kept for the next start (and a Reload of its page) and what needs the user (the app's badge and notifications, which the app sends itself) and an external link in the user's browser (open-url, which checks it), nothing else (no core or plugin APIs: the updater only through the app's two commands, the opener only through open-url)",
++  "description": "The app's windows (main, and window-<n> it opens, T-511): the app's own commands, the reads (and their subscriptions), connecting agents, installing an update and writing to a project's reviews (as the user, ATM-572) and its inbox (as the user, ATM-761) on the user's action, the window's own shell, title and a new window at one of the dashboard's pages, its tabs kept for the next start (and a Reload of its page) and what needs the user (the app's badge and notifications, which the app sends itself) and an external link in the user's browser (open-url, which checks it), nothing else (no core or plugin APIs: the updater only through the app's two commands, the opener only through open-url)",
+   "windows": ["main", "window-*"],
+   "permissions": [
+     "allow-version",
+@@ -35,6 +35,10 @@
+     "allow-add-review-draft",
+     "allow-update-review-draft",
+     "allow-remove-review-draft",
++    "allow-project-inbox",
++    "allow-add-inbox-item",
++    "allow-edit-inbox-item",
++    "allow-decide-inbox-item",
+     "allow-subscribe-links",
+     "allow-check-update",
+     "allow-install-update",
+diff --git a/app/src-tauri/src/commands.rs b/app/src-tauri/src/commands.rs
+index c6299de0..9e6661ae 100644
+--- a/app/src-tauri/src/commands.rs
++++ b/app/src-tauri/src/commands.rs
+@@ -5,14 +5,17 @@
+ //! module of their own: Tauri's command macros can't be defined at a library's root.)
+ //!
+ //! By area (ATM-711): [`state`] (what the commands share, their errors and filters), [`reads`] (the workspaces,
+-//! projects, tasks, documents and files), [`reviews`] (the review and draft commands) and [`windows`] (the
+-//! subscriptions, the links and the agents' skills). Each is re-exported here, so every command keeps its path.
++//! projects, tasks, documents and files), [`reviews`] (the review and draft commands), [`inbox`] (the inbox's,
++//! ATM-761) and [`windows`] (the subscriptions, the links and the agents' skills). Each is re-exported here, so every
++//! command keeps its path.
+ 
++mod inbox;
+ mod reads;
+ mod reviews;
+ mod state;
+ mod windows;
+ 
++pub use inbox::*;
+ pub use reads::*;
+ pub use reviews::*;
+ pub use state::*;
+diff --git a/app/src-tauri/src/commands/inbox.rs b/app/src-tauri/src/commands/inbox.rs
+new file mode 100644
+index 00000000..f6e6cbdd
+--- /dev/null
++++ b/app/src-tauri/src/commands/inbox.rs
+@@ -0,0 +1,103 @@
++//! The inbox's commands (docs/inbox-design.md §7, ATM-761), each the REST route of the same name, acting as the user:
++//! the items, an item added, its text changed, and a person's decision (discarded or restored). No command injects an
++//! item: an agent records that with `atm inbox inject`.
++
++use atm_lib::inbox;
++use atm_lib::review_requests::request_from;
++use serde_json::{Value, json};
++use tauri::State;
++
++use super::reads::member;
++use super::reviews::ReviewRequest;
++use super::state::{AppError, AppState, Json};
++
++/// A request's body: an object, as the routes take it (a list would fill a request's fields in order)
++fn object(body: ReviewRequest) -> Result<Value, AppError> {
++    if body.0.is_object() {
++        Ok(body.0)
++    } else {
++        Err(atm_common::Error::Invalid("not this request: the body is an object".into()).into())
++    }
++}
++
++/// `GET …/inbox?state=&archived=`: the items `state` names (the open ones when none), of the archive with `archived`.
++///
++/// # Errors
++/// No such workspace or project; a state that isn't one; an inbox that can't be read.
++#[tauri::command]
++#[specta::specta]
++pub async fn project_inbox(
++    state: State<'_, AppState>,
++    workspace: String,
++    project: String,
++    which: Option<String>,
++    archived: bool,
++) -> Result<Json, AppError> {
++    let project = member(&state.workspaces, &workspace, &project)?.project()?;
++    let listed = inbox::list(&project, inbox::listing_of(which.as_deref())?, archived)?;
++    Ok(Json(json!({
++        "items": listed.items,
++        "created": listed.created,
++        "discarded": listed.discarded,
++        "injected": listed.injected,
++    })))
++}
++
++/// `POST …/inbox`: an item added, as the user.
++///
++/// # Errors
++/// No such workspace or project; a body that isn't one; what the inbox's rules refuse.
++#[tauri::command]
++#[specta::specta]
++pub async fn add_inbox_item(
++    state: State<'_, AppState>,
++    workspace: String,
++    project: String,
++    item: ReviewRequest,
++) -> Result<Json, AppError> {
++    let mut project = member(&state.workspaces, &workspace, &project)?.project_as_user()?;
++    let item: inbox::NewItem = request_from(object(item)?)?;
++    Ok(Json(
++        json!({ "item": inbox::add(&mut project, &item.text)? }),
++    ))
++}
++
++/// `PATCH …/inbox/<IN>`: an open item's text, as the user.
++///
++/// # Errors
++/// As [`add_inbox_item`].
++#[tauri::command]
++#[specta::specta]
++pub async fn edit_inbox_item(
++    state: State<'_, AppState>,
++    workspace: String,
++    project: String,
++    id: String,
++    edit: ReviewRequest,
++) -> Result<Json, AppError> {
++    let mut project = member(&state.workspaces, &workspace, &project)?.project_as_user()?;
++    let edit: inbox::ItemEdit = request_from(object(edit)?)?;
++    Ok(Json(
++        json!({ "item": inbox::edit(&mut project, &id, &edit.text)? }),
++    ))
++}
++
++/// `POST …/inbox/<IN>/decisions`: a person's decision, discarded (with a reason) or restored.
++///
++/// # Errors
++/// As [`add_inbox_item`].
++#[tauri::command]
++#[specta::specta]
++pub async fn decide_inbox_item(
++    state: State<'_, AppState>,
++    workspace: String,
++    project: String,
++    id: String,
++    decision: ReviewRequest,
++) -> Result<Json, AppError> {
++    let mut project = member(&state.workspaces, &workspace, &project)?.project_as_user()?;
++    let decision: inbox::ItemDecision = request_from(object(decision)?)?;
++    Ok(Json(
++        json!({ "item": inbox::decide(&mut project, &id, &decision)? }),
++    ))
++}
+diff --git a/app/src-tauri/src/integration_tests.rs b/app/src-tauri/src/integration_tests.rs
+index 096eae60..e87aa6bd 100644
+--- a/app/src-tauri/src/integration_tests.rs
++++ b/app/src-tauri/src/integration_tests.rs
+@@ -1104,3 +1104,109 @@ fn the_window_commands_act_on_the_calling_window() {
+     }
+     std::fs::remove_dir_all(&home).expect("clean up");
+ }
++
++/// ATM-761: the inbox's commands, as its REST routes: the items, an item added as the user, its text changed, a
++/// person's decision; a body that isn't the request refused; a page from anywhere else can't call them
++#[test]
++#[cfg_attr(
++    windows,
++    ignore = "T-482: Windows' local origin differs (http://tauri.localhost?)"
++)]
++fn the_inbox_commands_answer_what_the_page_reads_and_only_from_the_apps_page() {
++    let home = a_state_with_a_project("inbox-flow");
++    let (_app, windows) = mock_app(
++        &home,
++        tauri::generate_handler![
++            project_inbox,
++            add_inbox_item,
++            edit_inbox_item,
++            decide_inbox_item
++        ],
++        &["main"],
++    );
++    let window = &windows[0];
++    let on = |extra: Value| {
++        let mut args = json!({"workspace": "work", "project": "abcd1234"});
++        args.as_object_mut()
++            .expect("an object")
++            .extend(extra.as_object().expect("an object").clone());
++        args
++    };
++    let list = |which: Value| {
++        call(
++            window,
++            "project_inbox",
++            &on(json!({"which": which, "archived": false})),
++        )
++    };
++    assert_eq!(list(Value::Null).expect("the inbox")["items"], json!([]));
++    let added = call(
++        window,
++        "add_inbox_item",
++        &on(json!({"item": {"text": "A note"}})),
++    )
++    .expect("an item");
++    assert_eq!(added["item"]["id"], json!("IN-1"), "{added}");
++    // As the user at the machine: the inbox refuses an agent
++    assert!(
++        !added["item"]["created_by"]
++            .as_str()
++            .unwrap_or_default()
++            .starts_with("claude:")
++    );
++    let edited = call(
++        window,
++        "edit_inbox_item",
++        &on(json!({"id": "IN-1", "edit": {"text": "A better note"}})),
++    )
++    .expect("an edit");
++    assert_eq!(edited["item"]["text"], json!("A better note"));
++    let discarded = call(
++        window,
++        "decide_inbox_item",
++        &on(json!({"id": "IN-1", "decision": {"decision": "discarded", "reason": "Done"}})),
++    )
++    .expect("a decision");
++    assert_eq!(discarded["item"]["state"], json!("discarded"));
++    assert_eq!(
++        list(json!("discarded")).expect("the discarded")["discarded"],
++        json!(1)
++    );
++    // Not a request: another author, an injection, a list
++    for (command, args) in [
++        (
++            "add_inbox_item",
++            on(json!({"item": {"text": "x", "created_by": "claude:x"}})),
++        ),
++        ("add_inbox_item", on(json!({"item": ["x"]}))),
++        (
++            "decide_inbox_item",
++            on(json!({"id": "IN-1", "decision": {"decision": "injected", "tasks": ["T-1"]}})),
++        ),
++    ] {
++        let refused = call(window, command, &args).expect_err(command);
++        assert_eq!(refused["kind"], json!("invalid"), "{command}: {refused}");
++    }
++    // From anywhere but the app's own page: none answers
++    for elsewhere in ELSEWHERE {
++        assert!(
++            tauri::test::get_ipc_response(
++                window,
++                ipc_request(
++                    "add_inbox_item",
++                    &on(json!({"item": {"text": "x"}})),
++                    elsewhere
++                )
++            )
++            .is_err(),
++            "add_inbox_item answered a page from {elsewhere}"
++        );
++    }
++    assert_eq!(
++        list(json!("all")).expect("all")["items"]
++            .as_array()
++            .map(Vec::len),
++        Some(1)
++    );
++    std::fs::remove_dir_all(&home).expect("clean up");
++}
+diff --git a/app/src-tauri/src/lib.rs b/app/src-tauri/src/lib.rs
+index f2027f0f..7cace26d 100644
+--- a/app/src-tauri/src/lib.rs
++++ b/app/src-tauri/src/lib.rs
+@@ -25,6 +25,7 @@ use commands::{
+     subscribe_project, subscribe_working_copy, subscribe_workspace, unsubscribe, version,
+     worktrees,
+ };
++use commands::{add_inbox_item, decide_inbox_item, edit_inbox_item, project_inbox};
+ use commands::{
+     add_review_comment, add_review_draft, close_review, create_review, list_review_drafts,
+     poke_review, project_review, project_reviews, remove_review_draft, reply_to_review_comment,
+@@ -84,6 +85,10 @@ pub fn commands() -> tauri_specta::Builder<tauri::Wry> {
+         add_review_draft,
+         update_review_draft,
+         remove_review_draft,
++        project_inbox,
++        add_inbox_item,
++        edit_inbox_item,
++        decide_inbox_item,
+         subscribe_links::<tauri::Wry>,
+         check_update,
+         install_update,
+diff --git a/crates/atm-api/src/lib.rs b/crates/atm-api/src/lib.rs
+index df3a0fda..0020957a 100644
+--- a/crates/atm-api/src/lib.rs
++++ b/crates/atm-api/src/lib.rs
+@@ -181,7 +181,12 @@ async fn serve_checked_review_change(
+     };
+     tokio::task::spawn_blocking(move || {
+         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+-            routes::serve_review_change(&served.projects, &method, &path, body)
++            // An inbox change (ATM-761) behind the same checks, to its own routes
++            if routes::is_inbox_path(&path) {
++                routes::serve_inbox_change(&served.projects, &method, &path, body)
++            } else {
++                routes::serve_review_change(&served.projects, &method, &path, body)
++            }
+         }))
+         .unwrap_or_else(|_| send_error(StatusCode::INTERNAL_SERVER_ERROR, "internal error"))
+     })
+@@ -277,14 +282,15 @@ fn send_conditional(
+ /// change.
+ async fn serve_request(State(served): State<Arc<Served>>, request: Request) -> Response {
+     let method = request.method().clone();
+-    let changes_reviews =
+-        changes_something(&method) && routes::is_reviews_path(request.uri().path());
++    let changes_reviews = changes_something(&method)
++        && (routes::is_reviews_path(request.uri().path())
++            || routes::is_inbox_path(request.uri().path()));
+     if method != Method::GET && method != Method::HEAD && !changes_reviews {
+         // OPTIONS among them: no CORS preflight is ever answered, so no other site can send the session header; and
+-        // every path but a project's reviews is read-only
++        // every path but a project's reviews and its inbox (ATM-761) is read-only
+         return send_error(
+             StatusCode::METHOD_NOT_ALLOWED,
+-            "only GET and HEAD, and POST, PATCH, PUT or DELETE on reviews",
++            "only GET and HEAD, and POST, PATCH, PUT or DELETE on reviews and the inbox",
+         );
+     }
+     let host = request
+diff --git a/crates/atm-api/src/routes.rs b/crates/atm-api/src/routes.rs
+index edf981a8..586916b3 100644
+--- a/crates/atm-api/src/routes.rs
++++ b/crates/atm-api/src/routes.rs
+@@ -5,7 +5,8 @@
+ //! - [`tasks`]: a project's tasks with what atm derives for them (`…/<w>/projects/<p>/tasks`);
+ //! - [`claims`]: its claims and worktrees; [`logo`]: its logo;
+ //! - [`documents`]: its files for the document viewer (`documents?path=`, `files?path=`);
+-//! - [`reviews`]: its code reviews, the only routes that change anything (POST, PATCH, PUT; ATM-572).
++//! - [`reviews`]: its code reviews (POST, PATCH, PUT; ATM-572) and [`inbox`]: its inbox (ATM-761), the only routes
++//!   that change anything, behind the same checks.
+ //!
+ //! The v1 routes (`/api/projects`, `/api/search`, `/api/v1/projects/<p>/…`, `/p/<p>/…`) are the same for the `default`
+ //! workspace. Each through atm-lib, on a snapshot of the project opened for the request; each read with an `ETag`, so
+@@ -14,6 +15,7 @@
+ 
+ mod claims;
+ mod documents;
++mod inbox;
+ mod logo;
+ mod query;
+ mod reviews;
+@@ -35,6 +37,7 @@ use serde_json::{Value, json};
+ 
+ use super::{send, send_error};
+ 
++pub use inbox::{is_inbox_path, serve_inbox_change};
+ pub use reviews::{is_reviews_path, serve_review_change};
+ use source::{AtmLib, Source, WorkspaceSource};
+ 
+@@ -146,6 +149,8 @@ enum ProjectRead<'a> {
+     Review(&'a str),
+     /// The user's drafts on a review (ATM-612)
+     Drafts(&'a str),
++    /// Its inbox's items (ATM-761)
++    Inbox,
+ }
+ 
+ impl<'a> ProjectRead<'a> {
+@@ -163,6 +168,7 @@ impl<'a> ProjectRead<'a> {
+             ["reviews"] => Self::Reviews,
+             ["reviews", review] if !review.is_empty() => Self::Review(review),
+             ["reviews", review, "drafts"] if !review.is_empty() => Self::Drafts(review),
++            ["inbox"] => Self::Inbox,
+             _ => return None,
+         })
+     }
+@@ -192,6 +198,7 @@ fn serve_project_read(
+         ProjectRead::Reviews => reviews::get_reviews(project, query),
+         ProjectRead::Review(review) => reviews::get_review(project, review, query, request),
+         ProjectRead::Drafts(review) => reviews::get_drafts(project, review),
++        ProjectRead::Inbox => inbox::get_inbox(project, query, request),
+     }
+ }
+ 
+@@ -257,7 +264,8 @@ pub fn serve(projects: &Projects, path: &str, query: &str, request: &HeaderMap)
+             | ProjectRead::Documents
+             | ProjectRead::Files
+             | ProjectRead::Reviews
+-            | ProjectRead::Review(_)),
++            | ProjectRead::Review(_)
++            | ProjectRead::Inbox),
+         ) = ProjectRead::named(&route.split('/').collect::<Vec<_>>())
+     {
+         return serve_project_read(default, id, read, query, request);
+@@ -463,6 +471,23 @@ mod tests {
+                 tasks("work"),
+             ),
+             ("/api/v1/projects/p1/tasks", "status=todo", tasks("default")),
++            // The inbox (ATM-761), v2's and v1's
++            (
++                "/api/v2/workspaces/work/projects/p1/inbox",
++                "state=all",
++                vec![
++                    project("work"),
++                    Call::Inbox(atm_lib::inbox::Listing::All, false),
++                ],
++            ),
++            (
++                "/api/v1/projects/p1/inbox",
++                "",
++                vec![
++                    project("default"),
++                    Call::Inbox(atm_lib::inbox::Listing::Open, false),
++                ],
++            ),
+             (
+                 "/api/v2/workspaces/work/projects/p1/documents",
+                 "path=a.md",
+diff --git a/crates/atm-api/src/routes/inbox.rs b/crates/atm-api/src/routes/inbox.rs
+new file mode 100644
+index 00000000..ec9063b7
+--- /dev/null
++++ b/crates/atm-api/src/routes/inbox.rs
+@@ -0,0 +1,179 @@
++//! A project's inbox (docs/inbox-design.md §7, ATM-761): its items, read with an `ETag`, and the page's changes. Each
++//! change is one atm-lib call (`inbox`), as the user at the machine; `serve_request` has checked the request first, as
++//! for a review change: the Host, the server's own Origin, the session token, a JSON body (I11).
++//!
++//! | Method | Resource | Does |
++//! |---|---|---|
++//! | GET | `inbox?state=&archived=` | the items (the open ones by default) |
++//! | POST | `inbox` | an item added |
++//! | PATCH | `inbox/<IN>` | an open item's text |
++//! | POST | `inbox/<IN>/decisions` | discarded (with a reason) or restored |
++//!
++//! No route injects an item: an agent records the tasks an item became, with `atm inbox inject`.
++
++use atm_common::py::to_json;
++use atm_lib::inbox::{ItemDecision, ItemEdit, NewItem, listing_of};
++use atm_lib::review_requests::request_from;
++use axum::http::{HeaderMap, Method, StatusCode};
++use axum::response::Response;
++use serde_json::Value;
++
++use super::query::parameter;
++use super::source::{InboxChanges, ProjectSource};
++use super::{Projects, error_response, etag, not_modified, ok_json, stamped, unchanged};
++use crate::{send, send_error};
++
++/// `GET …/inbox?state=&archived=`: the items `state` names (`created`, the open ones, by default; `discarded`,
++/// `injected`, `all`), of the archive with `archived=1`, newest first, with the counts. Tagged by what it holds, so a
++/// poll of an unchanged inbox is a 304.
++pub(super) fn get_inbox(project: &dyn ProjectSource, query: &str, request: &HeaderMap) -> Response {
++    let state = parameter(query, "state");
++    let which = match listing_of((!state.is_empty()).then_some(state.as_str())) {
++        Ok(which) => which,
++        Err(e) => return error_response(&e),
++    };
++    let archived = match parameter(query, "archived").as_str() {
++        "" | "0" | "false" => false,
++        "1" | "true" => true,
++        _ => return send_error(StatusCode::BAD_REQUEST, "archived is 1 or 0"),
++    };
++    let listed = match project.inbox(which, archived) {
++        Ok(listed) => listed,
++        Err(e) => return error_response(&e),
++    };
++    let tag = etag(&serde_json::json!(["inbox", archived, &listed]));
++    if unchanged(request, &tag) {
++        return not_modified(&tag, &[]);
++    }
++    ok_json(&stamped(listed), Some(&tag))
++}
++
++/// The answer to an inbox change: 201 with the item made, 200 with the item changed, or atm-lib's refusal.
++fn answer(made: bool, result: atm_common::Result<Value>) -> Response {
++    match result {
++        Ok(item) => send(
++            if made {
++                StatusCode::CREATED
++            } else {
++                StatusCode::OK
++            },
++            to_json(&stamped(serde_json::json!({ "item": item }))).into_bytes(),
++            "application/json",
++            None,
++            &[],
++        ),
++        Err(e) => error_response(&e),
++    }
++}
++
++/// Whether `path` is under a project's inbox (`/api/v2/workspaces/<w>/projects/<p>/inbox…`), where a POST or PATCH may
++/// change something.
++#[must_use]
++pub fn is_inbox_path(path: &str) -> bool {
++    let parts: Vec<&str> = path.split('/').collect();
++    matches!(
++        parts.as_slice(),
++        ["", "api", "v2", "workspaces", w, "projects", p, "inbox", ..] if !w.is_empty() && !p.is_empty()
++    )
++}
++
++/// One of the change routes of the table above.
++enum Route<'a> {
++    Add,
++    Edit(&'a str),
++    Decide(&'a str),
++}
++
++/// The route for `method` on `resource` (past `inbox`): a resource no route has is 404, one the method isn't for 405.
++fn route<'a>(
++    method: &Method,
++    resource: &[&'a str],
++) -> Result<Route<'a>, (StatusCode, &'static str)> {
++    Ok(match (method.as_str(), resource) {
++        ("POST", []) => Route::Add,
++        ("PATCH", [item]) => Route::Edit(item),
++        ("POST", [item, "decisions"]) => Route::Decide(item),
++        (_, [] | [_] | [_, "decisions"]) => {
++            return Err((StatusCode::METHOD_NOT_ALLOWED, "not with this method"));
++        }
++        _ => return Err((StatusCode::NOT_FOUND, "not found")),
++    })
++}
++
++/// The body, when it is an object: a list would fill a request's fields in order
++fn object(body: Value) -> atm_common::Result<Value> {
++    if body.is_object() {
++        Ok(body)
++    } else {
++        Err(atm_common::Error::Invalid(
++            "not this request: the body is an object".into(),
++        ))
++    }
++}
++
++fn add(inbox: &mut dyn InboxChanges, body: Value) -> Response {
++    answer(
++        true,
++        object(body)
++            .and_then(request_from::<NewItem>)
++            .and_then(|item| inbox.add_item(&item)),
++    )
++}
++
++fn edit(inbox: &mut dyn InboxChanges, item: &str, body: Value) -> Response {
++    answer(
++        false,
++        object(body)
++            .and_then(request_from::<ItemEdit>)
++            .and_then(|e| inbox.edit_item(item, &e)),
++    )
++}
++
++fn decide(inbox: &mut dyn InboxChanges, item: &str, body: Value) -> Response {
++    answer(
++        true,
++        object(body)
++            .and_then(request_from::<ItemDecision>)
++            .and_then(|d| inbox.decide_item(item, &d)),
++    )
++}
++
++/// An inbox change, to its route by method and resource; the project is opened only for a route there is.
++#[must_use]
++pub fn serve_inbox_change(
++    projects: &Projects,
++    method: &Method,
++    path: &str,
++    body: Value,
++) -> Response {
++    let Some(rest) = path.strip_prefix("/api/v2/workspaces/") else {
++        return send_error(StatusCode::NOT_FOUND, "not found");
++    };
++    let parts: Vec<&str> = rest.split('/').collect();
++    let [w, "projects", p, "inbox", resource @ ..] = parts.as_slice() else {
++        return send_error(StatusCode::NOT_FOUND, "not found");
++    };
++    if resource.iter().any(|part| part.is_empty()) {
++        return send_error(StatusCode::NOT_FOUND, "not found");
++    }
++    let route = match route(method, resource) {
++        Ok(route) => route,
++        Err((status, why)) => return send_error(status, why),
++    };
++    let Some(workspace) = projects.source.workspace(w) else {
++        return send_error(StatusCode::NOT_FOUND, "unknown workspace");
++    };
++    let mut inbox = match workspace.project(p).and_then(|m| m.inbox_as_user()) {
++        Ok(inbox) => inbox,
++        Err(e) => return error_response(&e),
++    };
++    let inbox = inbox.as_mut();
++    match route {
++        Route::Add => add(inbox, body),
++        Route::Edit(item) => edit(inbox, item, body),
++        Route::Decide(item) => decide(inbox, item, body),
++    }
++}
++
++#[cfg(test)]
++mod tests;
+diff --git a/crates/atm-api/src/routes/inbox/tests.rs b/crates/atm-api/src/routes/inbox/tests.rs
+new file mode 100644
+index 00000000..9068c5f6
+--- /dev/null
++++ b/crates/atm-api/src/routes/inbox/tests.rs
+@@ -0,0 +1,279 @@
++//! The inbox's rules (who may add, from which state) are atm-lib's and its tests'; the checks before a change reaches
++//! a route (Host, Origin, session token, JSON) are `serve_request`'s, as for reviews. Here: which route each method and
++//! resource reach, the request each body becomes, the status each answer becomes, and the read's `ETag`.
++
++use atm_common::inbox::InboxState;
++use atm_lib::inbox::{Decided, Listing};
++use serde_json::json;
++
++use super::super::test_support::{
++    Answer, Call, Fake, FakeProject, answer, bound, having, plain, refusals,
++};
++use super::*;
++
++const INBOX: &str = "/api/v2/workspaces/work/projects/p1/inbox";
++
++fn send(fake: Fake, method: &Method, resource: &str, body: Value) -> (Answer, Vec<Call>) {
++    let (projects, calls) = fake.projects();
++    let answer = answer(serve_inbox_change(
++        &projects,
++        method,
++        &format!("{INBOX}{resource}"),
++        body,
++    ));
++    (answer, calls.taken())
++}
++
++fn ok() -> Fake {
++    Fake::with(FakeProject::default())
++}
++
++const OPENED: [Call; 0] = [];
++
++fn opened() -> Vec<Call> {
++    vec![Call::Project("work".into(), "p1".into()), Call::InboxAsUser]
++}
++
++#[test]
++fn only_a_projects_inbox_takes_changes() {
++    for (path, ok) in [
++        ("/api/v2/workspaces/work/projects/p1/inbox", true),
++        (
++            "/api/v2/workspaces/work/projects/p1/inbox/IN-3/decisions",
++            true,
++        ),
++        ("/api/v2/workspaces/work/projects/p1/inboxes", false),
++        ("/api/v2/workspaces//projects/p1/inbox", false),
++        ("/api/v2/workspaces/work/projects//inbox", false),
++        ("/api/v1/projects/p1/inbox", false),
++        ("/api/v2/workspaces/work/projects/p1/tasks", false),
++    ] {
++        assert_eq!(is_inbox_path(path), ok, "{path}");
++    }
++}
++
++#[test]
++fn the_list_asks_for_the_state_and_the_archive_the_query_names() {
++    for (query, which, archived) in [
++        ("", Listing::Open, false),
++        ("state=created", Listing::Open, false),
++        ("state=discarded", Listing::In(InboxState::Discarded), false),
++        (
++            "state=injected&archived=1",
++            Listing::In(InboxState::Injected),
++            true,
++        ),
++        ("state=all&archived=true", Listing::All, true),
++        ("archived=0", Listing::Open, false),
++    ] {
++        let (project, calls) = bound(FakeProject::default());
++        let got = answer(get_inbox(project.as_ref(), query, &plain()));
++        assert_eq!(got.status, StatusCode::OK, "{query}");
++        assert_eq!(calls.taken(), [Call::Inbox(which, archived)], "{query}");
++    }
++}
++
++#[test]
++fn a_state_or_an_archive_that_isnt_one_is_a_bad_request_before_atm_lib_is_asked() {
++    for query in ["state=open", "archived=yes"] {
++        let (project, calls) = bound(FakeProject::default());
++        let got = answer(get_inbox(project.as_ref(), query, &plain()));
++        assert_eq!(got.status, StatusCode::BAD_REQUEST, "{query}");
++        assert_eq!(calls.taken(), OPENED, "{query}");
++    }
++}
++
++#[test]
++fn the_list_is_atm_libs_answer_stamped_with_an_etag_a_poll_of_it_unchanged_is_a_304() {
++    let listed = json!({"items": [{"id": "IN-2"}], "created": 1, "discarded": 0, "injected": 0});
++    let (project, _) = bound(FakeProject {
++        inbox: Ok(listed.clone()),
++        ..FakeProject::default()
++    });
++    let got = answer(get_inbox(project.as_ref(), "", &plain()));
++    assert_eq!(got.unstamped(), listed);
++    let tag = got.tag();
++    assert!(tag.starts_with('"'), "{tag}");
++    let again = answer(get_inbox(project.as_ref(), "", &having(&tag)));
++    assert_eq!(again.status, StatusCode::NOT_MODIFIED);
++    assert_eq!(again.body, Vec::<u8>::new());
++    // The archive's listing is another version, even with the same items
++    let archived = answer(get_inbox(project.as_ref(), "archived=1", &having(&tag)));
++    assert_eq!(archived.status, StatusCode::OK);
++    assert_ne!(archived.tag(), tag);
++    // Another answer, another tag
++    let (changed, _) = bound(FakeProject {
++        inbox: Ok(json!({"items": [], "created": 0, "discarded": 1, "injected": 0})),
++        ..FakeProject::default()
++    });
++    assert_eq!(
++        answer(get_inbox(changed.as_ref(), "", &having(&tag))).status,
++        StatusCode::OK
++    );
++}
++
++#[test]
++fn each_refusal_of_the_list_is_its_status() {
++    for (error, status) in refusals() {
++        let (project, _) = bound(FakeProject {
++            inbox: Err(error.clone()),
++            ..FakeProject::default()
++        });
++        let got = answer(get_inbox(project.as_ref(), "", &plain()));
++        assert_eq!(got.status, status, "{error}");
++        assert_eq!(got.json(), json!({"error": error.to_string()}));
++    }
++}
++
++#[test]
++fn each_change_reaches_its_call_as_the_user_with_its_status() {
++    let item = || json!({"id": "IN-1", "state": "created"});
++    for (method, resource, body, call, status) in [
++        (
++            Method::POST,
++            "",
++            json!({"text": "Note"}),
++            Call::AddItem(NewItem {
++                text: "Note".into(),
++            }),
++            StatusCode::CREATED,
++        ),
++        (
++            Method::PATCH,
++            "/IN-3",
++            json!({"text": "Better"}),
++            Call::EditItem(
++                "IN-3".into(),
++                ItemEdit {
++                    text: "Better".into(),
++                },
++            ),
++            StatusCode::OK,
++        ),
++        (
++            Method::POST,
++            "/IN-3/decisions",
++            json!({"decision": "discarded", "reason": "Done already"}),
++            Call::DecideItem(
++                "IN-3".into(),
++                ItemDecision {
++                    decision: Decided::Discarded,
++                    reason: Some("Done already".into()),
++                },
++            ),
++            StatusCode::CREATED,
++        ),
++        (
++            Method::POST,
++            "/IN-3/decisions",
++            json!({"decision": "restored"}),
++            Call::DecideItem(
++                "IN-3".into(),
++                ItemDecision {
++                    decision: Decided::Restored,
++                    reason: None,
++                },
++            ),
++            StatusCode::CREATED,
++        ),
++    ] {
++        let (got, calls) = send(ok(), &method, resource, body);
++        assert_eq!(got.status, status, "{method} {resource}");
++        assert_eq!(got.unstamped(), json!({ "item": item() }));
++        assert_eq!(got.header("cache-control"), "no-store");
++        let mut expected = opened();
++        expected.push(call);
++        assert_eq!(calls, expected, "{method} {resource}");
++    }
++}
++
++#[test]
++fn a_body_that_isnt_the_request_is_a_bad_request_and_atm_lib_changes_nothing() {
++    for (method, resource, body) in [
++        // An unknown field: deny_unknown_fields
++        (Method::POST, "", json!({"text": "x", "by": "claude:a"})),
++        (Method::POST, "", json!({})),
++        (Method::POST, "", json!(["x"])),
++        (Method::PATCH, "/IN-3", json!({"text": 3})),
++        // An injection isn't the page's: no such decision
++        (
++            Method::POST,
++            "/IN-3/decisions",
++            json!({"decision": "injected", "tasks": ["ATM-1"]}),
++        ),
++        (
++            Method::POST,
++            "/IN-3/decisions",
++            json!({"decision": "discarded", "why": "x"}),
++        ),
++    ] {
++        let (got, calls) = send(ok(), &method, resource, body.clone());
++        assert_eq!(got.status, StatusCode::BAD_REQUEST, "{body}");
++        assert_eq!(calls, opened(), "{body}");
++    }
++}
++
++#[test]
++fn a_resource_no_route_has_is_404_and_a_method_it_isnt_for_405_before_the_project_is_opened() {
++    for (method, resource, status) in [
++        (Method::GET, "", StatusCode::METHOD_NOT_ALLOWED),
++        (Method::PUT, "", StatusCode::METHOD_NOT_ALLOWED),
++        (Method::DELETE, "/IN-3", StatusCode::METHOD_NOT_ALLOWED),
++        (
++            Method::PATCH,
++            "/IN-3/decisions",
++            StatusCode::METHOD_NOT_ALLOWED,
++        ),
++        (Method::POST, "/IN-3/injections", StatusCode::NOT_FOUND),
++        (Method::POST, "/IN-3/decisions/x", StatusCode::NOT_FOUND),
++        (Method::PATCH, "//", StatusCode::NOT_FOUND),
++    ] {
++        let (got, calls) = send(ok(), &method, resource, json!({}));
++        assert_eq!(got.status, status, "{method} {resource}");
++        assert_eq!(calls, OPENED, "{method} {resource}");
++    }
++}
++
++#[test]
++fn each_refusal_of_a_change_is_its_status_and_a_project_not_opened_too() {
++    for (error, status) in refusals() {
++        let (got, _) = send(
++            Fake::with(FakeProject {
++                inbox_changes: Ok(Err(error.clone())),
++                ..FakeProject::default()
++            }),
++            &Method::POST,
++            "",
++            json!({"text": "x"}),
++        );
++        assert_eq!(got.status, status, "{error}");
++        assert_eq!(got.json(), json!({"error": error.to_string()}));
++        let (got, _) = send(
++            Fake::with(FakeProject {
++                inbox_changes: Err(error.clone()),
++                ..FakeProject::default()
++            }),
++            &Method::POST,
++            "",
++            json!({"text": "x"}),
++        );
++        assert_eq!(got.status, status, "{error}");
++    }
++}
++
++#[test]
++fn an_unknown_workspace_or_project_is_404() {
++    let (projects, _) = ok().projects();
++    for path in [
++        "/api/v2/workspaces/nope/projects/p1/inbox",
++        "/api/v2/workspaces/work/projects/nope/inbox",
++    ] {
++        let got = answer(serve_inbox_change(
++            &projects,
++            &Method::POST,
++            path,
++            json!({"text": "x"}),
++        ));
++        assert_eq!(got.status, StatusCode::NOT_FOUND, "{path}");
++    }
++}
+diff --git a/crates/atm-api/src/routes/source.rs b/crates/atm-api/src/routes/source.rs
+index fa31930e..5ebbfd33 100644
+--- a/crates/atm-api/src/routes/source.rs
++++ b/crates/atm-api/src/routes/source.rs
+@@ -6,6 +6,7 @@ use std::sync::Arc;
+ 
+ use atm_common::{Error, Result};
+ use atm_lib::Project;
++use atm_lib::inbox::{self, ItemDecision, ItemEdit, Listing, NewItem};
+ use atm_lib::query::Filters;
+ use atm_lib::review_drafts::{self, Draft, DraftUpdate, NewDraft};
+ use atm_lib::review_pages::ReviewQuery;
+@@ -133,6 +134,35 @@ pub trait ProjectSource {
+     /// # Errors
+     /// The project can't be opened.
+     fn reviews_as_user(&self) -> Result<Box<dyn ReviewChanges>>;
++    /// Its inbox's items `which` lists, of the inbox or its archive (ATM-761): `{items, created, discarded, injected}`.
++    ///
++    /// # Errors
++    /// The project or its inbox can't be read.
++    fn inbox(&self, which: Listing, archived: bool) -> Result<Value>;
++    /// Its inbox, to change as the user at the machine (never an agent's identity).
++    ///
++    /// # Errors
++    /// The project can't be opened.
++    fn inbox_as_user(&self) -> Result<Box<dyn InboxChanges>>;
++}
++
++/// A project's inbox, changed (atm-lib's `inbox`): what the page does; an injection is an agent's, never a route's.
++pub trait InboxChanges {
++    /// A new item: it, as stored.
++    ///
++    /// # Errors
++    /// What atm-lib refuses.
++    fn add_item(&mut self, item: &NewItem) -> Result<Value>;
++    /// An open item's new text.
++    ///
++    /// # Errors
++    /// What atm-lib refuses.
++    fn edit_item(&mut self, id: &str, edit: &ItemEdit) -> Result<Value>;
++    /// A person's decision: discarded, or restored.
++    ///
++    /// # Errors
++    /// What atm-lib refuses.
++    fn decide_item(&mut self, id: &str, decision: &ItemDecision) -> Result<Value>;
+ }
+ 
+ /// A project's reviews, changed (atm-lib's `review_requests`).
+@@ -359,6 +389,34 @@ impl ProjectSource for Member {
+     fn reviews_as_user(&self) -> Result<Box<dyn ReviewChanges>> {
+         Ok(Box::new(self.project_as_user()?))
+     }
++
++    fn inbox(&self, which: Listing, archived: bool) -> Result<Value> {
++        let listed = inbox::list(&self.project()?, which, archived)?;
++        Ok(serde_json::json!({
++            "items": listed.items,
++            "created": listed.created,
++            "discarded": listed.discarded,
++            "injected": listed.injected,
++        }))
++    }
++
++    fn inbox_as_user(&self) -> Result<Box<dyn InboxChanges>> {
++        Ok(Box::new(self.project_as_user()?))
++    }
++}
++
++impl InboxChanges for Project {
++    fn add_item(&mut self, item: &NewItem) -> Result<Value> {
++        inbox::add(self, &item.text)
++    }
++
++    fn edit_item(&mut self, id: &str, edit: &ItemEdit) -> Result<Value> {
++        inbox::edit(self, id, &edit.text)
++    }
++
++    fn decide_item(&mut self, id: &str, decision: &ItemDecision) -> Result<Value> {
++        inbox::decide(self, id, decision)
++    }
+ }
+ 
+ impl ReviewChanges for Project {
+diff --git a/crates/atm-api/src/routes/test_support.rs b/crates/atm-api/src/routes/test_support.rs
+index 99ec8789..75851f59 100644
+--- a/crates/atm-api/src/routes/test_support.rs
++++ b/crates/atm-api/src/routes/test_support.rs
+@@ -5,6 +5,7 @@
+ use std::sync::{Arc, Mutex};
+ 
+ use atm_common::{Error, Result};
++use atm_lib::inbox::{ItemDecision, ItemEdit, Listing, NewItem};
+ use atm_lib::query::Filters;
+ use atm_lib::review_drafts::{Draft, DraftUpdate, NewDraft, Place};
+ use atm_lib::review_pages::ReviewQuery;
+@@ -19,7 +20,9 @@ use axum::response::Response;
+ use serde_json::{Map, Value, json};
+ 
+ use super::Projects;
+-use super::source::{ProjectList, ProjectSource, ReviewChanges, Source, WorkspaceSource};
++use super::source::{
++    InboxChanges, ProjectList, ProjectSource, ReviewChanges, Source, WorkspaceSource,
++};
+ 
+ /// One call a route made of atm-lib.
+ #[derive(Debug, Clone)]
+@@ -56,6 +59,11 @@ pub(super) enum Call {
+     AddDraft(ReviewRef, NewDraft),
+     UpdateDraft(ReviewRef, String, DraftUpdate),
+     RemoveDraft(ReviewRef, String),
++    Inbox(Listing, bool),
++    InboxAsUser,
++    AddItem(NewItem),
++    EditItem(String, ItemEdit),
++    DecideItem(String, ItemDecision),
+ }
+ 
+ impl PartialEq for Call {
+@@ -151,6 +159,10 @@ pub(super) struct FakeProject {
+     pub page: Result<Value>,
+     /// What a live review's page is made from (ATM-607): none, a page that isn't tagged
+     pub live_stamp: Result<Option<Value>>,
++    /// What listing its inbox answers (ATM-761)
++    pub inbox: Result<Value>,
++    /// What a change of its inbox answers (the item); an error refuses to open the project as the user
++    pub inbox_changes: Result<Result<Value>>,
+ }
+ 
+ impl Default for FakeProject {
+@@ -171,6 +183,8 @@ impl Default for FakeProject {
+             listed: Ok(json!({"reviews": [], "you": "Ana"})),
+             page: Ok(json!({"review": {"reference": "CR-1"}, "view": {"files": []}})),
+             live_stamp: Ok(None),
++            inbox: Ok(json!({"items": [], "created": 0, "discarded": 0, "injected": 0})),
++            inbox_changes: Ok(Ok(json!({"id": "IN-1", "state": "created"}))),
+         }
+     }
+ }
+@@ -422,6 +436,41 @@ impl ProjectSource for Bound<FakeProject> {
+             calls: self.calls.clone(),
+         }))
+     }
++
++    fn inbox(&self, which: Listing, archived: bool) -> Result<Value> {
++        self.calls.note(Call::Inbox(which, archived));
++        self.fake.inbox.clone()
++    }
++
++    fn inbox_as_user(&self) -> Result<Box<dyn InboxChanges>> {
++        self.calls.note(Call::InboxAsUser);
++        Ok(Box::new(Bound {
++            fake: FakeInbox(self.fake.inbox_changes.clone()?),
++            id: self.id.clone(),
++            calls: self.calls.clone(),
++        }))
++    }
++}
++
++/// What a fake project's inbox changes answer: the item.
++pub(super) struct FakeInbox(Result<Value>);
++
++impl InboxChanges for Bound<FakeInbox> {
++    fn add_item(&mut self, item: &NewItem) -> Result<Value> {
++        self.calls.note(Call::AddItem(item.clone()));
++        self.fake.0.clone()
++    }
++
++    fn edit_item(&mut self, id: &str, edit: &ItemEdit) -> Result<Value> {
++        self.calls.note(Call::EditItem(id.into(), edit.clone()));
++        self.fake.0.clone()
++    }
++
++    fn decide_item(&mut self, id: &str, decision: &ItemDecision) -> Result<Value> {
++        self.calls
++            .note(Call::DecideItem(id.into(), decision.clone()));
++        self.fake.0.clone()
++    }
+ }
+ 
+ impl ReviewChanges for Bound<FakeReviews> {
+diff --git a/crates/atm-cli/src/commands/inbox.rs b/crates/atm-cli/src/commands/inbox.rs
+index c1998cdf..d94e88cd 100644
+--- a/crates/atm-cli/src/commands/inbox.rs
++++ b/crates/atm-cli/src/commands/inbox.rs
+@@ -4,11 +4,10 @@
+ 
+ use std::path::Path;
+ 
+-use atm_common::inbox::InboxState;
+ use atm_common::{Error, Result};
+ use atm_lib::Project;
+ use atm_lib::actor::agent_identity;
+-use atm_lib::inbox::{self, Listing};
++use atm_lib::inbox;
+ use clap::{Args, Subcommand};
+ use serde_json::{Value, json};
+ 
+@@ -152,15 +151,7 @@ fn report(ctx: Context, item: &Value, did: &str) {
+ 
+ /// `atm inbox list`: the items `state` names (the open ones without it), of the inbox or its archive
+ fn list(ctx: Context, cwd: &Path, state: Option<&str>, archived: bool) -> Result<()> {
+-    let which = match state {
+-        None | Some("created") => Listing::Open,
+-        Some("all") => Listing::All,
+-        Some(other) => Listing::In(
+-            InboxState::parse(other)
+-                .ok_or_else(|| Error::Invalid(format!("no inbox state {other:?}")))?,
+-        ),
+-    };
+-    let listed = inbox::list(&Project::open(cwd)?, which, archived)?;
++    let listed = inbox::list(&Project::open(cwd)?, inbox::listing_of(state)?, archived)?;
+     if ctx.json {
+         print_json(&json!({
+             "items": listed.items,
+diff --git a/crates/atm-common/schema/api.schema.json b/crates/atm-common/schema/api.schema.json
+index ac55676a..bfeb17f2 100644
+--- a/crates/atm-common/schema/api.schema.json
++++ b/crates/atm-common/schema/api.schema.json
+@@ -762,9 +762,17 @@
+           "description": "The same, of the active sprint's tasks only; null without an active sprint (T-340)"
+         },
+         "stats": { "$ref": "#/$defs/ProjectStats" },
+-        "progress": { "$ref": "#/$defs/OverviewProgress" }
++        "progress": { "$ref": "#/$defs/OverviewProgress" },
++        "inbox": { "$ref": "#/$defs/InboxSummary" }
+       }
+     },
++    "InboxSummary": {
++      "type": "object",
++      "description": "The project's inbox (ATM-761): how many items wait to be triaged, the Inbox item's badge; absent from an older server",
++      "additionalProperties": false,
++      "required": ["open"],
++      "properties": { "open": { "type": "integer" } }
++    },
+     "OverviewProgress": {
+       "type": "object",
+       "description": "What the overview's Progress tab shows of a project (ATM-722): no project's tasks are loaded for it",
+diff --git a/crates/atm-db/src/jsongit.rs b/crates/atm-db/src/jsongit.rs
+index a426c7f6..94d4bb38 100644
+--- a/crates/atm-db/src/jsongit.rs
++++ b/crates/atm-db/src/jsongit.rs
+@@ -344,6 +344,8 @@ impl Store for JsonGitStore {
+             "claims": file_stamp(&claims_store_path(&self.paths)),
+             "head": file_stamp(&self.paths.root.join(".git").join("HEAD")),
+             "copies": copies,
++            // The inbox (ATM-761): a summary counts its open items, so a change of it is a new version
++            "inbox": file_stamp(&self.paths.inbox()),
+         })
+     }
+ 
+diff --git a/crates/atm-lib/src/inbox.rs b/crates/atm-lib/src/inbox.rs
+index 9a5dd1f0..dc01bff8 100644
+--- a/crates/atm-lib/src/inbox.rs
++++ b/crates/atm-lib/src/inbox.rs
+@@ -21,6 +21,7 @@ use atm_common::inbox::{
+ use atm_common::time::{now_iso, parse_iso};
+ use atm_common::{Error, Result};
+ use atm_db::working::Working;
++use serde::Deserialize;
+ use serde_json::{Map, Value, json};
+ 
+ use crate::project::Project;
+@@ -391,6 +392,65 @@ pub fn unarchive(project: &mut Project, ids: &[String]) -> Result<Vec<String>> {
+     })
+ }
+ 
++/// `POST …/inbox` (ATM-761): an item's text.
++#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
++#[serde(deny_unknown_fields)]
++pub struct NewItem {
++    pub text: String,
++}
++
++/// `PATCH …/inbox/<IN>`: an open item's new text.
++#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
++#[serde(deny_unknown_fields)]
++pub struct ItemEdit {
++    pub text: String,
++}
++
++/// What a person decides about an item on the page: discard it (with why), or bring a discarded one back. Inject isn't
++/// one: an agent records it, with the tasks it made (docs/inbox-design.md §7).
++#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
++#[serde(rename_all = "lowercase")]
++pub enum Decided {
++    Discarded,
++    Restored,
++}
++
++/// `POST …/inbox/<IN>/decisions`: a decision, and for a discard its reason.
++#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
++#[serde(deny_unknown_fields)]
++pub struct ItemDecision {
++    pub decision: Decided,
++    #[serde(default)]
++    pub reason: Option<String>,
++}
++
++/// A person's decision on item `id`: discarded with its reason, or restored (no reason).
++///
++/// # Errors
++/// `Invalid` for a discard without a reason or a restore with one; what [`discard`] and [`restore`] refuse.
++pub fn decide(project: &mut Project, id: &str, decision: &ItemDecision) -> Result<Value> {
++    match (decision.decision, decision.reason.as_deref()) {
++        (Decided::Discarded, Some(reason)) => discard(project, id, reason),
++        (Decided::Discarded, None) => Err(Error::Invalid("a discard says why (reason)".into())),
++        (Decided::Restored, None) => restore(project, id),
++        (Decided::Restored, Some(_)) => Err(Error::Invalid("a restore takes no reason".into())),
++    }
++}
++
++/// The listing a `state` names (`created`, the open ones, when none; `discarded`, `injected`, `all`).
++///
++/// # Errors
++/// `Invalid` for a state that isn't one.
++pub fn listing_of(state: Option<&str>) -> Result<Listing> {
++    match state {
++        None | Some("created") => Ok(Listing::Open),
++        Some("all") => Ok(Listing::All),
++        Some(other) => InboxState::parse(other)
++            .map(Listing::In)
++            .ok_or_else(|| Error::Invalid(format!("no inbox state {other:?}"))),
++    }
++}
++
+ /// How many items wait in the inbox (created): the status line's and the dashboard's badge.
+ ///
+ /// # Errors
+diff --git a/crates/atm-lib/src/inbox/tests.rs b/crates/atm-lib/src/inbox/tests.rs
+index b9b0c07a..173713b4 100644
+--- a/crates/atm-lib/src/inbox/tests.rs
++++ b/crates/atm-lib/src/inbox/tests.rs
+@@ -196,6 +196,79 @@ fn a_person_restores_a_discarded_item_which_forgets_its_reason() {
+     );
+ }
+ 
++// The page's requests (ATM-761)
++
++#[test]
++fn a_decision_discards_with_its_reason_or_restores_without_one() {
++    let decision = |decision, reason: Option<&str>| ItemDecision {
++        decision,
++        reason: reason.map(String::from),
++    };
++    let mut p = project_with(
++        inbox(&[item("IN-1", "created", None)]),
++        atm_common::inbox::empty_inbox(),
++        PERSON,
++    );
++    for wrong in [
++        decision(Decided::Discarded, None),
++        decision(Decided::Restored, Some("why")),
++    ] {
++        assert!(
++            matches!(decide(&mut p, "IN-1", &wrong), Err(Error::Invalid(_))),
++            "{wrong:?}"
++        );
++    }
++    let gone = decide(
++        &mut p,
++        "IN-1",
++        &decision(Decided::Discarded, Some("Done already")),
++    )
++    .unwrap();
++    assert_eq!(
++        (gone["state"].as_str(), gone["reason"].as_str()),
++        (Some("discarded"), Some("Done already"))
++    );
++    let back = decide(&mut p, "IN-1", &decision(Decided::Restored, None)).unwrap();
++    assert_eq!(back["state"], "created");
++    // A restore is a person's, as restore() is
++    let mut agent = as_actor(p, AGENT);
++    decide(&mut agent, "IN-1", &decision(Decided::Discarded, Some("x"))).unwrap();
++    assert!(matches!(
++        decide(&mut agent, "IN-1", &decision(Decided::Restored, None)),
++        Err(Error::Refused(_))
++    ));
++}
++
++#[test]
++fn the_page_s_requests_take_their_fields_and_no_other_and_no_injection() {
++    let parsed = |v: Value| serde_json::from_value::<ItemDecision>(v);
++    assert!(parsed(json!({"decision": "discarded", "reason": "x"})).is_ok());
++    assert!(parsed(json!({"decision": "restored"})).is_ok());
++    for refused in [
++        json!({"decision": "injected"}),
++        json!({"decision": "discarded", "reason": "x", "by": "claude:a"}),
++        json!({}),
++    ] {
++        assert!(parsed(refused.clone()).is_err(), "{refused}");
++    }
++    assert!(serde_json::from_value::<NewItem>(json!({"text": "x", "state": "injected"})).is_err());
++    assert!(serde_json::from_value::<ItemEdit>(json!({"text": "x", "id": "IN-9"})).is_err());
++}
++
++#[test]
++fn a_listing_is_named_by_its_state_the_open_ones_without_one() {
++    for (state, listing) in [
++        (None, Listing::Open),
++        (Some("created"), Listing::Open),
++        (Some("discarded"), Listing::In(InboxState::Discarded)),
++        (Some("injected"), Listing::In(InboxState::Injected)),
++        (Some("all"), Listing::All),
++    ] {
++        assert_eq!(listing_of(state).unwrap(), listing, "{state:?}");
++    }
++    assert!(matches!(listing_of(Some("open")), Err(Error::Invalid(_))));
++}
++
+ // Injecting
+ 
+ #[test]
+diff --git a/crates/atm-lib/src/summary.rs b/crates/atm-lib/src/summary.rs
+index e6556e70..776b66be 100644
+--- a/crates/atm-lib/src/summary.rs
++++ b/crates/atm-lib/src/summary.rs
+@@ -829,6 +829,8 @@ pub fn project_summary(project: &Project) -> Result<Value> {
+         "stats": project_stats(project, document, vocab, &tasks, current),
+         // The overview's Progress tab (ATM-722): from the summary, no project's tasks loaded for it
+         "progress": crate::stats::overview(project, current * 1000)?,
++        // The Inbox item's badge (ATM-761): items waiting to be triaged; an inbox that can't be read counts none
++        "inbox": {"open": crate::inbox::open_count(project).unwrap_or(0)},
+     }))
+ }
+ 
+diff --git a/crates/atm-lib/src/workspaces.rs b/crates/atm-lib/src/workspaces.rs
+index 096872a0..bd60ac0e 100644
+--- a/crates/atm-lib/src/workspaces.rs
++++ b/crates/atm-lib/src/workspaces.rs
+@@ -497,14 +497,16 @@ pub fn folder(entry: &Value) -> PathBuf {
+     PathBuf::from(entry["path"].as_str().unwrap_or_default())
+ }
+ 
+-/// What the summary depends on: the task data, the claims, the day, and the checked-out branch (on the card).
++/// What the summary depends on: the task data, the claims, the day, the checked-out branch (on the card), the reviews
++/// and the inbox (its open items, ATM-761).
+ fn summary_stamp(stamp: &Value) -> Value {
+     json!([
+         stamp["tasks"],
+         stamp["claims"],
+         &format_iso(now())[..10],
+         stamp["head"],
+-        stamp["reviews"]
++        stamp["reviews"],
++        stamp["inbox"]
+     ])
+ }
+ 
+diff --git a/docs/multi-project-api.md b/docs/multi-project-api.md
+index 2681a531..7b6f6f93 100644
+--- a/docs/multi-project-api.md
++++ b/docs/multi-project-api.md
+@@ -420,6 +420,26 @@ page has them as `drafts` too, a draft comment placed in the round shown (`place
+   `reply_to_review_comment`, `poke_review`, and the drafts' `list_review_drafts`, `add_review_draft`,
+   `update_review_draft` and `remove_review_draft`.
+ 
++### 2.10 A project's inbox (ATM-761)
++
++The project's inbox (docs/inbox-design.md): `IN-<n>` items a person notes for later, each `created`, then `discarded`
++with a reason or `injected` into tasks. Under `api/v2/workspaces/<w>/projects/<p>/`:
++
++| Route | Body | Does | Answer |
++|---|---|---|---|
++| `GET inbox?state=&archived=` | — | the items `state` names (`created`, the open ones, by default; `discarded`, `injected`, `all`), of the archive with `archived=1`, newest first; also at `api/v1/projects/<p>/inbox` | `200`, `{items, created, discarded, injected}` (the counts are the whole inbox's or archive's), with an `ETag`: `304` while it is unchanged |
++| `POST inbox` | `{text}` | an item added, as the user (`atm inbox add`) | `201`, `{item}` |
++| `PATCH inbox/<IN>` | `{text}` | an open item's text (`atm inbox edit`) | `200`, `{item}` |
++| `POST inbox/<IN>/decisions` | `{decision: "discarded", reason}` or `{decision: "restored"}` | a person's decision (`atm inbox discard`, `restore`) | `201`, `{item}` |
++
++- **The same checks as the review routes** (§2.9): the server's own `Origin`, the session token, JSON (at most 1 MB),
++  each body an object with exactly its fields, acting as the user at the machine: so the inbox's own rule, that an
++  agent doesn't add, edit or restore, holds whatever environment started the server. v1's path takes no change.
++- **No route injects an item**: the tasks an item became are an agent's to record (`atm inbox inject`), in the triage
++  skill, with the user.
++- The app's commands do the same, one each: `project_inbox` (with `which` and `archived`), `add_inbox_item`,
++  `edit_inbox_item` and `decide_inbox_item`.
++
+ ## 3. `GET /api/projects`
+ 
+ ```json
+@@ -517,6 +537,7 @@ and `key_final` too, as the task views give them; a project before task keys has
+ | `completions_14d` | 14 integers, oldest first, ending with today: done-kind tasks by the UTC day of `completed_at` (tasks without `completed_at` aren't counted) |
+ | `board` | the cards for the All projects board (§3.3) |
+ | `board_active_sprint` | the same columns, of the active sprint's tasks only, with their own counts: the board's default view (T-340, §3.3); `null` without an active sprint. Absent before 0.26, when the dashboard shows `board` |
++| `inbox` | `{ open }`: the project's inbox items waiting to be triaged (ATM-761), the Inbox item's badge; `0` when the inbox can't be read; absent from an older server. The summary's stamp includes `inbox.json`, so its cache and `ETag` move with an item |
+ | `progress` | the overview's Progress tab (ATM-722, atm-lib's `stats::overview`), so the overview loads no project's tasks for it: `done` and `total` (all but the skipped, the archive too), `open_releases` (`[{ id, name, done, total }]`, the planned ones), `done_days` (`[[day, count]]`, days since 1970 in UTC, for the velocity chart), `burndown` (`[[day, scope, remaining]]` at the end of each day from the first task's to today) and `forecast` (`{ minutes: { likely, low, high }, waiting }`, the agent work left at the agents' pace and the open tasks waiting on someone; `null` without a pace) |
+ | `stats` | the overview card's line (T-255), archived tasks included (a task in both files counted once, from `tasks.json`; an unreadable archive left out): `started`, the earliest `created_at` (else `meta.created`, else `null`); `tasks`, how many; `agent_minutes`, the agent time as the Project tab counts it: the work (`started_at` until the review request or completion, until now while active) of tasks an agent (`claude:…`) or nobody recorded started, each agent's spans merged, added up. Computed when the summary is (a change to `tasks.json` or the claims), so a running task's time grows between changes only then |
+ 
+diff --git a/docs/security-architecture.md b/docs/security-architecture.md
+index 2858dfb9..67834c76 100644
+--- a/docs/security-architecture.md
++++ b/docs/security-architecture.md
+@@ -83,7 +83,7 @@ with the task that adds it.
+ | #   | Invariant                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Enforced by                                                                                                                                             |
+ | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+ | I10 | **Loopback only, matching Host**: the server binds 127.0.0.1 and refuses any other Host header (DNS rebinding)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `serve.test.mjs` "a request for another Host is refused"                                                                                                |
+-| I11 | **Nothing changes state over HTTP but a project's reviews, from atm's own page**; and no other site's page has the server read for it (ATM-671: reads write `recent.json` and run git): a GET or HEAD but the page itself and `/assets/` is refused (403) when the browser says it comes from another site (`Sec-Fetch-Site: cross-site`) or its `Origin` isn't on this machine: GET and HEAD everywhere, and POST, PATCH, PUT and DELETE only on the review routes (ATM-572, docs/code-review-design.md §3.12: `POST …/projects/<p>/reviews`, `PATCH …/reviews/<CR>`, `PUT …/reviews/<CR>/tasks`, `POST …/reviews/<CR>/decisions`, `POST …/reviews/<CR>/comments`, `PATCH …/comments/<c>`, `POST …/comments/<c>/replies`, `POST …/reviews/<CR>/pokes` (ATM-611: a review-level comment marked as a poke, with the same checks; an agent's identity is refused), `POST …/reviews/<CR>/drafts`, `PATCH …/drafts/<d>` and `DELETE …/drafts/<d>` (ATM-612: the user's drafts, written to their own state folder's `drafts/`, a file per project, review and person, **never to the repository or the review's folder**, so no other person, no agent and no commit sees them until a decision sends them as the user's comments; DELETE only there, with the same checks and an empty JSON body; an agent's identity is refused; their read, `GET …/reviews/<CR>/drafts`, and the review's page answer the asking user's drafts only)). Each such request must carry the Host check (I10), an `Origin` that is the server's own, this start's session token (random, 244 bits, in the page atm serves as `<meta name="atm-session">`, which another site can't read) in `X-Atm-Session`, and a JSON body (at most 1 MB; a plain form can't send one); no CORS preflight is answered (OPTIONS is 405), so no other site's page can send the header. Each route is one atm-lib call (`review_requests`), acting as the user at the machine (their git name: never an agent's identity, whatever environment started the server), each body read with `deny_unknown_fields`, texts at most 100,000 characters, files inside the repository, revisions resolved to commits before git sees them (never an option); a review's decisions keep its rules (its author can't decide it, I23). The one other exception is a choice of view (ADR-003 §5, T-456): `api/v2/workspaces/<w>/projects` records `<w>` as the last opened workspace in the state folder's `recent.json` (only a workspace that exists, its ID checked as a file name, written under the state folder's lock and only when it changes; never task data). The v2 routes (`api/v2/workspaces`, and per workspace `…/<w>/projects`, `…/<w>/search` and `…/<w>/projects/<p>/tasks | documents                                                                                                                                               | files | claims | worktrees | logo | reviews | reviews/<CR>`) are the v1 routes below for any workspace, through the same atm-lib reads with the same checks; an unknown workspace or project is 404. The v1 routes: the page, `api/projects`, `api/search`(reads every project's`tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), a project's `claims.json`, `worktrees.json`and`logo`(computed through atm-lib; the task files themselves are no longer served as stored, T-374),`api/v1/projects/<id>/tasks`(a registered project's tasks through atm-lib, read-only: the same Host check, the size limit, and the task folder's symlink checks of`find_paths`, which refuse the whole project; filters are query parameters, compared, never run or used as paths, T-364), `/assets/…`(atm's own files the page loads, the CompMD runtime, its sandbox's frame documents and the Mermaid pack:`.js`, `.wasm`and`.html`only, embedded in the binary from the build's`dashboard/dist/assets/`, named by plain segments; readable cross-origin, a frame document sandboxed, T-284, T-285; one policy for every answer there, CompMD's bundle and the 404s included: `nosniff`, CORP cross-origin, `Access-Control-Allow-Origin: *`, HEAD answered as GET, ATM-672), `api/v1/projects/<id>/reviews`and`…/reviews/<CR>`(a project's code reviews and a review's page, read through atm-lib as the user, ATM-574),`api/v1/projects/<id>/documents?path=`(with`&at=<rev>`: as a commit or tree has it, the revision resolved before git sees it, the same path checks, ATM-574; kept by the browser per atm version, its address and tag naming it, ATM-672) and `…/files?path=`(a project's file for the document viewer, through atm-lib, T-392: a relative, normalized path, never in `.git` or `.agentic-task-manager`, not an environment file (`.env`, `.env.local`, …; `.env.example`, `.sample` and `.template` are shown), not a key file, not a file git ignores; other hidden files, `.github/` or `.gitignore`, are shown (ATM-598, CR-3) (in a git submodule, the submodule's own repository decides, T-408; any git error refuses the file), under 1 MB (5 MB for an image), reached through no symlink;`files`only an image whose bytes match its type, sandboxed; `files` with `&at=<rev>` too (a review's image file's sides, ATM-689): the image as that commit or tree has it, through the same checks as `documents?…&at=` and then the image's),`whoami`and`/_app/version.json` (the page's own version and nothing else, for SvelteKit's check for a new deployment, T-495) | `serve.test.mjs` "review changes (ATM-572)…" (each route; refused without the token, with another, from another origin, as a form, with an unknown field; no preflight answered; ATM-612's drafts kept in the state folder, not the repository, a DELETE refused without the token), "review reads (ATM-574)…" (read-only; a revision that is an option or no object refused); atm-api's `routes` unit tests (each route on a fake atm-lib), "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "api/search", "api/v1/projects/<id>/tasks", "/assets/ serves the CompMD runtime atm embeds…", "a project's files for the document viewer…", "files in a git submodule…"; `crates/atm-docs/src/lib.rs`'s tests (moved from atm-lib, ATM-570; a file at a revision passes the same checks, its revision never an option for git) |
++| I11 | **Nothing changes state over HTTP but a project's reviews and its inbox, from atm's own page** (the inbox, ATM-761: `POST …/projects/<p>/inbox` `{text}`, `PATCH …/inbox/<IN>` `{text}`, `POST …/inbox/<IN>/decisions` `{decision: discarded, reason}` or `{decision: restored}`, v2's paths only; no route injects an item, an agent's `atm inbox inject` does; behind exactly the review routes' checks below, each body an object read with `deny_unknown_fields`, acting as the user, so atm-lib's refusal of an agent adding or restoring holds; its read `GET …/inbox?state=&archived=`, v2's and v1's, with an `ETag`); and no other site's page has the server read for it (ATM-671: reads write `recent.json` and run git): a GET or HEAD but the page itself and `/assets/` is refused (403) when the browser says it comes from another site (`Sec-Fetch-Site: cross-site`) or its `Origin` isn't on this machine: GET and HEAD everywhere, and POST, PATCH, PUT and DELETE only on the review routes (ATM-572, docs/code-review-design.md §3.12: `POST …/projects/<p>/reviews`, `PATCH …/reviews/<CR>`, `PUT …/reviews/<CR>/tasks`, `POST …/reviews/<CR>/decisions`, `POST …/reviews/<CR>/comments`, `PATCH …/comments/<c>`, `POST …/comments/<c>/replies`, `POST …/reviews/<CR>/pokes` (ATM-611: a review-level comment marked as a poke, with the same checks; an agent's identity is refused), `POST …/reviews/<CR>/drafts`, `PATCH …/drafts/<d>` and `DELETE …/drafts/<d>` (ATM-612: the user's drafts, written to their own state folder's `drafts/`, a file per project, review and person, **never to the repository or the review's folder**, so no other person, no agent and no commit sees them until a decision sends them as the user's comments; DELETE only there, with the same checks and an empty JSON body; an agent's identity is refused; their read, `GET …/reviews/<CR>/drafts`, and the review's page answer the asking user's drafts only)). Each such request must carry the Host check (I10), an `Origin` that is the server's own, this start's session token (random, 244 bits, in the page atm serves as `<meta name="atm-session">`, which another site can't read) in `X-Atm-Session`, and a JSON body (at most 1 MB; a plain form can't send one); no CORS preflight is answered (OPTIONS is 405), so no other site's page can send the header. Each route is one atm-lib call (`review_requests`), acting as the user at the machine (their git name: never an agent's identity, whatever environment started the server), each body read with `deny_unknown_fields`, texts at most 100,000 characters, files inside the repository, revisions resolved to commits before git sees them (never an option); a review's decisions keep its rules (its author can't decide it, I23). The one other exception is a choice of view (ADR-003 §5, T-456): `api/v2/workspaces/<w>/projects` records `<w>` as the last opened workspace in the state folder's `recent.json` (only a workspace that exists, its ID checked as a file name, written under the state folder's lock and only when it changes; never task data). The v2 routes (`api/v2/workspaces`, and per workspace `…/<w>/projects`, `…/<w>/search` and `…/<w>/projects/<p>/tasks | documents                                                                                                                                               | files | claims | worktrees | logo | reviews | reviews/<CR>`) are the v1 routes below for any workspace, through the same atm-lib reads with the same checks; an unknown workspace or project is 404. The v1 routes: the page, `api/projects`, `api/search`(reads every project's`tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), a project's `claims.json`, `worktrees.json`and`logo`(computed through atm-lib; the task files themselves are no longer served as stored, T-374),`api/v1/projects/<id>/tasks`(a registered project's tasks through atm-lib, read-only: the same Host check, the size limit, and the task folder's symlink checks of`find_paths`, which refuse the whole project; filters are query parameters, compared, never run or used as paths, T-364), `/assets/…`(atm's own files the page loads, the CompMD runtime, its sandbox's frame documents and the Mermaid pack:`.js`, `.wasm`and`.html`only, embedded in the binary from the build's`dashboard/dist/assets/`, named by plain segments; readable cross-origin, a frame document sandboxed, T-284, T-285; one policy for every answer there, CompMD's bundle and the 404s included: `nosniff`, CORP cross-origin, `Access-Control-Allow-Origin: *`, HEAD answered as GET, ATM-672), `api/v1/projects/<id>/reviews`and`…/reviews/<CR>`(a project's code reviews and a review's page, read through atm-lib as the user, ATM-574),`api/v1/projects/<id>/documents?path=`(with`&at=<rev>`: as a commit or tree has it, the revision resolved before git sees it, the same path checks, ATM-574; kept by the browser per atm version, its address and tag naming it, ATM-672) and `…/files?path=`(a project's file for the document viewer, through atm-lib, T-392: a relative, normalized path, never in `.git` or `.agentic-task-manager`, not an environment file (`.env`, `.env.local`, …; `.env.example`, `.sample` and `.template` are shown), not a key file, not a file git ignores; other hidden files, `.github/` or `.gitignore`, are shown (ATM-598, CR-3) (in a git submodule, the submodule's own repository decides, T-408; any git error refuses the file), under 1 MB (5 MB for an image), reached through no symlink;`files`only an image whose bytes match its type, sandboxed; `files` with `&at=<rev>` too (a review's image file's sides, ATM-689): the image as that commit or tree has it, through the same checks as `documents?…&at=` and then the image's),`whoami`and`/_app/version.json` (the page's own version and nothing else, for SvelteKit's check for a new deployment, T-495) | `serve.test.mjs` "inbox (ATM-761)…" (each route as the user; refused without the token, with another, from another origin, as a form, with an unknown field, as a list, as an injection, too large; v1 takes no change), atm-api's `routes::inbox` tests; "review changes (ATM-572)…" (each route; refused without the token, with another, from another origin, as a form, with an unknown field; no preflight answered; ATM-612's drafts kept in the state folder, not the repository, a DELETE refused without the token), "review reads (ATM-574)…" (read-only; a revision that is an option or no object refused); atm-api's `routes` unit tests (each route on a fake atm-lib), "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "api/search", "api/v1/projects/<id>/tasks", "/assets/ serves the CompMD runtime atm embeds…", "a project's files for the document viewer…", "files in a git submodule…"; `crates/atm-docs/src/lib.rs`'s tests (moved from atm-lib, ATM-570; a file at a revision passes the same checks, its revision never an option for git) |
+ | I12 | **Only the registered projects' data is served**; never git's or atm's own folders, in any case (`.GIT`, and Windows' `.git.`), a logo neither, nor one through a symbolic link, and a logo that can't be read is a 404; a file at a revision is named by a full object ID only (ATM-671): their task data, read from regular files only, never through a symlink (a task folder with a linked file is refused whole, checked on every request), and, for the document viewer, files of their working copy under the checks of I11, never a hidden, ignored or key file, nothing outside the project (a git submodule's checkout is inside it; a file in it is ignored by the submodule's own rules)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "a project's files for the document viewer…" |
+ | I13 | **Every response has `nosniff` and CORP same-origin, but `/assets/`'s, which are `nosniff`, CORP cross-origin and readable from anywhere, each one, a refusal too (I11, ATM-672); a response that can't be built is a bare 500 with them, never a 200 without; the page has the strict CSP** (own scripts by hash, and the CompMD runtime from the asset folder only, `http://<the page's host>/assets/compmd/`, which may compile WebAssembly, `'wasm-unsafe-eval'`; never `'self'`, `'unsafe-eval'` or inline scripts; frames only CompMD's sandbox frames from the same folder, `frame-src`; `connect-src 'self'`, `frame-ancestors 'none'`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `serve.test.mjs` "security headers"; `dashboard/tests/e2e/security.spec.ts`; `security-headers.test.ts`                                                 |
+ 
+@@ -111,7 +111,7 @@ with the task that adds it.
+ | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+ | I25 | **Only the window's own page calls the app, and only its commands**: the main window's capability allows exactly the commands in `build.rs`'s manifest, one permission each, no core or plugin API and no remote URL; a page from anywhere else, CompMD's sandbox frames included, is refused. Tauri counts every scheme the app registers as local, so the capability alone covers `compmd:` and `atm:` too: the app's invoke handler (`navigation::guarded`) answers only a call whose `Origin` is the app's page (ATM-677). Every webview loads only the app's page, CompMD's frames, atm's files and `about:` (`navigation::plugin`'s navigation guard, ATM-677). The capability covers `main` and the windows the app opens, `window-<n>` (T-511), and no other label. A command about a window (`set_title`, the subscriptions, `unsubscribe`, `subscribe_links`) acts on the window that calls it, never on one it names; `open_window` takes only one of the dashboard's pages, checked as a deep link is (I28), as do `save_tabs` and the windows' file the app reads at the start (T-518); `open_url` opens outside the app only an `https:` or `http:` URL with a host or a `mailto:` one, and the opener plugin's own commands are refused (T-551)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `app/src-tauri/src/lib.rs` `the_capability_allows_exactly_the_apps_commands`, `the_main_windows_capability_lets_it_call_the_commands`, `a_window_the_app_opens_has_the_main_windows_capability_and_no_other`, `the_window_opens_links_only_through_open_url`, `a_call_from_compmds_frames_is_refused_though_the_capability_covers_it`; `navigation.rs`'s tests (the origins); `external.rs`'s tests (the URL check); `windows.rs`'s tests (`open_window`'s check); `session.rs`'s (the file and the tabs checked); `commands.rs`'s (a window ends only its own subscriptions)                                                                                                                                                                         |
+ | I26 | **The window's page has the server's strict CSP** (I13): `default-src 'none'`, scripts only the bundle's hashes and two folders, by path, with `'wasm-unsafe-eval'`: atm's CompMD build on the app's `atm:` scheme (`atm://localhost/assets/compmd/`) and CompMD's frames (`compmd://localhost/frames/`), each also in its `http://….localhost` form for Windows; never `blob:`, `data:` or `'self'`; frames only CompMD's origin; images only the app's own or `data:` (the app's logos come as `data:`, T-457); connections only to Tauri's IPC and the same two folders; `frame-ancestors 'none'`; `freezePrototype`, no global Tauri object. Tauri doesn't modify `style-src` (`dangerousDisableAssetCspModification: ["style-src"]`): its nonce made `'unsafe-inline'` ignored, the same allowance the server's policy makes. Debug builds use `devCsp`, the same policy plus only the CLI's live-reload socket (`ws://127.0.0.1:1430/__tauri_cli`). **Two schemes are entry points** (ADR-006, T-524), which any page in the webview can request: **`compmd:`**, CompMD's plugin (`tauri-plugin-compmd`, crates.io, pinned), serving the bundle the dashboard's build wrote and the app's `build.rs` embedded (the frames under their hash, the packs by their place) by CompMD's serving contract (`compmd-host`'s `respond`: `GET` only, a `404` with why for anything else, the manifest included, every file sandboxed); and **`atm:`**, the app's own (`app/src-tauri/src/assets.rs`), serving only `compmd.js` and its `.wasm` from the dashboard's CompMD build (no HTML, no file reached through a symlink), by exact path of plain segments, `GET` and `HEAD` only, every refusal a `404` or `405` with its reason, logged, with `atm serve`'s headers for those files (I11: readable cross-origin, `nosniff`). A pack's module loads in a frame by its place, checked against the `sha384` the bundle's manifest pins; the page never fetches one. `atm:` is also the deep links' scheme (T-459), but no asset address opens a page. Neither is IPC: a page or frame on them can't call the app's commands (I25) | `the_windows_csp_is_strict` (devCsp in step); `the_pages_compmd_files_come_from_atms_scheme_as_atm_serve_sends_them` (`atm:` against `tests/scripts/compmd-host-headers.json`'s page rows, whose bundle rows `serve.test.mjs` checks `atm serve`'s `respond` against); `assets.rs`'s tests (refusals, no deep link); `the_main_windows_capability_lets_it_call_the_commands` (refused from `compmd:` and `atm:` in both forms); `the_page_is_served_with_a_policy_it_works_under`; `compmd.test.ts` (the sandbox's options, the modules' hashes); the e2e `cspGuard` on `app.spec.ts`, and its diagram drawn from the plugin's origin |
+-| I27 | **The app's reads are atm serve's**: each command answers what its REST route does, through the same atm-lib call with the same checks (I11, I12), the reviews' reads among them (`project_reviews`, `project_review`, `document` with `at`; ATM-574); the commands write nothing but the last opened workspace (`list_projects`, as its route), on the user's click only the skills (`connect_agents`, through `atm agents install`'s code: a harness atm knows, nothing replaced that atm didn't write), and, on the user's action in the page only, a project's reviews (ATM-572: `create_review`, `close_review`, `set_review_tasks`, `submit_review_decision`, `add_review_comment`, `update_review_comment`, `reply_to_review_comment`, each its REST route's atm-lib call, as the user); CompMD's frames, which show the comments, still call nothing (I25)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `each_command_answers_what_its_rest_route_does`; `the_main_windows_capability_lets_it_call_the_commands` (the review commands reach atm-lib and refuse a page from anywhere else); `app.spec.ts` "Connect your agents" (opening the dialog only reads); atm-lib's `agents.rs` tests                                                                                                                                                                                                                                                                                                                                                   |
++| I27 | **The app's reads are atm serve's**: each command answers what its REST route does, through the same atm-lib call with the same checks (I11, I12), the reviews' reads among them (`project_reviews`, `project_review`, `document` with `at`; ATM-574); the commands write nothing but the last opened workspace (`list_projects`, as its route), on the user's click only the skills (`connect_agents`, through `atm agents install`'s code: a harness atm knows, nothing replaced that atm didn't write), and, on the user's action in the page only, a project's reviews (ATM-572: `create_review`, `close_review`, `set_review_tasks`, `submit_review_decision`, `add_review_comment`, `update_review_comment`, `reply_to_review_comment`, each its REST route's atm-lib call, as the user) and its inbox (ATM-761: `project_inbox` reads it; `add_inbox_item`, `edit_inbox_item`, `decide_inbox_item`, each its REST route's atm-lib call, as the user; no command injects); CompMD's frames, which show the comments, still call nothing (I25)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `each_command_answers_what_its_rest_route_does`; `the_main_windows_capability_lets_it_call_the_commands` (the review commands reach atm-lib and refuse a page from anywhere else); `the_inbox_commands_answer_what_the_page_reads_and_only_from_the_apps_page` (ATM-761); `app.spec.ts` "Connect your agents" (opening the dialog only reads); atm-lib's `agents.rs` tests                                                                                                                                                                                                                                                                                                                                                   |
+ | I28 | **A deep link is an address, never a request**: an `atm://` link becomes a dashboard address only when its path is one of the dashboard's pages, without `.`/`..`, empty segments, a fragment or other characters (4 KB at most), and the page navigates to it only if it is one of its pages; nothing is fetched, read or run because of a link                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `app/src-tauri/src/links.rs`'s tests; `tests/unit/links.test.ts`; `app.spec.ts` "deep links"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+ | I29 | **The app users run is the reviewed build, with one `atm` on PATH**: the DMG is built on a `v*` tag in the release workflow's `app-macos` job (read-only token, the dashboard built from the lockfile first), signed and notarized (the app and its bundled CLI by Tauri's bundler, the DMG by `notarize-dmg.sh`, stapled), its checksum in `SHA256SUMS`; an update the app installs (T-483) is the same job's build, its archive signed with the updater key and checked against the key built into the app, on the user's click only; the cask links the app's own CLI, and its caveats say to uninstall the formula first (a cask can declare conflicts only with casks); it installs nothing into agent harnesses                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `release.yml` (`ci-workflow.test.ts`'s checks of every workflow); `packaging.test.mjs` "the Homebrew cask…"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+ 
+diff --git a/tests/scripts/scenarios/inbox.json b/tests/scripts/scenarios/inbox.json
+index 502a0c89..773d8f8d 100644
+--- a/tests/scripts/scenarios/inbox.json
++++ b/tests/scripts/scenarios/inbox.json
+@@ -60,7 +60,13 @@
+           "version": 1,
+           "next": 4,
+           "items": [
+-            { "id": "IN-1", "text": "First\nmore", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" },
++            {
++              "id": "IN-1",
++              "text": "First\nmore",
++              "state": "created",
++              "created_at": "2026-11-24T09:00:00Z",
++              "created_by": "Ana"
++            },
+             {
+               "id": "IN-2",
+               "text": "Second",
+@@ -71,13 +77,21 @@
+               "decided_at": "2026-11-24T09:05:00Z",
+               "decided_by": "Ana"
+             },
+-            { "id": "IN-3", "text": "Third", "state": "created", "created_at": "2026-11-24T09:02:00Z", "created_by": "Ana" }
++            {
++              "id": "IN-3",
++              "text": "Third",
++              "state": "created",
++              "created_at": "2026-11-24T09:02:00Z",
++              "created_by": "Ana"
++            }
+           ]
+         }
+       }
+     },
+     "args": ["inbox", "list"],
+-    "expect": { "stdout": "IN-3  created  Third\nIN-1  created  First\n3 items in the inbox: 2 open, 1 discarded, 0 injected\n" }
++    "expect": {
++      "stdout": "IN-3  created  Third\nIN-1  created  First\n3 items in the inbox: 2 open, 1 discarded, 0 injected\n"
++    }
+   },
+   {
+     "name": "inbox list --state discarded says why; --json gives the items and counts",
+@@ -88,7 +102,13 @@
+           "version": 1,
+           "next": 3,
+           "items": [
+-            { "id": "IN-1", "text": "First", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" },
++            {
++              "id": "IN-1",
++              "text": "First",
++              "state": "created",
++              "created_at": "2026-11-24T09:00:00Z",
++              "created_by": "Ana"
++            },
+             {
+               "id": "IN-2",
+               "text": "Second",
+@@ -121,7 +141,13 @@
+           "version": 1,
+           "next": 2,
+           "items": [
+-            { "id": "IN-1", "text": "Title line\nand more", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }
++            {
++              "id": "IN-1",
++              "text": "Title line\nand more",
++              "state": "created",
++              "created_at": "2026-11-24T09:00:00Z",
++              "created_by": "Ana"
++            }
+           ]
+         }
+       }
+@@ -145,7 +171,15 @@
+         ".agentic-task-manager/inbox.json": {
+           "version": 1,
+           "next": 2,
+-          "items": [{ "id": "IN-1", "text": "Old idea", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }]
++          "items": [
++            {
++              "id": "IN-1",
++              "text": "Old idea",
++              "state": "created",
++              "created_at": "2026-11-24T09:00:00Z",
++              "created_by": "Ana"
++            }
++          ]
+         }
+       }
+     },
+@@ -210,11 +244,24 @@
+     "name": "inbox inject: the item names its tasks, and each task names the item",
+     "setup": {
+       "files": {
+-        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-001", "status": "todo" }, { "id": "T-002", "status": "todo" }] },
++        ".agentic-task-manager/tasks.json": {
++          "tasks": [
++            { "id": "T-001", "status": "todo" },
++            { "id": "T-002", "status": "todo" }
++          ]
++        },
+         ".agentic-task-manager/inbox.json": {
+           "version": 1,
+           "next": 2,
+-          "items": [{ "id": "IN-1", "text": "Two things", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }]
++          "items": [
++            {
++              "id": "IN-1",
++              "text": "Two things",
++              "state": "created",
++              "created_at": "2026-11-24T09:00:00Z",
++              "created_by": "Ana"
++            }
++          ]
+         }
+       }
+     },
+@@ -251,7 +298,9 @@
+         ".agentic-task-manager/inbox.json": {
+           "version": 1,
+           "next": 2,
+-          "items": [{ "id": "IN-1", "text": "x", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }]
++          "items": [
++            { "id": "IN-1", "text": "x", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }
++          ]
+         }
+       }
+     },
+@@ -263,7 +312,9 @@
+         ".agentic-task-manager/inbox.json": {
+           "version": 1,
+           "next": 2,
+-          "items": [{ "id": "IN-1", "text": "x", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }]
++          "items": [
++            { "id": "IN-1", "text": "x", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }
++          ]
+         }
+       }
+     }
+@@ -276,7 +327,9 @@
+         ".agentic-task-manager/inbox.json": {
+           "version": 1,
+           "next": 2,
+-          "items": [{ "id": "IN-1", "text": "x", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }]
++          "items": [
++            { "id": "IN-1", "text": "x", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }
++          ]
+         }
+       },
+       "commands": [["sh", "-c", "\"$ATM\" inbox inject IN-1 --task T-001"]]
+@@ -325,7 +378,9 @@
+         ".agentic-task-manager/inbox.json": {
+           "version": 1,
+           "next": 2,
+-          "items": [{ "id": "IN-1", "text": "x", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }]
++          "items": [
++            { "id": "IN-1", "text": "x", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }
++          ]
+         }
+       }
+     },
+@@ -341,7 +396,9 @@
+         ".agentic-task-manager/inbox.json": {
+           "version": 1,
+           "next": 2,
+-          "items": [{ "id": "IN-1", "text": "x", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }]
++          "items": [
++            { "id": "IN-1", "text": "x", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }
++          ]
+         }
+       }
+     },
+@@ -354,7 +411,10 @@
+     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
+     "env": { "ATM_AGENT": "Ana" },
+     "args": ["inbox", "add", "x", "--dry-run"],
+-    "expect": { "stdout": "[dry-run] would add an item to the inbox\n", "files": { ".agentic-task-manager/inbox.json": false } }
++    "expect": {
++      "stdout": "[dry-run] would add an item to the inbox\n",
++      "files": { ".agentic-task-manager/inbox.json": false }
++    }
+   },
+   {
+     "name": "db archive moves the inbox's items decided long ago, never an open one; unarchive brings one back",
+@@ -365,7 +425,13 @@
+           "version": 1,
+           "next": 4,
+           "items": [
+-            { "id": "IN-1", "text": "open, old", "state": "created", "created_at": "2026-01-01T09:00:00Z", "created_by": "Ana" },
++            {
++              "id": "IN-1",
++              "text": "open, old",
++              "state": "created",
++              "created_at": "2026-01-01T09:00:00Z",
++              "created_by": "Ana"
++            },
+             {
+               "id": "IN-2",
+               "text": "decided, old",
+@@ -407,7 +473,13 @@
+           "version": 1,
+           "next": 3,
+           "items": [
+-            { "id": "IN-1", "text": "open, old", "state": "created", "created_at": "2026-01-01T09:00:00Z", "created_by": "Ana" },
++            {
++              "id": "IN-1",
++              "text": "open, old",
++              "state": "created",
++              "created_at": "2026-01-01T09:00:00Z",
++              "created_by": "Ana"
++            },
+             {
+               "id": "IN-2",
+               "text": "decided, old",
+@@ -465,7 +537,13 @@
+           "version": 1,
+           "next": 3,
+           "items": [
+-            { "id": "IN-1", "text": "a", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" },
++            {
++              "id": "IN-1",
++              "text": "a",
++              "state": "created",
++              "created_at": "2026-11-24T09:00:00Z",
++              "created_by": "Ana"
++            },
+             { "id": "IN-2", "text": "b", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }
+           ]
+         }
+diff --git a/tests/scripts/serve.test.mjs b/tests/scripts/serve.test.mjs
+index 2efa8620..ee128a8d 100644
+--- a/tests/scripts/serve.test.mjs
++++ b/tests/scripts/serve.test.mjs
+@@ -329,6 +329,8 @@ describe('serve', () => {
+       board_active_sprint: null,
+       // The card's line (T-255): no creation times, no work recorded
+       stats: { started: null, tasks: 8, agent_minutes: 0 },
++      // No inbox yet (ATM-761)
++      inbox: { open: 0 },
+     });
+     assert.deepEqual(
+       [byId.eeee5555.summary.percent, byId.eeee5555.summary.recent_sprints, byId.eeee5555.summary.last_activity],
+@@ -348,6 +350,12 @@ describe('serve', () => {
+     // (the branch HEAD names, as the project card's: the test repository has no commit yet, but HEAD is main, T-385)
+     assert.deepEqual(summary.working, [{ task: 'T-7', name: 'T-7', agent: 'claude:test', branch: 'main' }]);
+     assert.deepEqual(summary.next, []);
++    // An item noted in the inbox (ATM-761) is a new version too: its count is the Inbox item's badge
++    const before = changed.headers.get('etag');
++    assert.equal(runAtm(['inbox', 'add', 'Later'], root, { ...env, ATM_AGENT: 'Ana' }).code, 0);
++    const noted = await fetch(url, { headers: { 'If-None-Match': before } });
++    assert.equal(noted.status, 200);
++    assert.deepEqual((await noted.json()).projects.find((p) => p.id === 'abcd1234').summary.inbox, { open: 1 });
+     atm(['service', 'stop'], root);
+   });
+ 
+@@ -1101,7 +1109,7 @@ describe('serve', () => {
+     for (const method of ['POST', 'PUT', 'DELETE'])
+       assert.deepEqual(await get('/api/projects', { method }), [
+         405,
+-        'only GET and HEAD, and POST, PATCH, PUT or DELETE on reviews',
++        'only GET and HEAD, and POST, PATCH, PUT or DELETE on reviews and the inbox',
+       ]);
+     atm(['service', 'stop'], root);
+   });
+@@ -1333,6 +1341,91 @@ describe('serve', () => {
+     atm(['service', 'stop'], root);
+   });
+ 
++  test('inbox (ATM-761): read with an ETag; changed only from atm’s own page with its session token, as JSON; as the user', async () => {
++    const atmHome = home();
++    const atm = atmIn(atmHome);
++    const root = project({ meta: { id: 'abcd1234', project: 'Serve' }, tasks: [] });
++    const port = ports();
++    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
++    const origin = `http://localhost:${port}`;
++    const page = await (await fetch(`${origin}/projects/abcd1234/inbox`)).text();
++    const token = /<meta name="atm-session" content="([0-9a-f]{64})">/.exec(page)?.[1];
++    assert.ok(token, 'the page has the session token');
++    const inbox = `${origin}/api/v2/workspaces/default/projects/abcd1234/inbox`;
++    const send = (method, url, body, headers = {}) =>
++      fetch(url, {
++        method,
++        headers: { Origin: origin, 'Content-Type': 'application/json', 'X-Atm-Session': token, ...headers },
++        body: typeof body === 'string' ? body : JSON.stringify(body),
++      });
++    const refused = async (r) => [r.status, (await r.json()).error];
++    const items = () => JSON.parse(atm(['inbox', 'list', '--state', 'all', '--json'], root).stdout).items;
++
++    // Empty at first, with an ETag; v1's route is the default workspace's
++    let r = await fetch(inbox);
++    assert.equal(r.status, 200);
++    assert.deepEqual((await r.json()).items, []);
++    const empty = r.headers.get('etag');
++    assert.ok(empty);
++    assert.equal((await fetch(inbox, { headers: { 'If-None-Match': empty } })).status, 304);
++    assert.equal((await fetch(`${origin}/api/v1/projects/abcd1234/inbox`)).status, 200);
++
++    // Added as the user at the machine: the inbox refuses an agent, whatever agent's environment started the server
++    r = await send('POST', inbox, { text: 'Remember the **sidebar**' });
++    assert.equal(r.status, 201, await r.clone().text());
++    assert.equal((await r.json()).item.id, 'IN-1');
++    assert.equal(items()[0].created_by, git(['config', 'user.name'], root).trim());
++    // The poll sees it
++    assert.equal((await fetch(inbox, { headers: { 'If-None-Match': empty } })).status, 200);
++    r = await send('PATCH', `${inbox}/IN-1`, { text: 'Remember the sidebar' });
++    assert.equal(r.status, 200, await r.clone().text());
++    r = await send('POST', `${inbox}/IN-1/decisions`, { decision: 'discarded', reason: 'Done already' });
++    assert.equal(r.status, 201, await r.clone().text());
++    r = await send('POST', `${inbox}/IN-1/decisions`, { decision: 'restored' });
++    assert.equal(r.status, 201, await r.clone().text());
++    assert.deepEqual(
++      items().map((i) => [i.id, i.text, i.state]),
++      [['IN-1', 'Remember the sidebar', 'created']],
++    );
++
++    // Without the token, with another, from another site, or as a form: refused, nothing written
++    const note = { text: 'Not this one' };
++    assert.deepEqual(await refused(await send('POST', inbox, note, { 'X-Atm-Session': '' })), [
++      403,
++      "no session token, or not this server's",
++    ]);
++    assert.deepEqual(await refused(await send('POST', inbox, note, { 'X-Atm-Session': 'f'.repeat(64) })), [
++      403,
++      "no session token, or not this server's",
++    ]);
++    assert.deepEqual(await refused(await send('POST', inbox, note, { Origin: 'https://evil.example' })), [
++      403,
++      "a change comes from atm's own page",
++    ]);
++    assert.deepEqual(
++      await refused(
++        await fetch(inbox, {
++          method: 'POST',
++          headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: origin, 'X-Atm-Session': token },
++          body: 'text=Not+this+one',
++        }),
++      ),
++      [415, 'the body is JSON'],
++    );
++    // A field a request doesn't take (another author), a list, an injection (an agent's, never the page's), a route
++    // there isn't, a method a resource doesn't take, and v1's path, which takes no change
++    assert.equal((await send('POST', inbox, { text: 'x', created_by: 'claude:x' })).status, 400);
++    assert.equal((await send('POST', inbox, ['x'])).status, 400);
++    assert.equal((await send('POST', `${inbox}/IN-1/decisions`, { decision: 'injected', tasks: ['T-1'] })).status, 400);
++    assert.equal((await send('POST', `${inbox}/IN-1/injections`, {})).status, 404);
++    assert.equal((await send('DELETE', `${inbox}/IN-1`, {})).status, 405);
++    assert.equal((await send('POST', `${origin}/api/v1/projects/abcd1234/inbox`, note)).status, 405);
++    // Too large a body
++    assert.equal((await send('POST', inbox, { text: 'x'.repeat(1_100_000) })).status, 413);
++    assert.equal(items().length, 1, 'nothing refused was written');
++    atm(['service', 'stop'], root);
++  });
++
+   test('review reads (ATM-574): the list, a review’s page for each view, a round’s sides; read-only, as the user', async () => {
+     const atmHome = home();
+     const atm = atmIn(atmHome);

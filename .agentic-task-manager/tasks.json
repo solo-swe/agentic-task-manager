@@ -19819,7 +19819,7 @@
       "description": "Ship the sprint *Sidebar overhaul* as 0.44.0, as AGENTS.md's *Versions* and *CI* sections describe: the sidebar as a scope selector, the review and doc viewer fixes, and the release signing fix (ATM-749).\n\n## Change\n- **The version:** 0.44.0 in `Cargo.toml` (`[workspace.package]`), if no task of the sprint bumped it already.\n- **`CHANGELOG.md` and `WHATS-NEW.md`:** the `[0.44.0]` entries dated the release day; WHATS-NEW's 3–6 plain-language bullets written from the changelog entry.\n- **Screenshots:** regenerate the Linux baselines the sprint changed (`pnpm run test:e2e:visual:update`, Docker), look at them, commit them; delete baselines whose test is gone.\n- **The security checklist** (`docs/security-architecture.md` §3): the 0.44.0 entry. If skills, `docs/agent/` or agent-facing output changed, the agent sandbox, or without an API key the written skill review in §3.3; any new entry point, agent-facing field or CI permission recorded in the document.\n- **Verify:** `pnpm run verify` in `dashboard/` (the screenshots included), `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo deny check`.\n- **After the release:** check that the app job's signing step compiled nothing (ATM-749).\n\n## Push\nPushing, the release PR to `main`, merging, tagging and publishing are Hakan's.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "01a207f0-a2e1-7602-b260-d97d26c2073b",
         "01a207f0-a2e1-7602-b260-d97e12924d39",
@@ -19860,7 +19860,7 @@
         "dashboard/tests/e2e/__screenshots__/"
       ],
       "created_at": "2026-11-23T22:40:34Z",
-      "updated_at": "2026-11-25T01:04:34Z",
+      "updated_at": "2026-11-25T01:28:44Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:33cba067",
       "sprint_history": [
@@ -19874,7 +19874,44 @@
       "review": "async",
       "number": 750,
       "started_at": "2026-11-25T01:04:34Z",
-      "started_by": "claude:33cba067"
+      "started_by": "claude:33cba067",
+      "commit": "aa8002c5614720553b693ef7e3a36f6da4afb71b",
+      "code_reviews": [
+        {
+          "id": "01a2104c-c792-73f1-a0d2-aad87d377799",
+          "ref": "CR-184"
+        }
+      ],
+      "review_requested_at": "2026-11-25T01:23:17Z",
+      "notes": [
+        {
+          "at": "2026-11-25T01:23:17Z",
+          "kind": "review",
+          "text": "CR-184: Release 0.44.0: the entries, the security checklist, the Linux screenshots",
+          "by": "claude:33cba067"
+        },
+        {
+          "at": "2026-11-25T01:27:47Z",
+          "kind": "note",
+          "text": "Approved: in CR-184 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-25T01:28:44Z",
+          "kind": "outcome",
+          "text": "Approved in CR-184: 0.44.0 with its changelog and What is new entries, the security checklist entry and 58 Linux screenshots; verify, cargo test, clippy, fmt and deny all pass. Pushing, the release PR, tagging and publishing are Hakan’s.",
+          "by": "claude:33cba067"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-25T01:23:17Z",
+          "to": "2026-11-25T01:27:47Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-25T01:28:44Z",
+      "completed_by": "claude:33cba067"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e889c1f825f3",

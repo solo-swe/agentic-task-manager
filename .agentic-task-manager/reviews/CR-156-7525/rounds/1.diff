@@ -1,0 +1,473 @@
+diff --git a/dashboard/src/lib/reviews/ReviewList.svelte b/dashboard/src/lib/reviews/ReviewList.svelte
+index 25c11b82..e0fcddb1 100644
+--- a/dashboard/src/lib/reviews/ReviewList.svelte
++++ b/dashboard/src/lib/reviews/ReviewList.svelte
+@@ -4,6 +4,7 @@
+   import { readStored, writeStored } from '../prefs';
+   import Icon from '../ui/Icon.svelte';
+   import { groupReviews, waitedFor } from './page';
++  import { offerReviewSearch } from './search.svelte';
+   import {
+     NO_QUERY,
+     STATUS_LABELS,
+@@ -105,14 +106,16 @@
+     (groups ? groups.flatMap((g) => g.entries) : entries).filter((e) => e.needs_you || e.waiting === 'answered'),
+   );
+ 
+-  // What is typed, until the query takes it (a moment later), then the query's
+-  let search = $derived(query.q);
+-  let timer: ReturnType<typeof setTimeout> | undefined;
+-  function typed(text: string) {
+-    search = text;
+-    clearTimeout(timer);
+-    timer = setTimeout(() => onquery({ ...query, q: text.trim() }), 250);
+-  }
++  // The search is the title bar's, where a project's is (ATM-738): offered while the list is shown, and what is typed
++  // there is the query's text
++  $effect(() =>
++    offerReviewSearch({
++      get q() {
++        return query.q;
++      },
++      search: (q) => onquery({ ...query, q }),
++    }),
++  );
+ 
+   function toggleStatus(status: StatusFilter) {
+     const status_ = query.status.includes(status)
+@@ -140,33 +143,22 @@
+ </script>
+ 
+ <div class="review-list" id="review-list">
+-  <div class="review-list-bar">
+-    <label class="review-search-box">
+-      <Icon name="search" size={15} />
+-      <input
+-        class="review-search"
+-        type="search"
+-        placeholder="Search titles, summaries and comments"
+-        aria-label="Search reviews"
+-        value={search}
+-        oninput={(e) => typed(e.currentTarget.value)}
+-      />
+-    </label>
+-    {#if waiting.length}
+-      <button class="review-next" onclick={() => onopen(waiting[0].review.reference, false, waiting[0])}>
+-        Next review needing you <span class="review-count">{waiting.length}</span>
+-      </button>
+-    {/if}
+-    {#if onlive}
+-      <button
+-        class="review-new-live"
+-        id="review-new-live"
+-        aria-expanded={starting}
+-        title="Review a change while it is being made: the working copy, followed as it changes"
+-        onclick={() => (starting = !starting)}><Icon name="eye" size={15} /> New live review</button
+-      >
+-    {/if}
+-  </div>
++  {#if waiting.length || onlive}<div class="review-list-bar">
++      {#if waiting.length}
++        <button class="review-next" onclick={() => onopen(waiting[0].review.reference, false, waiting[0])}>
++          Next review needing you <span class="review-count">{waiting.length}</span>
++        </button>
++      {/if}
++      {#if onlive}
++        <button
++          class="review-new-live"
++          id="review-new-live"
++          aria-expanded={starting}
++          title="Review a change while it is being made: the working copy, followed as it changes"
++          onclick={() => (starting = !starting)}><Icon name="eye" size={15} /> New live review</button
++        >
++      {/if}
++    </div>{/if}
+   {#if starting}
+     <form
+       class="review-live-form"
+@@ -360,32 +352,6 @@
+     align-items: center;
+     gap: var(--space-4);
+   }
+-  .review-search-box {
+-    flex: 1;
+-    min-width: 12rem;
+-    display: flex;
+-    align-items: center;
+-    gap: var(--space-4);
+-    height: 34px;
+-    padding: 0 var(--space-6);
+-    border: 1px solid var(--border);
+-    border-radius: var(--radius-md);
+-    background: var(--bg);
+-    color: var(--text-muted);
+-  }
+-  .review-search-box:focus-within {
+-    border-color: var(--accent);
+-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+-  }
+-  .review-search {
+-    flex: 1;
+-    min-width: 0;
+-    border: none;
+-    outline: none;
+-    background: none;
+-    color: var(--text);
+-    font: inherit;
+-  }
+   .review-next,
+   .review-clear,
+   .review-chip,
+diff --git a/dashboard/src/lib/reviews/ReviewSearch.svelte b/dashboard/src/lib/reviews/ReviewSearch.svelte
+new file mode 100644
+index 00000000..8ad86e2d
+--- /dev/null
++++ b/dashboard/src/lib/reviews/ReviewSearch.svelte
+@@ -0,0 +1,60 @@
++<script lang="ts">
++  // The reviews search (ATM-738): titles, summaries and comments, every word. In the title bar, where a project's
++  // search is, with its look ("/" focuses it); the list it searches offers it (search.svelte.ts). What is typed goes
++  // to the list's query a moment after typing stops, trimmed.
++  import Icon from '../ui/Icon.svelte';
++  import type { OfferedSearch } from './search.svelte';
++
++  let { offered }: { offered: OfferedSearch } = $props();
++
++  /** After typing stops, the query takes it */
++  const SEARCH_PAUSE_MS = 250;
++
++  // What is typed, until the query takes it, then the query's
++  let text = $derived(offered.q);
++  let timer: ReturnType<typeof setTimeout> | undefined;
++  let input = $state<HTMLInputElement>();
++
++  function typed(next: string) {
++    text = next;
++    clearTimeout(timer);
++    timer = setTimeout(() => offered.search(next.trim()), SEARCH_PAUSE_MS);
++  }
++
++  function clear() {
++    clearTimeout(timer);
++    text = '';
++    offered.search('');
++    input?.focus();
++  }
++
++  function onKeydown(e: KeyboardEvent) {
++    // "/" focuses the search, unless the user is typing somewhere already
++    const typing = e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable]');
++    if (e.key === '/' && !e.metaKey && !e.ctrlKey && !typing) {
++      e.preventDefault();
++      input?.focus();
++    }
++  }
++</script>
++
++<svelte:window onkeydown={onKeydown} />
++
++<label class="task-search review-search-box">
++  <Icon name="search" size={14} />
++  <input
++    class="review-search"
++    type="search"
++    placeholder="Search reviews"
++    aria-label="Search reviews"
++    title="Search the reviews’ titles, summaries and comments (/)"
++    bind:this={input}
++    value={text}
++    oninput={(e) => typed(e.currentTarget.value)}
++  />
++  {#if text}
++    <button class="search-clear" aria-label="Clear search" onclick={clear}><Icon name="x" size={12} /></button>
++  {:else}
++    <kbd class="search-key" aria-hidden="true">/</kbd>
++  {/if}
++</label>
+diff --git a/dashboard/src/lib/reviews/search.svelte.ts b/dashboard/src/lib/reviews/search.svelte.ts
+new file mode 100644
+index 00000000..b8ef9c7f
+--- /dev/null
++++ b/dashboard/src/lib/reviews/search.svelte.ts
+@@ -0,0 +1,26 @@
++// The reviews list's search, which the title bar shows (ATM-738, docs/sidebar-overhaul-design.md §6): where a
++// project's search is, the same field in the same place on every page that searches. The list (ReviewList) offers
++// its search while it is shown; the title bar (Header) shows the field while one is offered, and what is typed goes
++// to the list's query.
++
++/** A list's search: its query's text now, and what to do with a new one */
++export interface OfferedSearch {
++  readonly q: string;
++  search: (q: string) => void;
++}
++
++let offered = $state.raw<OfferedSearch | null>(null);
++
++/** The search offered now, if a reviews list is shown */
++export function offeredReviewSearch(): OfferedSearch | null {
++  return offered;
++}
++
++/** Offer `search` while the list is shown: the returned function takes it back (only it: another list may have
++ * offered its own since) */
++export function offerReviewSearch(search: OfferedSearch): () => void {
++  offered = search;
++  return () => {
++    if (offered === search) offered = null;
++  };
++}
+diff --git a/dashboard/src/lib/shell/Header.svelte b/dashboard/src/lib/shell/Header.svelte
+index bb9d53c6..bf4bf3c3 100644
+--- a/dashboard/src/lib/shell/Header.svelte
++++ b/dashboard/src/lib/shell/Header.svelte
+@@ -7,6 +7,8 @@
+   import NeedsYouMenu from './NeedsYouMenu.svelte';
+   import ActivityWidget from '../progress/ActivityWidget.svelte';
+   import BoardSearch from '../overview/BoardSearch.svelte';
++  import ReviewSearch from '../reviews/ReviewSearch.svelte';
++  import { offeredReviewSearch } from '../reviews/search.svelte';
+   import OverviewActivity from '../overview/OverviewActivity.svelte';
+   import ProgressWidget from '../progress/ProgressWidget.svelte';
+   import TitleBar from './TitleBar.svelte';
+@@ -53,12 +55,15 @@
+   const onAllTasks = $derived(
+     route.page === 'overview' && (dashboard.overviewTab === 'board' || dashboard.overviewTab === 'list'),
+   );
++  // A reviews list's search, while one is shown (a project's Code Reviews, All's): the title bar's (ATM-738)
++  const reviewSearch = $derived(offeredReviewSearch());
+ </script>
+ 
+ <!-- A project's search and Filters, and its Progress and Activity pills: the browser's title bar has them together, the
+      app's in two places (search and Filters before the tabs) -->
+ {#snippet projectSearch()}
+-  <Filters />
++  <!-- On the Code Reviews tab its list's search instead (ATM-738): one search where a page's search is, the page's own -->
++  {#if reviewSearch}<ReviewSearch offered={reviewSearch} />{:else}<Filters />{/if}
+ {/snippet}
+ {#snippet projectPills()}
+   <ProgressWidget />
+@@ -73,10 +78,10 @@
+     </div>
+   {/if}
+ {/snippet}
+-<!-- All projects' search, on the pages that search every project's tasks (the Board and the List), where a project's
+-     search is (ATM-737), and its activity -->
++<!-- All projects' search where a project's search is: on the pages that search every project's tasks (the Board and
++     the List, ATM-737), and on Code Reviews its list's (ATM-738); and its activity -->
+ {#snippet overviewSearch()}
+-  {#if onAllTasks}<BoardSearch />{/if}
++  {#if onAllTasks}<BoardSearch />{:else if reviewSearch}<ReviewSearch offered={reviewSearch} />{/if}
+ {/snippet}
+ {#snippet overviewPills()}
+   <!-- Every project's activity together (T-328) -->
+@@ -143,7 +148,7 @@
+     selector={dashboard.projects.length > 0}
+     inTab={inApp}
+     charts={overviewCharts}
+-    lead={inApp && onAllTasks ? overviewSearch : undefined}
++    lead={inApp && (onAllTasks || reviewSearch) ? overviewSearch : undefined}
+     trail={inApp && route.page === 'overview' ? overviewPills : undefined}
+   >
+     {#snippet subtitle()}
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index 3cfe19c0..ecebce43 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -1016,6 +1016,12 @@ test.describe('the dashboard in the atm app', () => {
+     await trail.locator('#progress-card').click();
+     await expect(page.locator('#progress-panel')).toBeVisible();
+     await page.keyboard.press('Escape');
++    // Code Reviews: its line's search is the reviews' (ATM-738), not the tasks'
++    await openView(page, 'reviews');
++    await expect(page.locator('.topbar.in-tab .in-tab-row > .review-search-box')).toHaveCount(1);
++    await expect(page.locator('#task-search')).toHaveCount(0);
++    await openView(page, 'kanban');
++    await expect(page.locator('.topbar.in-tab .in-tab-row #task-search')).toHaveCount(1);
+     // A narrow tab: they give way, the subtitle stays
+     await page.setViewportSize({ width: 1100, height: 900 });
+     await expect(trail).toBeVisible();
+@@ -1032,11 +1038,15 @@ test.describe('the dashboard in the atm app', () => {
+       await expect(trail.locator('#activity-card'), item).toBeVisible();
+       await expect(trail.locator('#progress-card'), item).toHaveCount(0);
+       await expect(page.locator('#app-titlebar #activity-card'), item).toHaveCount(0);
+-      // Its search (ATM-737): on Tasks, at the left of the tab's line, before the subtitle, as a project's is
+-      const search = page.locator('.topbar.in-tab .in-tab-row > .board-search');
+-      await expect(search, item).toHaveCount(item === 'tasks' ? 1 : 0);
+-      if (item === 'tasks')
++      // Its search, at the left of the tab's line, before the subtitle, as a project's is: on Tasks the tasks'
++      // (ATM-737), on Code Reviews the reviews' (ATM-738)
++      const searches = { tasks: '.board-search', reviews: '.review-search-box' } as Record<string, string>;
++      const search = page.locator('.topbar.in-tab .in-tab-row > .task-search');
++      await expect(search, item).toHaveCount(searches[item] ? 1 : 0);
++      if (searches[item]) {
++        await expect(search, item).toHaveClass(new RegExp(searches[item].slice(1)));
+         expect((await search.boundingBox())!.x).toBeLessThan((await page.locator('#subtitle').boundingBox())!.x);
++      }
+     }
+     await expect(page.locator('.projects-toolbar #board-search')).toHaveCount(0);
+     const allPills = (await trail.boundingBox())!;
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 1a57cedf..effc66aa 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -4,6 +4,7 @@ import {
+   expect,
+   loadFixture,
+   openDashboard,
++  openView,
+   projectDocument,
+   summary,
+   test,
+@@ -298,6 +299,33 @@ test.describe('the reviews tab', () => {
+     await expect(unreadable.getByRole('link')).toHaveCount(0);
+   });
+ 
++  test('the search is in the title bar, where the tasks’ search is on the other tabs; All’s reviews have it too (ATM-738)', async ({
++    page,
++    tasksServer,
++  }) => {
++    await openReviews(page, tasksServer);
++    const search = page.locator('.topbar .topbar-charts .review-search-box');
++    await expect(search).toHaveCount(1);
++    await expect(page.locator('#review-list .review-search')).toHaveCount(0);
++    // One search there, the page's own: not the tasks' search and Filters, which the reviews don't take
++    await expect(page.locator('#task-search, #filters-toggle')).toHaveCount(0);
++    // Before the pills, as the tasks' search is
++    expect((await search.boundingBox())!.x).toBeLessThan((await page.locator('#progress-card').boundingBox())!.x);
++    // "/" focuses it
++    await page.locator('#review-list').click({ position: { x: 1, y: 1 } });
++    await page.keyboard.press('/');
++    await expect(page.getByRole('searchbox', { name: 'Search reviews' })).toBeFocused();
++    // Another tab: the tasks' search is back
++    await openView(page, 'kanban');
++    await expect(page.locator('#task-search')).toHaveCount(1);
++    await expect(search).toHaveCount(0);
++    // All projects' Code Reviews
++    await page.goto('/reviews');
++    await expect(page.locator('#overview-reviews')).toBeVisible();
++    await expect(page.locator('.topbar .review-search-box')).toHaveCount(1);
++    await expect(page.locator('#overview-reviews .review-search')).toHaveCount(0);
++  });
++
+   test('opens with the last filter chosen, kept in the browser (not the search words); Clear forgets it', async ({
+     page,
+     tasksServer,
+diff --git a/dashboard/tests/unit/ReviewList.component.test.ts b/dashboard/tests/unit/ReviewList.component.test.ts
+index f0c76574..ad3d5b66 100644
+--- a/dashboard/tests/unit/ReviewList.component.test.ts
++++ b/dashboard/tests/unit/ReviewList.component.test.ts
+@@ -1,6 +1,7 @@
+ import { fireEvent, render, screen, within } from '@testing-library/svelte';
+ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+ import ReviewList from '../../src/lib/reviews/ReviewList.svelte';
++import { offeredReviewSearch } from '../../src/lib/reviews/search.svelte';
+ import { NO_QUERY, type ListQuery, type ReviewEntry, type ReviewStatus } from '../../src/lib/reviews/types';
+ 
+ // The reviews page (lib/reviews/ReviewList.svelte, ATM-574): the list and the query are given; what the user does is
+@@ -224,15 +225,21 @@ describe('ReviewList', () => {
+     expect(onopen).not.toHaveBeenCalled();
+   });
+ 
+-  it('asks for a search once typing stops, trimmed', async () => {
+-    const { onquery } = show([entry(1, 'waiting')]);
+-    const search = screen.getByRole('searchbox', { name: 'Search reviews' });
+-    await fireEvent.input(search, { target: { value: 'tw' } });
+-    await fireEvent.input(search, { target: { value: ' two words ' } });
+-    expect(onquery).not.toHaveBeenCalled();
+-    vi.advanceTimersByTime(300);
+-    expect(onquery).toHaveBeenCalledTimes(1);
+-    expect(onquery).toHaveBeenCalledWith({ ...NO_QUERY, q: 'two words' });
++  // ATM-738: the search is the title bar's; the list offers it while shown, the query's text and a way to change it
++  it('offers its search while shown: its query’s text, and a search is the query with that text', async () => {
++    expect(offeredReviewSearch()).toBeNull();
++    const query = { ...NO_QUERY, status: ['open' as const], q: 'names' };
++    const { onquery, unmount, rerender } = show([entry(1, 'waiting')], query);
++    expect(screen.queryByRole('searchbox')).toBeNull();
++    const offered = offeredReviewSearch()!;
++    expect(offered.q).toBe('names');
++    offered.search('two words');
++    expect(onquery).toHaveBeenCalledWith({ ...query, q: 'two words' });
++    // A new query given: the offer reads it
++    await rerender({ query: { ...query, q: 'other' } });
++    expect(offeredReviewSearch()!.q).toBe('other');
++    unmount();
++    expect(offeredReviewSearch()).toBeNull();
+   });
+ 
+   // ATM-613: Open is every review not decided yet, the first chip; the statuses narrow it further
+diff --git a/dashboard/tests/unit/ReviewSearch.component.test.ts b/dashboard/tests/unit/ReviewSearch.component.test.ts
+new file mode 100644
+index 00000000..6c694fe2
+--- /dev/null
++++ b/dashboard/tests/unit/ReviewSearch.component.test.ts
+@@ -0,0 +1,70 @@
++import { fireEvent, render, screen } from '@testing-library/svelte';
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
++import ReviewSearch from '../../src/lib/reviews/ReviewSearch.svelte';
++import { offerReviewSearch, offeredReviewSearch } from '../../src/lib/reviews/search.svelte';
++
++// The reviews search in the title bar (lib/reviews/ReviewSearch.svelte, ATM-738), and the offer it shows
++// (search.svelte.ts): what is typed goes to the offered search a moment after typing stops
++
++function show(q = '') {
++  const search = vi.fn();
++  const result = render(ReviewSearch, { offered: { q, search } });
++  return { ...result, search, box: screen.getByRole('searchbox', { name: 'Search reviews' }) as HTMLInputElement };
++}
++
++beforeEach(() => vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] }));
++afterEach(() => vi.useRealTimers());
++
++describe('ReviewSearch', () => {
++  it('shows the query’s text', () => {
++    expect(show('names').box.value).toBe('names');
++  });
++
++  it('searches once typing stops, trimmed', async () => {
++    const { search, box } = show();
++    await fireEvent.input(box, { target: { value: 'tw' } });
++    await fireEvent.input(box, { target: { value: ' two words ' } });
++    expect(search).not.toHaveBeenCalled();
++    vi.advanceTimersByTime(300);
++    expect(search.mock.calls).toEqual([['two words']]);
++  });
++
++  it('× clears it at once, and a search still waiting is dropped', async () => {
++    const { search, box } = show('names');
++    await fireEvent.input(box, { target: { value: 'names and' } });
++    await fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
++    vi.advanceTimersByTime(300);
++    expect(search.mock.calls).toEqual([['']]);
++    expect(box.value).toBe('');
++    expect(document.activeElement).toBe(box);
++  });
++
++  it('"/" focuses it, unless typing somewhere already; ⌘/ and Ctrl+/ don’t', async () => {
++    const { box } = show();
++    const other = document.body.appendChild(document.createElement('input'));
++    other.focus();
++    await fireEvent.keyDown(other, { key: '/' });
++    expect(document.activeElement).toBe(other);
++    other.blur();
++    await fireEvent.keyDown(document.body, { key: '/', metaKey: true });
++    await fireEvent.keyDown(document.body, { key: '/', ctrlKey: true });
++    expect(document.activeElement).not.toBe(box);
++    await fireEvent.keyDown(document.body, { key: '/' });
++    expect(document.activeElement).toBe(box);
++    other.remove();
++  });
++});
++
++describe('the offered reviews search', () => {
++  it('is the last offered; taking one back leaves another’s', () => {
++    const one = { q: '', search: vi.fn() };
++    const two = { q: '', search: vi.fn() };
++    const takeOne = offerReviewSearch(one);
++    expect(offeredReviewSearch()).toBe(one);
++    const takeTwo = offerReviewSearch(two);
++    takeOne();
++    expect(offeredReviewSearch()).toBe(two);
++    takeTwo();
++    expect(offeredReviewSearch()).toBeNull();
++  });
++});

@@ -1,0 +1,110 @@
+diff --git a/dashboard/src/lib/shell/Header.svelte b/dashboard/src/lib/shell/Header.svelte
+index 8e057b3d..c7043c5f 100644
+--- a/dashboard/src/lib/shell/Header.svelte
++++ b/dashboard/src/lib/shell/Header.svelte
+@@ -68,18 +68,20 @@
+     </div>
+   {/if}
+ {/snippet}
++{#snippet overviewPills()}
++  <!-- Every project's activity together (T-328) -->
++  {#if dashboard.route.page === 'overview'}<OverviewActivity />{/if}
++{/snippet}
+ {#snippet overviewCharts()}
+   {#if dashboard.route.page === 'overview'}
+-    <!-- Every project's activity together (T-328) -->
+-    <div class="topbar-charts">
+-      <OverviewActivity />
+-    </div>
++    <div class="topbar-charts">{@render overviewPills()}</div>
+   {/if}
+ {/snippet}
+ 
+-<!-- The atm app's own title bar (T-513): the window's, its tabs; at its right end the workspace picker, the overview's
+-     activity and the ⋯; inside the tab, the subtitle line, a project's search and Filters before it (Hakan) and its
+-     Progress and Activity at its right end: they are the tab's project's (T-530) -->
++<!-- The atm app's own title bar (T-513): the window's, its tabs; at its right end the workspace picker and the ⋯;
++     inside the tab, the subtitle line, a project's search and Filters before it (Hakan), and at its right end the
++     tab's pills: a project's Progress and Activity (T-530), All projects' activity (ATM-736). They are the tab's
++     scope's, not the window's -->
+ {#snippet tabSearch()}
+   {#if dashboard.loaded}{@render projectSearch()}{/if}
+ {/snippet}
+@@ -88,7 +90,6 @@
+ {/snippet}
+ {#snippet appEnd()}
+   <WorkspaceSelector />
+-  {#if !onProject}{@render overviewCharts()}{/if}
+   <SettingsMenu />
+ {/snippet}
+ {#if inApp}<AppTitleBar {title} end={appEnd} />{/if}
+@@ -127,7 +128,13 @@
+     {/snippet}
+   </TitleBar>
+ {:else}
+-  <TitleBar {title} selector={dashboard.projects.length > 0} inTab={inApp} charts={overviewCharts}>
++  <TitleBar
++    {title}
++    selector={dashboard.projects.length > 0}
++    inTab={inApp}
++    charts={overviewCharts}
++    trail={inApp && route.page === 'overview' ? overviewPills : undefined}
++  >
+     {#snippet subtitle()}
+       {#if !dashboard.projectsLoaded}
+         Loading projects…
+diff --git a/dashboard/src/lib/shell/TitleBar.svelte b/dashboard/src/lib/shell/TitleBar.svelte
+index ce9ff835..c0b74811 100644
+--- a/dashboard/src/lib/shell/TitleBar.svelte
++++ b/dashboard/src/lib/shell/TitleBar.svelte
+@@ -29,7 +29,8 @@
+     inTab?: boolean;
+     /** Inside the tab, before the subtitle, on its line (a project's search and Filters) */
+     lead?: Snippet;
+-    /** Inside the tab, at the right end of the subtitle's line (a project's Progress and Activity, T-530) */
++    /** Inside the tab, at the right end of the subtitle's line: its pills (a project's Progress and Activity, T-530;
++     * All projects' activity, ATM-736) */
+     trail?: Snippet;
+   }
+   let { title, selector = true, subtitle, charts, below, inTab = false, lead, trail }: Props = $props();
+@@ -56,7 +57,7 @@
+ 
+ {#if inTab}
+   <!-- In the app, inside the tab (T-513): only the subtitle line, on top of the tab's content; the tab label has the
+-       title, its logo and the project picker, the app's title bar the charts and the ⋯ (AppTitleBar) -->
++       title, its logo and the project picker, the app's title bar the ⋯ (AppTitleBar); the pills are the tab's (trail) -->
+   <header class="topbar in-tab">
+     <div class="in-tab-row">
+       {@render lead?.()}
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index ea323d3a..84526af4 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -1022,12 +1022,23 @@ test.describe('the dashboard in the atm app', () => {
+     await page.setViewportSize({ width: 900, height: 900 });
+     await expect(trail).toBeHidden();
+     await expect(page.locator('#subtitle')).toBeVisible();
+-    // The overview has none in its tab
++    // All projects: its activity is its tab's too (ATM-736), on every page of the scope, never the window's
++    await page.setViewportSize({ width: 1400, height: 900 });
+     await page.locator('#app-sidebar-scope').click();
+     await page.locator('#app-sidebar-scopes [data-scope=""]').click();
+-    await page.locator('#app-sidebar [data-item="overview"]').click();
+-    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
+-    await expect(page.locator('#in-tab-trail')).toHaveCount(0);
++    for (const item of ['overview', 'tasks', 'analysis', 'reviews']) {
++      await page.locator(`#app-sidebar [data-item="${item}"]`).click();
++      await expect(page.locator('#dashboard-title'), item).toHaveText('Projects Overview');
++      await expect(trail.locator('#activity-card'), item).toBeVisible();
++      await expect(trail.locator('#progress-card'), item).toHaveCount(0);
++      await expect(page.locator('#app-titlebar #activity-card'), item).toHaveCount(0);
++    }
++    const allPills = (await trail.boundingBox())!;
++    const allSubtitle = (await page.locator('#subtitle').boundingBox())!;
++    expect(Math.abs(allPills.y + allPills.height / 2 - (allSubtitle.y + allSubtitle.height / 2))).toBeLessThan(6);
++    // It opens what it opens
++    await trail.locator('#activity-card').click();
++    await expect(page.locator('#activity-panel')).toBeVisible();
+   });
+ 
+   // Hakan: in the app, the regular themes' board scrolled as a whole, with a scrollbar, where each column should

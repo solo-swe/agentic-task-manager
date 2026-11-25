@@ -1,0 +1,37 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "7fb923fe636a9cc2a72d1d2cae9d040e49165dc6",
+    "head": "838a2b35201b8a2f62db1abd86cb1556b67b17be"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/lib/overview/BoardSearch.svelte",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/overview/ProjectsOverview.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/shell/Header.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/all-projects-board.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/app.spec.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:ba530ebb",
+  "at": "2026-11-24T14:43:10Z"
+}

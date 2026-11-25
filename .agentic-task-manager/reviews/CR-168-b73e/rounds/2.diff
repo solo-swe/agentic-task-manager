@@ -1,0 +1,408 @@
+diff --git a/crates/atm-lib/src/review_pages/list.rs b/crates/atm-lib/src/review_pages/list.rs
+index 18a797a8..062f352f 100644
+--- a/crates/atm-lib/src/review_pages/list.rs
++++ b/crates/atm-lib/src/review_pages/list.rs
+@@ -1,8 +1,11 @@
+ //! The reviews list: which reviews a page's query keeps, the latest activity first (ATM-574).
+ 
++use std::collections::HashMap;
++use std::path::PathBuf;
++
+ use super::{
+     Deserialize, Error, FileStore, Found, Project, Result, Review, ReviewFilter, ReviewHeader,
+-    ReviewRef, ReviewStore, Status, TASK_DIR, Value, json, me, needs, reviews, waiting_for,
++    ReviewStore, Status, TASK_DIR, Value, json, me, needs, reviews, waiting_for,
+ };
+ 
+ /// Which reviews a page lists (`…/reviews?q=&status=&author=&reviewer=&task=&branch=`): each one given must fit.
+@@ -71,11 +74,30 @@ pub(super) fn mentions(review: &Review, words: &[String]) -> bool {
+     words.iter().all(|w| text.contains(w))
+ }
+ 
+-/// A review found in one of the working copies, read from that copy (else the project's own store).
+-pub(super) fn whole(found: &Found, store: &FileStore) -> Result<Review> {
+-    FileStore::open(&found.working_copy.join(TASK_DIR))
+-        .and_then(|s| s.get_review(&ReviewRef(found.header.id.0.clone())))
+-        .or_else(|_| store.get_review(&found.header.reference))
++/// The working copies' reviews, whole, by ID: each copy's read once, when a review found there is first asked for
++/// (ATM-775). Reading one review from its store reads the whole folder to find it, so a list asking for each in turn
++/// read n² of them.
++#[derive(Default)]
++pub(super) struct Wholes(HashMap<PathBuf, HashMap<String, Review>>);
++
++impl Wholes {
++    /// A review found in one of the working copies, read from that copy (else the project's own store).
++    pub(super) fn of(&mut self, found: &Found, store: &FileStore) -> Result<Review> {
++        let copy = self.0.entry(found.working_copy.clone()).or_insert_with(|| {
++            FileStore::open(&found.working_copy.join(TASK_DIR))
++                .and_then(|s| s.reviews())
++                .map(|all| {
++                    all.into_iter()
++                        .map(|r| (r.header.id.0.clone(), r))
++                        .collect()
++                })
++                .unwrap_or_default()
++        });
++        match copy.get(&found.header.id.0) {
++            Some(review) => Ok(review.clone()),
++            None => store.get_review(&found.header.reference),
++        }
++    }
+ }
+ 
+ /// The reviews of every working copy the query keeps, the latest activity first: `{reviews: [{review, branch, chains,
+@@ -106,11 +128,12 @@ pub fn list_reviews(project: &Project, query: &ReviewQuery) -> Result<Value> {
+     };
+     let (me, words) = (me(project), words(&query.q));
+     let mut listed: Vec<(String, Value)> = Vec::new();
++    let mut wholes = Wholes::default();
+     for found in reviews::list_naming(project, root, &filter)? {
+         if !fits(&found.header, found.branch.as_deref(), query) {
+             continue;
+         }
+-        let review = whole(&found, &store)?;
++        let review = wholes.of(&found, &store)?;
+         if !mentions(&review, &words) {
+             continue;
+         }
+diff --git a/crates/atm-lib/tests/reviews/listing.rs b/crates/atm-lib/tests/reviews/listing.rs
+index d8e13eb2..235c2bcc 100644
+--- a/crates/atm-lib/tests/reviews/listing.rs
++++ b/crates/atm-lib/tests/reviews/listing.rs
+@@ -87,6 +87,84 @@ fn the_list_says_whether_each_review_has_ended() {
+     assert_eq!(ended(&hakan), json!(true));
+ }
+ 
++/// ATM-775: each working copy's reviews are read once, and each review listed whole from the copy it was found in: one
++/// only in a worktree comes with its comments and its words, on that copy's branch
++#[test]
++fn the_list_reads_each_review_whole_from_its_own_working_copy() {
++    let (main, other) = (dir(), dir());
++    git(&["init", "-q", "-b", "main"], &main.0);
++    let mut here = project(&main.0, "claude:1");
++    git(&["add", "-A"], &main.0);
++    git(&["commit", "-q", "-m", "tasks"], &main.0);
++    let copy = other.0.join("wt");
++    git(
++        &[
++            "worktree",
++            "add",
++            "-q",
++            "-b",
++            "side",
++            copy.to_str().unwrap(),
++        ],
++        &main.0,
++    );
++    waiting(&mut here, &["T-1"]).unwrap();
++    let mut there = reopen(&copy, "claude:1");
++    let cr = atm_lib::reviews::create(
++        &mut there,
++        NewReview {
++            title: "Elsewhere".into(),
++            summary: "A walrus in the worktree.".into(),
++            tasks: vec!["T-2".into()],
++            author: Some("claude:1".into()),
++            reviewers: vec!["Hakan".into()],
++            status: Status::Waiting,
++            first: round(),
++        },
++    )
++    .unwrap()
++    .reference;
++    let mut reviews = atm_lib::reviews::store(&there).unwrap();
++    atm_lib::reviews::Reviews::new(&mut reviews)
++        .comment(
++            &cr,
++            atm_lib::reviews::Anchor {
++                round: 1,
++                ..atm_lib::reviews::Anchor::default()
++            },
++            "Why a walrus?",
++            &"Hakan".into(),
++        )
++        .unwrap();
++    let list = |q: &str| {
++        atm_lib::review_pages::list_reviews(
++            &here,
++            &atm_lib::review_pages::ReviewQuery {
++                q: q.into(),
++                ..atm_lib::review_pages::ReviewQuery::default()
++            },
++        )
++        .unwrap()["reviews"]
++            .as_array()
++            .unwrap()
++            .iter()
++            .map(|r| json!([r["review"]["title"], r["branch"], r["chains"], r["open"]]))
++            .collect::<Vec<_>>()
++    };
++    let mut all = list("");
++    all.sort_by_key(ToString::to_string);
++    assert_eq!(
++        all,
++        vec![
++            json!(["Elsewhere", "side", 1, 1]),
++            json!(["The change", "main", 0, 0]),
++        ]
++    );
++    // Its words are its copy's: its summary's and its comment's
++    assert_eq!(list("walrus why"), vec![json!(["Elsewhere", "side", 1, 1])]);
++    assert_eq!(list("nowhere"), Vec::<serde_json::Value>::new());
++}
++
+ /// ATM-610: the list says since when each review waits on its reviewers, its latest round's time
+ #[test]
+ fn the_list_says_since_when_each_review_waits() {
+diff --git a/dashboard/src/lib/shell/Sidebar.svelte b/dashboard/src/lib/shell/Sidebar.svelte
+index dfdfc464..9cd36d6c 100644
+--- a/dashboard/src/lib/shell/Sidebar.svelte
++++ b/dashboard/src/lib/shell/Sidebar.svelte
+@@ -196,58 +196,67 @@
+       <SidebarToggle />
+     </div>
+     <!-- The scope (§2.1): All projects, then the workspace's projects; missing ones dimmed and not chosen. Its list
+-         is placed under the button (`.menu` is placed under its positioned parent: without this one, the sidebar's
+-         whole height, below the window) -->
+-    <div class="menu-anchor app-sidebar-scope-anchor">
+-      <DropdownMenu.Root bind:open={menuOpen}>
+-        <DropdownMenu.Trigger>
+-          {#snippet child({ props })}
+-            <button
+-              {...props}
+-              class="app-sidebar-item app-sidebar-scope"
+-              id="app-sidebar-scope"
+-              data-scope={scope ?? ''}
+-              aria-label="Scope: {scope === null ? 'All projects' : (scoped?.name ?? scope)}; choose another"
+-              >{@render scopeLabel(scope === null ? null : scoped, false)}<span class="app-sidebar-chevron"
+-                ><Icon name="chevron-down" size={14} /></span
+-              ></button
+-            >
+-          {/snippet}
+-        </DropdownMenu.Trigger>
+-        <DropdownMenu.ContentStatic preventScroll={false} aria-label="Scopes">
+-          {#snippet child({ props })}
+-            <span {...props} class="menu app-sidebar-scopes" id="app-sidebar-scopes">
+-              <DropdownMenu.Item onSelect={() => choose(null)}>
+-                {#snippet child({ props })}
+-                  <button
+-                    {...props}
+-                    class="app-sidebar-item"
+-                    class:current={scope === null}
+-                    aria-current={scope === null ? 'true' : undefined}
+-                    data-scope="">{@render scopeLabel(null, true)}</button
+-                  >
+-                {/snippet}
+-              </DropdownMenu.Item>
+-              {#each dashboard.projects as project (project.id)}
+-                <DropdownMenu.Item disabled={project.missing} onSelect={() => choose(project.id)}>
++         floats over the window under the button (Bits UI's portal, ATM-774): never clipped by the sidebar or its
++         width, over its edge when the sidebar is narrow -->
++    <DropdownMenu.Root bind:open={menuOpen}>
++      <DropdownMenu.Trigger>
++        {#snippet child({ props })}
++          <button
++            {...props}
++            class="app-sidebar-item app-sidebar-scope"
++            id="app-sidebar-scope"
++            data-scope={scope ?? ''}
++            aria-label="Scope: {scope === null ? 'All projects' : (scoped?.name ?? scope)}; choose another"
++            >{@render scopeLabel(scope === null ? null : scoped, false)}<span class="app-sidebar-chevron"
++              ><Icon name="chevron-down" size={14} /></span
++            ></button
++          >
++        {/snippet}
++      </DropdownMenu.Trigger>
++      <DropdownMenu.Portal>
++        <DropdownMenu.Content
++          side="bottom"
++          align="start"
++          sideOffset={4}
++          collisionPadding={8}
++          preventScroll={false}
++          aria-label="Scopes"
++        >
++          {#snippet child({ props, wrapperProps })}
++            <div {...wrapperProps}>
++              <div {...props} class="app-sidebar-scopes" id="app-sidebar-scopes">
++                <DropdownMenu.Item onSelect={() => choose(null)}>
+                   {#snippet child({ props })}
+                     <button
+                       {...props}
+                       class="app-sidebar-item"
+-                      class:current={scope === project.id}
+-                      class:missing={project.missing}
+-                      aria-current={scope === project.id ? 'true' : undefined}
+-                      title={project.missing ? `${project.path}: not found` : project.path}
+-                      data-scope={project.id}>{@render scopeLabel(project, true)}</button
++                      class:current={scope === null}
++                      aria-current={scope === null ? 'true' : undefined}
++                      data-scope="">{@render scopeLabel(null, true)}</button
+                     >
+                   {/snippet}
+                 </DropdownMenu.Item>
+-              {/each}
+-            </span>
++                {#each dashboard.projects as project (project.id)}
++                  <DropdownMenu.Item disabled={project.missing} onSelect={() => choose(project.id)}>
++                    {#snippet child({ props })}
++                      <button
++                        {...props}
++                        class="app-sidebar-item"
++                        class:current={scope === project.id}
++                        class:missing={project.missing}
++                        aria-current={scope === project.id ? 'true' : undefined}
++                        title={project.missing ? `${project.path}: not found` : project.path}
++                        data-scope={project.id}>{@render scopeLabel(project, true)}</button
++                      >
++                    {/snippet}
++                  </DropdownMenu.Item>
++                {/each}
++              </div>
++            </div>
+           {/snippet}
+-        </DropdownMenu.ContentStatic>
+-      </DropdownMenu.Root>
+-    </div>
++        </DropdownMenu.Content>
++      </DropdownMenu.Portal>
++    </DropdownMenu.Root>
+     <!-- The scope's items (§2.2): each a link to its page, opened in a new tab -->
+     <ul class="app-sidebar-list" aria-label="{scope === null ? 'All projects' : (scoped?.name ?? scope)}: pages">
+       {#each itemsOf(scope) as item (item)}
+@@ -360,18 +369,22 @@
+     grid-column: -2;
+     grid-row: 1;
+   }
+-  /* Above the list of items it opens over */
+-  .app-sidebar-scope-anchor {
+-    z-index: 2;
+-  }
++  /* The scope's list, floating over the window as the other menus do (app.css .menu's look): its own width whatever
++     the sidebar's, at least the button's; Bits UI's wrapper places it */
+   .app-sidebar-scopes {
++    background: var(--surface);
++    border: 1px solid var(--border);
++    border-radius: var(--radius-lg);
++    box-shadow: 0 8px 24px color-mix(in srgb, var(--overlay) 60%, transparent);
+     display: flex;
+-    left: 0;
+-    right: 0;
+     flex-direction: column;
+     gap: var(--space-1);
+-    min-width: 220px;
++    max-height: 70vh;
++    max-width: 360px;
++    min-width: max(240px, var(--bits-dropdown-menu-anchor-width, 0px));
++    overflow-y: auto;
+     padding: var(--space-2);
++    z-index: 50;
+   }
+   .app-sidebar-icon {
+     color: var(--text-muted);
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index c4454d2e..a4085a4d 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -1,6 +1,43 @@
+ // The dashboard in the atm app (T-457): the same page, its data from the app's commands over Tauri's IPC (mocked here
+ // as `@tauri-apps/api/mocks` does, backed by the fixture's data), never from HTTP.
++import type { Page } from '@playwright/test';
+ import { addressOf, expect, loadFixture, openView, test } from './helpers';
++import { PREFS_KEY } from '../../src/lib/prefs';
++
++/** Where the sidebar's open scope list is: under its button, whole in the window, on top where it is */
++async function scopesPlaced(page: Page) {
++  return page.evaluate(() => {
++    const button = document.querySelector('#app-sidebar-scope')!.getBoundingClientRect();
++    const sidebar = document.querySelector('#app-sidebar')!;
++    const list = document.querySelector('#app-sidebar-scopes')!.getBoundingClientRect();
++    const at = (x: number, y: number) => !!document.elementFromPoint(x, y)?.closest('#app-sidebar-scopes');
++    const nameShown = [...document.querySelectorAll('#app-sidebar-scopes .app-sidebar-name')].every(
++      (n) => n.scrollWidth <= n.clientWidth + 1,
++    );
++    return {
++      underButton: list.top - button.bottom >= 0 && list.top - button.bottom < 16,
++      alignedLeft: Math.abs(list.left - button.left) < 16,
++      inWindow: list.left >= 0 && list.right <= window.innerWidth && list.bottom <= window.innerHeight,
++      outsideSidebar: !sidebar.contains(document.querySelector('#app-sidebar-scopes')),
++      sidebarScrolled: sidebar.scrollTop,
++      // On top at its corners and middle: over the sidebar's edge too when it is wider than the sidebar
++      onTop: at(list.left + 4, list.top + 4) && at(list.right - 4, list.bottom - 4) && at(list.right - 4, list.top + 4),
++      wide: list.width >= 240,
++      nameShown,
++    };
++  });
++}
++
++const SCOPES_PLACED = {
++  underButton: true,
++  alignedLeft: true,
++  inWindow: true,
++  outsideSidebar: true,
++  sidebarScrolled: 0,
++  onTop: true,
++  wide: true,
++  nameShown: true,
++};
+ 
+ test.describe('the dashboard in the atm app', () => {
+   test('loads its projects and their tasks through the app’s commands, with no request to a server', async ({
+@@ -914,22 +951,9 @@ test.describe('the dashboard in the atm app', () => {
+     const menu = page.locator('#app-sidebar-scopes');
+     await expect(menu.locator('[data-scope]')).toHaveCount(3);
+     await expect(menu.locator('.app-sidebar-bar')).toHaveCount(2);
+-    // It opens just under its button, in the window, over the items: not under the sidebar's whole height, out of
+-    // sight (where a click still scrolled to it)
+-    const placed = await page.evaluate(() => {
+-      const button = document.querySelector('#app-sidebar-scope')!.getBoundingClientRect();
+-      const list = document.querySelector('#app-sidebar-scopes')!.getBoundingClientRect();
+-      const top = document.elementFromPoint(list.left + list.width / 2, list.top + 8);
+-      return {
+-        gap: list.top - button.bottom,
+-        inWindow: list.bottom <= window.innerHeight,
+-        sidebarScrolled: document.querySelector('#app-sidebar')!.scrollTop,
+-        onTop: !!top?.closest('#app-sidebar-scopes'),
+-      };
+-    });
+-    expect(placed.gap).toBeGreaterThanOrEqual(0);
+-    expect(placed.gap).toBeLessThan(16);
+-    expect(placed).toMatchObject({ inWindow: true, sidebarScrolled: 0, onTop: true });
++    // It floats just under its button, in the window, over the items: never inside the sidebar, clipped by it or
++    // scrolled to (ATM-774)
++    expect(await scopesPlaced(page)).toMatchObject(SCOPES_PLACED);
+     const colours = await page.evaluate(() => ({
+       sidebar: getComputedStyle(document.querySelector('#app-sidebar')!).backgroundColor,
+       tracks: [...document.querySelectorAll('#app-sidebar-scopes .app-sidebar-bar')].map(
+@@ -992,6 +1016,31 @@ test.describe('the dashboard in the atm app', () => {
+     await expect(sidebar).toBeVisible();
+   });
+ 
++  test(
++    'the scope list floats over the sidebar’s edge at its own width when the sidebar is at its narrowest (ATM-774)',
++    { tag: '@webkit' },
++    async ({ page, tasksServer }) => {
++      await page.addInitScript((key) => localStorage.setItem(key, JSON.stringify({ sidebarWidth: 180 })), PREFS_KEY);
++      await tasksServer.asApp();
++      tasksServer.addProject('second', 'minimal', 'A project with a rather long name');
++      tasksServer.use('standard');
++      await page.goto('/');
++      const sidebar = page.locator('#app-sidebar');
++      await expect(sidebar).toBeVisible();
++      expect((await sidebar.boundingBox())!.width).toBeLessThanOrEqual(181);
++      await page.locator('#app-sidebar-scope').click();
++      await expect(page.locator('#app-sidebar-scopes [data-scope]')).toHaveCount(3);
++      expect(await scopesPlaced(page)).toMatchObject(SCOPES_PLACED);
++      // Wider than the sidebar: over its edge, onto the page
++      const list = (await page.locator('#app-sidebar-scopes').boundingBox())!;
++      expect(list.x + list.width).toBeGreaterThan((await sidebar.boundingBox())!.width);
++      // A choice still works, and closes it
++      await page.locator('#app-sidebar-scopes [data-scope="second"]').click();
++      await expect(page.locator('#app-sidebar-scope')).toHaveAttribute('data-scope', 'second');
++      await expect(page.locator('#app-sidebar-scopes')).toHaveCount(0);
++    },
++  );
++
+   test('the sidebar is the window’s full height and the title bar only right of it, its tabs from its edge; closed, the bar the whole width (T-535)', async ({
+     page,
+     tasksServer,

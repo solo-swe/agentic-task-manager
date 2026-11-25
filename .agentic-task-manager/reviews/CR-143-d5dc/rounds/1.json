@@ -1,0 +1,27 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "536fb2042ae56bc600a0467b5d3da4196c3d1596",
+    "head": "1fddfae0df4f744a154cf6cb6ac0ec4c429a54a4"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/app.css",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/documents/DocumentViewer.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/documents.spec.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:ba530ebb",
+  "at": "2026-11-24T02:16:42Z"
+}

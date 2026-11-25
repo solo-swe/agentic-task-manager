@@ -1,0 +1,667 @@
+diff --git a/dashboard/src/app.css b/dashboard/src/app.css
+index 407c7d20..6001a031 100644
+--- a/dashboard/src/app.css
++++ b/dashboard/src/app.css
+@@ -13,8 +13,9 @@ body {
+   background: var(--bg);
+   color: var(--text);
+   padding: var(--space-9);
+-  /* Room for the atm app's sidebar when it is open (T-515: Sidebar.svelte sets it; nothing in the browser) */
+-  padding-left: calc(var(--space-9) + var(--sidebar-offset, 0px));
++  /* Room for the atm app's sidebar when it is open (T-515: Sidebar.svelte sets it; nothing in the browser), or for its
++     rail when it is hidden (ATM-771) */
++  padding-left: calc(var(--space-9) + var(--sidebar-offset, 0px) + var(--sidebar-rail, 0px));
+   line-height: 1.5;
+   min-height: 100vh;
+   display: flex;
+diff --git a/dashboard/src/lib/shell/AppTitleBar.svelte b/dashboard/src/lib/shell/AppTitleBar.svelte
+index a0f1bc65..561c1851 100644
+--- a/dashboard/src/lib/shell/AppTitleBar.svelte
++++ b/dashboard/src/lib/shell/AppTitleBar.svelte
+@@ -122,7 +122,8 @@
+     display: flex;
+     gap: var(--space-3);
+     height: 40px;
+-    margin: calc(-1 * var(--space-9)) calc(-1 * var(--space-9)) 0;
++    /* Over the hidden sidebar's rail too (ATM-771): the rail is under it, so the bar keeps the window's width */
++    margin: calc(-1 * var(--space-9)) calc(-1 * var(--space-9)) 0 calc(-1 * (var(--space-9) + var(--sidebar-rail, 0px)));
+     padding: 0 var(--space-2) 0 var(--space-3);
+     position: sticky;
+     top: 0;
+diff --git a/dashboard/src/lib/shell/Sidebar.svelte b/dashboard/src/lib/shell/Sidebar.svelte
+index 9cd36d6c..8af34cf4 100644
+--- a/dashboard/src/lib/shell/Sidebar.svelte
++++ b/dashboard/src/lib/shell/Sidebar.svelte
+@@ -33,11 +33,56 @@
+ 
+   const MIN = 180;
+   const MAX = 420;
++  /** The rail's width, while the sidebar is hidden (ATM-771) */
++  const RAIL = 44;
+   const tabs = tabActions();
+ 
+   let width = $state(Math.min(MAX, Math.max(MIN, getPref('sidebarWidth', 240))));
+   let menuOpen = $state(false);
+ 
++  // Hidden, the sidebar is a rail of icons (ATM-771): the pointer over it, or the keyboard's focus in it, shows the
++  // whole sidebar over the page until both have left it (and the scope's menu is closed); nothing is kept
++  let hovering = $state(false);
++  let focused = $state(false);
++  // The pointer shows it once it rests on the rail a moment, so a quick click on a rail icon opens that icon's item
++  // rather than landing on the sidebar shown over it
++  const HOVER_DELAY = 250;
++  let hoverTimer: ReturnType<typeof setTimeout> | undefined;
++  function onzoneenter() {
++    if (dashboard.sidebarOpen || hovering) return;
++    clearTimeout(hoverTimer);
++    hoverTimer = setTimeout(() => (hovering = true), HOVER_DELAY);
++  }
++  function onzoneleave() {
++    clearTimeout(hoverTimer);
++    hovering = false;
++  }
++  onMount(() => () => clearTimeout(hoverTimer));
++  function onzonepointerdown() {
++    byPointer = true;
++    // A click on the rail itself: its item, not the sidebar
++    if (!hovering) clearTimeout(hoverTimer);
++  }
++  const peeking = $derived(!dashboard.sidebarOpen && (hovering || focused || menuOpen));
++  // A focus a click gives isn't the keyboard's: it would hold the sidebar shown after the pointer left
++  let byPointer = false;
++  function onfocusin() {
++    if (!byPointer) focused = true;
++    byPointer = false;
++  }
++  function onfocusout(e: FocusEvent) {
++    const to = e.relatedTarget as Node | null;
++    const zone = e.currentTarget as HTMLElement;
++    if (!to || (!zone.contains(to) && !document.getElementById('app-sidebar-scopes')?.contains(to))) focused = false;
++  }
++  function onzonekeydown(e: KeyboardEvent) {
++    if (e.key === 'Escape' && peeking && !menuOpen) {
++      focused = false;
++      hovering = false;
++      (document.activeElement as HTMLElement | null)?.blur();
++    }
++  }
++
+   // The active tab's page's scope: a project's, All's, or none (the landing page's choice, the new tab)
+   const pageScope = $derived<Scope | undefined>(
+     dashboard.route.page === 'project' ? dashboard.route.id : dashboard.route.page === 'overview' ? null : undefined,
+@@ -93,11 +138,17 @@
+     void appShell().then((s) => (shell = s));
+   });
+ 
+-  // The page leaves room for it: the title bar and the page shift by its width (app.css, --sidebar-offset)
++  // The page leaves room for it: the title bar and the page shift by its width (app.css, --sidebar-offset); hidden, the
++  // page leaves the rail's (--sidebar-rail), which is under the title bar, so the bar keeps the window's width. Shown
++  // over the page from the rail, it takes no more room
+   $effect(() => {
+-    const offset = dashboard.sidebarOpen ? `${width}px` : '0px';
+-    document.documentElement.style.setProperty('--sidebar-offset', offset);
+-    return () => document.documentElement.style.removeProperty('--sidebar-offset');
++    const style = document.documentElement.style;
++    style.setProperty('--sidebar-offset', dashboard.sidebarOpen ? `${width}px` : '0px');
++    style.setProperty('--sidebar-rail', dashboard.sidebarOpen ? '0px' : `${RAIL}px`);
++    return () => {
++      style.removeProperty('--sidebar-offset');
++      style.removeProperty('--sidebar-rail');
++    };
+   });
+ 
+   /** A project's progress as its overview card counts it (T-533): the active sprint's, else the whole project's (the
+@@ -180,117 +231,170 @@
+   {/if}
+ {/snippet}
+ 
+-{#if dashboard.sidebarOpen}
+-  <nav class="app-sidebar" id="app-sidebar" aria-label="Sidebar" style:width="{width}px">
+-    <!-- Its top strip, the title bar's height (T-535): room for macOS's traffic lights, then the sidebar button; its
++<!-- The rail and the sidebar it shows: the pointer leaving both, or the focus, hides it again (ATM-771) -->
++<div
++  class="app-sidebar-zone"
++  role="presentation"
++  onmouseenter={onzoneenter}
++  onmouseleave={onzoneleave}
++  onpointerdown={onzonepointerdown}
++  {onfocusin}
++  {onfocusout}
++  onkeydown={onzonekeydown}
++>
++  {#if !dashboard.sidebarOpen}
++    <!-- Hidden: a rail at the window's left edge, under the title bar, with the scope's icon and its items' icons -->
++    <nav class="app-sidebar-rail" id="app-sidebar-rail" aria-label="Sidebar, hidden: point at it to show it">
++      <span
++        class="app-sidebar-rail-scope"
++        id="app-sidebar-rail-scope"
++        data-scope={scope ?? ''}
++        title={scope === null ? 'All projects' : (scoped?.name ?? scope)}
++      >
++        {#if scope !== null && scoped}<ProjectLogo project={scoped} size={20} />{:else}<Icon
++            name="layout-grid"
++            size={18}
++          />{/if}
++      </span>
++      <ul class="app-sidebar-rail-list">
++        {#each itemsOf(scope) as item (item)}
++          {@const address = itemAddress(dashboard.workspace, scope, item)}
++          {@const badge = badgeOf(item)}
++          {#if address}
++            <li>
++              <a
++                class="app-sidebar-rail-item"
++                class:current={currentItem === item}
++                aria-current={currentItem === item ? 'page' : undefined}
++                aria-label={badge ? `${ITEM_NAMES[item]} (${badge} waiting for you)` : ITEM_NAMES[item]}
++                title={ITEM_NAMES[item]}
++                href={address}
++                data-item={item}
++                onclick={(e) => open(e, address)}
++                onauxclick={(e) => open(e, address)}
++                ><Icon name={ITEM_ICONS[item]} size={18} />{#if badge}<span class="app-sidebar-rail-badge">{badge}</span
++                  >{/if}</a
++              >
++            </li>
++          {/if}
++        {/each}
++      </ul>
++    </nav>
++  {/if}
++  {#if dashboard.sidebarOpen || peeking}
++    <nav class="app-sidebar" class:peeking id="app-sidebar" aria-label="Sidebar" style:width="{width}px">
++      <!-- Its top strip, the title bar's height (T-535): room for macOS's traffic lights, then the sidebar button; its
+          free space drags the window, as the title bar's does -->
+-    <!-- svelte-ignore a11y_no_static_element_interactions -->
+-    <div
+-      class="app-sidebar-top"
+-      class:system-buttons={shell?.system_window_buttons}
+-      id="app-sidebar-top"
+-      onmousedown={onBarMouseDown}
+-    >
+-      <!-- Back and Forward left of the toggle (ATM-695), as in the title bar while the sidebar is closed -->
+-      <HistoryArrows />
+-      <SidebarToggle />
+-    </div>
+-    <!-- The scope (§2.1): All projects, then the workspace's projects; missing ones dimmed and not chosen. Its list
++      <!-- svelte-ignore a11y_no_static_element_interactions -->
++      <div
++        class="app-sidebar-top"
++        class:system-buttons={shell?.system_window_buttons}
++        id="app-sidebar-top"
++        onmousedown={onBarMouseDown}
++      >
++        <!-- Back and Forward left of the toggle (ATM-695), as in the title bar while the sidebar is closed -->
++        <HistoryArrows />
++        <SidebarToggle />
++      </div>
++      <!-- The scope (§2.1): All projects, then the workspace's projects; missing ones dimmed and not chosen. Its list
+          floats over the window under the button (Bits UI's portal, ATM-774): never clipped by the sidebar or its
+          width, over its edge when the sidebar is narrow -->
+-    <DropdownMenu.Root bind:open={menuOpen}>
+-      <DropdownMenu.Trigger>
+-        {#snippet child({ props })}
+-          <button
+-            {...props}
+-            class="app-sidebar-item app-sidebar-scope"
+-            id="app-sidebar-scope"
+-            data-scope={scope ?? ''}
+-            aria-label="Scope: {scope === null ? 'All projects' : (scoped?.name ?? scope)}; choose another"
+-            >{@render scopeLabel(scope === null ? null : scoped, false)}<span class="app-sidebar-chevron"
+-              ><Icon name="chevron-down" size={14} /></span
+-            ></button
++      <DropdownMenu.Root bind:open={menuOpen}>
++        <DropdownMenu.Trigger>
++          {#snippet child({ props })}
++            <button
++              {...props}
++              class="app-sidebar-item app-sidebar-scope"
++              id="app-sidebar-scope"
++              data-scope={scope ?? ''}
++              aria-label="Scope: {scope === null ? 'All projects' : (scoped?.name ?? scope)}; choose another"
++              >{@render scopeLabel(scope === null ? null : scoped, false)}<span class="app-sidebar-chevron"
++                ><Icon name="chevron-down" size={14} /></span
++              ></button
++            >
++          {/snippet}
++        </DropdownMenu.Trigger>
++        <DropdownMenu.Portal>
++          <DropdownMenu.Content
++            side="bottom"
++            align="start"
++            sideOffset={4}
++            collisionPadding={8}
++            preventScroll={false}
++            aria-label="Scopes"
+           >
+-        {/snippet}
+-      </DropdownMenu.Trigger>
+-      <DropdownMenu.Portal>
+-        <DropdownMenu.Content
+-          side="bottom"
+-          align="start"
+-          sideOffset={4}
+-          collisionPadding={8}
+-          preventScroll={false}
+-          aria-label="Scopes"
+-        >
+-          {#snippet child({ props, wrapperProps })}
+-            <div {...wrapperProps}>
+-              <div {...props} class="app-sidebar-scopes" id="app-sidebar-scopes">
+-                <DropdownMenu.Item onSelect={() => choose(null)}>
+-                  {#snippet child({ props })}
+-                    <button
+-                      {...props}
+-                      class="app-sidebar-item"
+-                      class:current={scope === null}
+-                      aria-current={scope === null ? 'true' : undefined}
+-                      data-scope="">{@render scopeLabel(null, true)}</button
+-                    >
+-                  {/snippet}
+-                </DropdownMenu.Item>
+-                {#each dashboard.projects as project (project.id)}
+-                  <DropdownMenu.Item disabled={project.missing} onSelect={() => choose(project.id)}>
++            {#snippet child({ props, wrapperProps })}
++              <!-- Its wrapper is what is placed over the window: over the sidebar, the page's header and the sidebar
++                   shown from the rail (60), whatever z-index Bits UI read for it -->
++              <div {...wrapperProps} style:z-index="70">
++                <div {...props} class="app-sidebar-scopes" id="app-sidebar-scopes">
++                  <DropdownMenu.Item onSelect={() => choose(null)}>
+                     {#snippet child({ props })}
+                       <button
+                         {...props}
+                         class="app-sidebar-item"
+-                        class:current={scope === project.id}
+-                        class:missing={project.missing}
+-                        aria-current={scope === project.id ? 'true' : undefined}
+-                        title={project.missing ? `${project.path}: not found` : project.path}
+-                        data-scope={project.id}>{@render scopeLabel(project, true)}</button
++                        class:current={scope === null}
++                        aria-current={scope === null ? 'true' : undefined}
++                        data-scope="">{@render scopeLabel(null, true)}</button
+                       >
+                     {/snippet}
+                   </DropdownMenu.Item>
+-                {/each}
++                  {#each dashboard.projects as project (project.id)}
++                    <DropdownMenu.Item disabled={project.missing} onSelect={() => choose(project.id)}>
++                      {#snippet child({ props })}
++                        <button
++                          {...props}
++                          class="app-sidebar-item"
++                          class:current={scope === project.id}
++                          class:missing={project.missing}
++                          aria-current={scope === project.id ? 'true' : undefined}
++                          title={project.missing ? `${project.path}: not found` : project.path}
++                          data-scope={project.id}>{@render scopeLabel(project, true)}</button
++                        >
++                      {/snippet}
++                    </DropdownMenu.Item>
++                  {/each}
++                </div>
+               </div>
+-            </div>
+-          {/snippet}
+-        </DropdownMenu.Content>
+-      </DropdownMenu.Portal>
+-    </DropdownMenu.Root>
+-    <!-- The scope's items (§2.2): each a link to its page, opened in a new tab -->
+-    <ul class="app-sidebar-list" aria-label="{scope === null ? 'All projects' : (scoped?.name ?? scope)}: pages">
+-      {#each itemsOf(scope) as item (item)}
+-        {@const address = itemAddress(dashboard.workspace, scope, item)}
+-        {@const badge = badgeOf(item)}
+-        {#if address}
+-          <li>
+-            <a
+-              class="app-sidebar-item app-sidebar-link"
+-              class:current={currentItem === item}
+-              aria-current={currentItem === item ? 'page' : undefined}
+-              href={address}
+-              data-item={item}
+-              onclick={(e) => open(e, address)}
+-              onauxclick={(e) => open(e, address)}
+-              ><span class="app-sidebar-icon"><Icon name={ITEM_ICONS[item]} size={16} /></span>
+-              <span class="app-sidebar-name">{ITEM_NAMES[item]}</span>
+-              {#if badge}<span class="app-sidebar-badge" title="{badge} waiting for you">{badge}</span>{/if}</a
+-            >
+-          </li>
+-        {/if}
+-      {/each}
+-    </ul>
+-    <!-- The edge: drag it, or focus it and use the arrows, to resize -->
+-    <button
+-      class="app-sidebar-edge"
+-      id="app-sidebar-edge"
+-      aria-label="Resize the sidebar ({width} pixels; the arrow keys change it)"
+-      title="Drag to resize"
+-      {onpointerdown}
+-      {onkeydown}
+-    ></button>
+-  </nav>
+-{/if}
++            {/snippet}
++          </DropdownMenu.Content>
++        </DropdownMenu.Portal>
++      </DropdownMenu.Root>
++      <!-- The scope's items (§2.2): each a link to its page, opened in a new tab -->
++      <ul class="app-sidebar-list" aria-label="{scope === null ? 'All projects' : (scoped?.name ?? scope)}: pages">
++        {#each itemsOf(scope) as item (item)}
++          {@const address = itemAddress(dashboard.workspace, scope, item)}
++          {@const badge = badgeOf(item)}
++          {#if address}
++            <li>
++              <a
++                class="app-sidebar-item app-sidebar-link"
++                class:current={currentItem === item}
++                aria-current={currentItem === item ? 'page' : undefined}
++                href={address}
++                data-item={item}
++                onclick={(e) => open(e, address)}
++                onauxclick={(e) => open(e, address)}
++                ><span class="app-sidebar-icon"><Icon name={ITEM_ICONS[item]} size={16} /></span>
++                <span class="app-sidebar-name">{ITEM_NAMES[item]}</span>
++                {#if badge}<span class="app-sidebar-badge" title="{badge} waiting for you">{badge}</span>{/if}</a
++              >
++            </li>
++          {/if}
++        {/each}
++      </ul>
++      <!-- The edge: drag it, or focus it and use the arrows, to resize -->
++      <button
++        class="app-sidebar-edge"
++        id="app-sidebar-edge"
++        aria-label="Resize the sidebar ({width} pixels; the arrow keys change it)"
++        title="Drag to resize"
++        {onpointerdown}
++        {onkeydown}
++      ></button>
++    </nav>
++  {/if}
++</div>
+ 
+ <style>
+   /* A column of the window's full height, as Notion's (T-535): the title bar is only over the area right of it */
+@@ -305,6 +409,77 @@
+     top: 0;
+     z-index: 30;
+   }
++  /* The rail and the sidebar shown from it take no place of their own in the page: both are fixed */
++  .app-sidebar-zone {
++    display: contents;
++  }
++  /* Shown from the rail (ATM-771): over the page, which keeps its place, with a shadow to tell it apart */
++  .app-sidebar.peeking {
++    box-shadow: 0 8px 24px color-mix(in srgb, var(--overlay) 60%, transparent);
++    /* Over the title bar too (its z-index is 50), as the sidebar is a column of the window's full height */
++    z-index: 60;
++  }
++  /* Hidden: a thin rail at the window's left edge, under the title bar (which keeps the window's width), the icons in
++     a column */
++  .app-sidebar-rail {
++    align-items: center;
++    background: var(--surface2);
++    border-right: 1px solid var(--border);
++    bottom: 0;
++    display: flex;
++    flex-direction: column;
++    gap: var(--space-3);
++    left: 0;
++    overflow-y: auto;
++    padding: var(--space-3) 0;
++    position: fixed;
++    top: 40px;
++    width: 44px;
++    z-index: 30;
++  }
++  .app-sidebar-rail-scope {
++    align-items: center;
++    color: var(--text-muted);
++    display: inline-flex;
++  }
++  .app-sidebar-rail-list {
++    border-top: 1px solid var(--border);
++    display: flex;
++    flex-direction: column;
++    gap: var(--space-1);
++    list-style: none;
++    margin: 0;
++    padding: var(--space-3) 0 0;
++  }
++  .app-sidebar-rail-item {
++    align-items: center;
++    border-radius: var(--radius-md);
++    color: var(--text-muted);
++    display: inline-flex;
++    justify-content: center;
++    padding: var(--space-2);
++    position: relative;
++  }
++  .app-sidebar-rail-item:hover,
++  .app-sidebar-rail-item.current {
++    background: var(--surface);
++  }
++  .app-sidebar-rail-item.current {
++    color: var(--accent);
++  }
++  /* Its badge on the icon's corner */
++  .app-sidebar-rail-badge {
++    background: var(--accent);
++    border-radius: var(--radius-pill);
++    color: var(--on-accent);
++    font-size: var(--text-2xs);
++    font-weight: 600;
++    line-height: 1.4;
++    padding: 0 var(--space-1);
++    position: absolute;
++    right: calc(-1 * var(--space-1));
++    top: calc(-1 * var(--space-1));
++  }
+   /* Its top strip: the title bar's height and colour, the button on its middle line, pinned while the list scrolls */
+   .app-sidebar-top {
+     align-items: center;
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index ad459e39..f38a2e14 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -1079,6 +1079,61 @@ test.describe('the dashboard in the atm app', () => {
+     await expect.poll(async () => Math.round((await box(bar)).x)).toBe(edge);
+   });
+ 
++  test('hidden, the sidebar is a rail of icons beside the page; pointing at it shows the sidebar over the page; Show Sidebar pins it (ATM-771)', async ({
++    page,
++    tasksServer,
++  }) => {
++    await tasksServer.asApp();
++    tasksServer.use('standard');
++    await page.goto(`/projects/${tasksServer.projectId}/kanban`);
++    const sidebar = page.locator('#app-sidebar');
++    const rail = page.locator('#app-sidebar-rail');
++    const bar = page.locator('#app-titlebar');
++    const tabs = page.locator('#app-titlebar [role="tab"]');
++    const box = async (l: ReturnType<typeof page.locator>) => (await l.boundingBox())!;
++    await expect(sidebar).toBeVisible();
++    await expect(rail).toHaveCount(0);
++    await page.locator('#app-sidebar-toggle').click();
++    // Hidden: the rail at the window's left edge under the title bar, which keeps the window's width; the page beside it
++    await expect(sidebar).toHaveCount(0);
++    await expect(rail).toBeVisible();
++    const strip = await box(rail);
++    const barBox = await box(bar);
++    expect([Math.round(strip.x), Math.round(strip.width)]).toEqual([0, 44]);
++    expect(Math.round(strip.y)).toBe(Math.round(barBox.y + barBox.height));
++    expect(Math.round(barBox.x)).toBe(0);
++    const main = await box(page.locator('#app-main'));
++    expect(main.x).toBeGreaterThanOrEqual(strip.x + strip.width);
++    await expect(rail.locator('.app-sidebar-rail-item')).toHaveCount(6);
++    await expect(rail.locator('[data-item="tasks"]')).toHaveAttribute('aria-current', 'page');
++    // Pointing at it: the whole sidebar over the page, which stays where it is
++    await rail.locator('[data-item="overview"]').hover();
++    await expect(sidebar).toBeVisible();
++    await expect(sidebar).toHaveClass(/peeking/);
++    expect(Math.round((await box(sidebar)).x)).toBe(0);
++    expect((await box(page.locator('#app-main'))).x).toBe(main.x);
++    // A click on one of its items opens it in a new tab, as the sidebar's items do
++    await sidebar.locator('[data-item="analysis"]').click();
++    await expect(tabs).toHaveCount(2);
++    await expect.poll(() => addressOf(page)).toMatch(/\/progress(\?|$)/);
++    // The pointer leaving: hidden again, still the rail; nothing was saved
++    await page.mouse.move(600, 400);
++    await expect(sidebar).toHaveCount(0);
++    await expect(rail).toBeVisible();
++    // A rail icon's own click opens its item too
++    await rail.locator('[data-item="reviews"]').click();
++    await expect(tabs).toHaveCount(3);
++    await page.mouse.move(600, 400);
++    await expect(sidebar).toHaveCount(0);
++    // Show Sidebar pins it: the sidebar takes its room, no rail
++    await page.locator('#app-titlebar #app-sidebar-toggle').click();
++    await expect(sidebar).toBeVisible();
++    await expect(sidebar).not.toHaveClass(/peeking/);
++    await expect(rail).toHaveCount(0);
++    await page.mouse.move(600, 400);
++    await expect(sidebar).toBeVisible();
++  });
++
+   test('Progress and Activity are the tab’s: at the right of its subtitle line, not in the title bar; they give way on a narrow tab (T-530)', async ({
+     page,
+     tasksServer,
+diff --git a/dashboard/tests/unit/Sidebar.component.test.ts b/dashboard/tests/unit/Sidebar.component.test.ts
+index 0cc78ce3..02b2e499 100644
+--- a/dashboard/tests/unit/Sidebar.component.test.ts
++++ b/dashboard/tests/unit/Sidebar.component.test.ts
+@@ -1,5 +1,5 @@
+ import { fireEvent, render } from '@testing-library/svelte';
+-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+ import { appTabs } from '../../src/lib/app-tabs.svelte';
+ import type { ProjectEntry, ProjectSummary } from '../../src/lib/load';
+ import { setPref } from '../../src/lib/prefs';
+@@ -148,3 +148,128 @@ describe('Sidebar (ATM-753)', () => {
+     expect(container.querySelector('#app-sidebar')).toBeNull();
+   });
+ });
++
++describe('the hidden sidebar’s rail (ATM-771)', () => {
++  beforeEach(() => {
++    localStorage.clear();
++    sessionStorage.clear();
++    dashboard.projects = [project('a', 'Alpha', summary(40, 1, 0, 2)), project('b', 'Beta', summary(90))];
++    dashboard.projectsLoaded = true;
++    dashboard.route = { page: 'project', id: 'a' };
++    dashboard.tab = 'kanban';
++    dashboard.sidebarOpen = false;
++    appTabs.start('/projects/a/kanban');
++  });
++  afterEach(() => {
++    dashboard.sidebarOpen = true;
++    history.replaceState(null, '', '/');
++  });
++
++  const rail = (container: HTMLElement) => container.querySelector<HTMLElement>('#app-sidebar-rail');
++  const railItems = (container: HTMLElement) =>
++    [...container.querySelectorAll<HTMLAnchorElement>('.app-sidebar-rail-item')].map((a) => a.dataset.item);
++  const zone = (container: HTMLElement) => container.querySelector<HTMLElement>('.app-sidebar-zone')!;
++
++  it('hidden: the rail, the scope’s icon and each item’s icon and badge, no labels; the page leaves its room', () => {
++    const { container } = render(Sidebar);
++    expect(container.querySelector('#app-sidebar')).toBeNull();
++    expect(rail(container)).not.toBeNull();
++    expect(container.querySelector('#app-sidebar-rail-scope')).toHaveAttribute('data-scope', 'a');
++    expect(container.querySelector('#app-sidebar-rail-scope')).toHaveAttribute('title', 'Alpha');
++    expect(railItems(container)).toEqual(['overview', 'inbox', 'tasks', 'reviews', 'documents', 'analysis']);
++    // Icons only: the names are their labels and titles, never text
++    expect(rail(container)!.textContent?.replace(/\d/g, '').trim()).toBe('');
++    const reviews = container.querySelector('.app-sidebar-rail-item[data-item="reviews"]')!;
++    expect(reviews).toHaveAttribute('aria-label', 'Code Reviews (2 waiting for you)');
++    expect(reviews.querySelector('.app-sidebar-rail-badge')).toHaveTextContent('2');
++    expect(container.querySelector('.app-sidebar-rail-item[data-item="tasks"]')).toHaveAttribute(
++      'aria-current',
++      'page',
++    );
++    expect(document.documentElement.style.getPropertyValue('--sidebar-offset')).toBe('0px');
++    expect(document.documentElement.style.getPropertyValue('--sidebar-rail')).toBe('44px');
++  });
++
++  it('All projects: its icon, and All’s items', async () => {
++    dashboard.route = { page: 'overview' };
++    setPref('sidebarScope', '');
++    const { container } = render(Sidebar);
++    await Promise.resolve();
++    expect(container.querySelector('#app-sidebar-rail-scope')).toHaveAttribute('title', 'All projects');
++    expect(railItems(container)).not.toContain('inbox');
++  });
++
++  it('the pointer resting on it shows the whole sidebar over the page, which keeps its room; leaving hides it, unsaved', async () => {
++    vi.useFakeTimers();
++    const { container } = render(Sidebar);
++    await fireEvent.mouseEnter(zone(container));
++    // Not at once: a quick click on an icon is the icon's
++    await vi.advanceTimersByTimeAsync(200);
++    expect(container.querySelector('#app-sidebar')).toBeNull();
++    await vi.advanceTimersByTimeAsync(100);
++    vi.useRealTimers();
++    const shown = container.querySelector('#app-sidebar')!;
++    expect(shown).not.toBeNull();
++    expect(shown).toHaveClass('peeking');
++    expect(document.documentElement.style.getPropertyValue('--sidebar-offset')).toBe('0px');
++    expect(dashboard.sidebarOpen).toBe(false);
++    await fireEvent.mouseLeave(zone(container));
++    expect(container.querySelector('#app-sidebar')).toBeNull();
++    expect(dashboard.sidebarOpen).toBe(false);
++  });
++
++  it('the keyboard’s focus in it shows it; the focus leaving, or Escape, hides it; a click’s focus doesn’t hold it', async () => {
++    const { container } = render(Sidebar);
++    const tasks = container.querySelector<HTMLElement>('.app-sidebar-rail-item[data-item="tasks"]')!;
++    await fireEvent.focusIn(tasks);
++    expect(container.querySelector('#app-sidebar')).not.toBeNull();
++    await fireEvent.focusOut(tasks, { relatedTarget: document.body });
++    expect(container.querySelector('#app-sidebar')).toBeNull();
++    await fireEvent.focusIn(tasks);
++    await fireEvent.keyDown(zone(container), { key: 'Escape' });
++    expect(container.querySelector('#app-sidebar')).toBeNull();
++    // A click's focus doesn't show it, nor hold it once the pointer leaves
++    await fireEvent.mouseEnter(zone(container));
++    await fireEvent.pointerDown(tasks);
++    await fireEvent.focusIn(tasks);
++    expect(container.querySelector('#app-sidebar')).toBeNull();
++    await fireEvent.mouseLeave(zone(container));
++    expect(container.querySelector('#app-sidebar')).toBeNull();
++  });
++
++  it('a quick click on an icon: its item, and no sidebar shown over the rail', async () => {
++    vi.useFakeTimers();
++    const { container } = render(Sidebar);
++    await fireEvent.mouseEnter(zone(container));
++    const reviews = container.querySelector<HTMLElement>('.app-sidebar-rail-item[data-item="reviews"]')!;
++    await fireEvent.pointerDown(reviews);
++    await fireEvent.click(reviews);
++    await vi.advanceTimersByTimeAsync(1000);
++    vi.useRealTimers();
++    expect(appTabs.current?.address).toBe('/projects/a/reviews');
++    expect(container.querySelector('#app-sidebar')).toBeNull();
++  });
++
++  it('a rail icon opens its item as the sidebar’s does: a new tab, ⌘-click in the background', async () => {
++    const { container } = render(Sidebar);
++    const first = appTabs.active;
++    await fireEvent.click(container.querySelector('.app-sidebar-rail-item[data-item="reviews"]')!);
++    expect(appTabs.tabs).toHaveLength(2);
++    expect(appTabs.current?.address).toBe('/projects/a/reviews');
++    expect(appTabs.active).not.toBe(first);
++    const shown = appTabs.active;
++    await fireEvent.click(container.querySelector('.app-sidebar-rail-item[data-item="analysis"]')!, { metaKey: true });
++    expect(appTabs.tabs).toHaveLength(3);
++    expect(appTabs.active).toBe(shown);
++  });
++
++  it('shown again (Show Sidebar), no rail; the sidebar takes its room', async () => {
++    const { container } = render(Sidebar);
++    dashboard.sidebarOpen = true;
++    await Promise.resolve();
++    expect(rail(container)).toBeNull();
++    expect(container.querySelector('#app-sidebar')).not.toHaveClass('peeking');
++    expect(document.documentElement.style.getPropertyValue('--sidebar-rail')).toBe('0px');
++    expect(document.documentElement.style.getPropertyValue('--sidebar-offset')).toBe('240px');
++  });
++});

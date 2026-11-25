@@ -1,0 +1,52 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "838a2b35201b8a2f62db1abd86cb1556b67b17be",
+    "head": "df03fcd51cd4774ce6e94fde9203f67cc6885ebf"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/lib/reviews/ReviewList.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/reviews/ReviewSearch.svelte",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/reviews/search.svelte.ts",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/shell/Header.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/app.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/reviews.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/ReviewList.component.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/ReviewSearch.component.test.ts",
+      "status": "added",
+      "binary": false
+    }
+  ],
+  "by": "claude:ba530ebb",
+  "at": "2026-11-24T14:53:38Z"
+}

@@ -1,0 +1,47 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "2db1d2abe2a66a0b8e7766105fa7fbe69dd687a8",
+    "head": "7d1950f944d1175c2dcdc8c86fa2c38666b29cae"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/lib/api/http.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/api/ipc.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/load.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/worktrees.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/app.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/http.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/ipc.test.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:ba530ebb",
+  "at": "2026-11-24T14:31:07Z"
+}

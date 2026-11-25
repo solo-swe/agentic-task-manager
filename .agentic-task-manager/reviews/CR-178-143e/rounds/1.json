@@ -1,0 +1,87 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "5f8e56de062618eff9dd1c9473390547b4f58aeb",
+    "head": "c93cfefabe74d800909dcb651400e76b5b5a8696"
+  },
+  "files": [
+    {
+      "path": "app/src-tauri/src/commands/inbox.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-api/src/routes/source.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/commands/inbox.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-common/schema/inbox.schema.json",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/foreign.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/foreign/tests.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/inbox.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/inbox/tests.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/api/inbox.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/inbox/InboxPage.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/InboxPage.component.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/agent/commands.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/inbox-design.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/security-architecture.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/scenarios/inbox.json",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:33cba067",
+  "at": "2026-11-24T23:05:33Z"
+}

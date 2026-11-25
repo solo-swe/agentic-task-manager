@@ -1,0 +1,140 @@
+diff --git a/dashboard/tests/e2e/graph-zoom.spec.ts b/dashboard/tests/e2e/graph-zoom.spec.ts
+index 708c0ad9..e2060db3 100644
+--- a/dashboard/tests/e2e/graph-zoom.spec.ts
++++ b/dashboard/tests/e2e/graph-zoom.spec.ts
+@@ -1,7 +1,7 @@
+ import type { Page } from '@playwright/test';
+ import { layoutGraph } from '../../src/lib/graph/layout';
+ import type { Task } from '../../src/lib/types';
+-import { expect, filterButton, loadFixture, openDashboard, openFilters, test } from './helpers';
++import { expect, filterButton, focusGraph, loadFixture, openDashboard, openFilters, test } from './helpers';
+ 
+ // The Kanban is the default tab (T-251): these open on the graph. Most test the view without auto-fit (T-341), which
+ // is on by default: AUTO_FIT opens the graph as a new user sees it.
+@@ -154,7 +154,7 @@ test.describe('pan and zoom', () => {
+   });
+ 
+   test('keyboard shortcuts when the graph has focus', async ({ page }) => {
+-    await page.locator('#graph-container').focus();
++    await focusGraph(page);
+     await page.keyboard.press('+');
+     await expect(zoomLabel(page)).toHaveText('75%');
+     await page.keyboard.press('-');
+@@ -191,7 +191,7 @@ test.describe('view persistence', () => {
+   test('a reload keeps a moved view', async ({ page, tasksServer }) => {
+     await openDashboard(page, tasksServer, 'large-90', GRAPH);
+     await expect(zoomLabel(page)).toHaveText('60%');
+-    await page.locator('#graph-container').focus();
++    await focusGraph(page);
+     await page.keyboard.press('+');
+     const moved = await view(page);
+     await page.locator('#reload-btn').click();
+@@ -201,7 +201,7 @@ test.describe('view persistence', () => {
+ 
+   test('filtering keeps a zoom level the user chose', async ({ page, tasksServer }) => {
+     await openDashboard(page, tasksServer, 'large-90', GRAPH);
+-    await page.locator('#graph-container').focus();
++    await focusGraph(page);
+     await page.keyboard.press('+');
+     await expect(zoomLabel(page)).toHaveText('75%');
+     await openFilters(page);
+@@ -226,7 +226,7 @@ test.describe('view persistence', () => {
+ 
+   test('pans, at the same zoom, when no task would be visible', async ({ page, tasksServer }) => {
+     await openDashboard(page, tasksServer, 'large-90', GRAPH);
+-    await page.locator('#graph-container').focus();
++    await focusGraph(page);
+     for (let i = 0; i < 4; i++) await page.keyboard.press('+');
+     const zoom = await zoomLabel(page).textContent();
+     // Look at the far right end of the 90-task graph, then show only phase 0 (the far left end)
+@@ -327,7 +327,7 @@ test.describe('auto-fit and fitting the matches (T-341)', () => {
+ 
+   test('panning or zooming turns it off; the zoom then stays', async ({ page, tasksServer }) => {
+     await openDashboard(page, tasksServer, 'large-90', AUTO_FIT);
+-    await page.locator('#graph-container').focus();
++    await focusGraph(page);
+     await page.keyboard.press('+');
+     await expect(autoFit(page)).toHaveAttribute('aria-pressed', 'false');
+     const zoom = await zoomLabel(page).textContent();
+diff --git a/dashboard/tests/e2e/helpers.ts b/dashboard/tests/e2e/helpers.ts
+index 098dee05..284e1f7d 100644
+--- a/dashboard/tests/e2e/helpers.ts
++++ b/dashboard/tests/e2e/helpers.ts
+@@ -1351,6 +1351,14 @@ export async function follow(page: Page, address: string) {
+   }, address);
+ }
+ 
++/** Focus the dependency graph once it takes keys (ATM-742): it does from the moment it is laid out in its panel,
++ * which is when it sets its SVG's viewBox (DepGraph's `active`). A key pressed before that is dropped, and under a
++ * loaded run the page can still be laying it out when a test presses one */
++export async function focusGraph(page: Page) {
++  await expect(page.locator('#dep-graph')).toHaveAttribute('viewBox', /\S/);
++  await page.locator('#graph-container').focus();
++}
++
+ /** The Activity pill's bars and line as drawn (ATM-739): each bar's place, size and colour, and the line's path */
+ export async function sparkline(page: Page): Promise<string[]> {
+   const svg = page.locator('#activity-card svg.sparkline');
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index effc66aa..878a3c21 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -3615,12 +3615,34 @@ test.describe('performance', { tag: '@timed' }, () => {
+         await frame();
+       }
+     });
+-    await page.waitForTimeout(1000);
++    // Settled (ATM-742): the work a scroll leaves (cards made or let go when the page is idle) done, as the page says it,
++    // not after a fixed second, which a loaded run (CI's retry) doesn't always give it: the page's nodes the same over
++    // two idle periods in a row
++    await page.evaluate(async () => {
++      const idle = () => new Promise((r) => requestIdleCallback(() => requestAnimationFrame(r), { timeout: 2000 }));
++      let last = -1;
++      for (let i = 0; i < 50; i++) {
++        await idle();
++        await idle();
++        const now = document.querySelectorAll('*').length;
++        if (now === last) return;
++        last = now;
++      }
++    });
+     const cdp = await page.context().newCDPSession(page);
+     await cdp.send('Performance.enable');
+-    await cdp.send('HeapProfiler.collectGarbage');
+-    const { metrics } = await cdp.send('Performance.getMetrics');
+-    const alive = metrics.find((m) => m.name === 'Nodes')!.value;
++    // Collected until nothing more goes (one collection can leave what the last one let go): the nodes still alive
++    const nodes = async () => {
++      await cdp.send('HeapProfiler.collectGarbage');
++      const { metrics } = await cdp.send('Performance.getMetrics');
++      return metrics.find((m) => m.name === 'Nodes')!.value;
++    };
++    let alive = await nodes();
++    for (let i = 0; i < 5; i++) {
++      const next = await nodes();
++      if (next >= alive) break;
++      alive = next;
++    }
+     console.log('long review, DOM nodes alive after down and back:', alive, 'on the page:', scrolled.nodes);
+     // Measured (docs/diff-viewer-profile.md): 93,240 before the fixes (a render after its text was gone kept its
+     // card; content-visibility kept every card's old layout), 21,840 after them; the page itself about 5,400
+diff --git a/dashboard/tests/e2e/tabs.spec.ts b/dashboard/tests/e2e/tabs.spec.ts
+index 4820ebe1..acdeb01a 100644
+--- a/dashboard/tests/e2e/tabs.spec.ts
++++ b/dashboard/tests/e2e/tabs.spec.ts
+@@ -1,5 +1,5 @@
+ import type { Page } from '@playwright/test';
+-import { expect, filterButton, matchCount, openDashboard, openFilters, openView, test } from './helpers';
++import { expect, filterButton, focusGraph, matchCount, openDashboard, openFilters, openView, test } from './helpers';
+ 
+ // A project's page by item (ATM-752, docs/sidebar-overhaul-design.md §5): its items as tabs, Tasks' and Analysis' views
+ // as sub-tabs under them
+@@ -185,7 +185,7 @@ test.describe('the page by item', () => {
+   test('the graph keeps its zoom across a tab round trip', async ({ page, tasksServer }) => {
+     // Without auto-fit (T-341), the graph opens at 60%
+     await openDashboard(page, tasksServer, 'large-90', { tab: 'graph', graphAutoFit: false });
+-    await page.locator('#graph-container').focus();
++    await focusGraph(page);
+     await page.keyboard.press('+');
+     await expect(zoomLabel(page)).toHaveText('75%');
+     const viewBox = await page.locator('#dep-graph').getAttribute('viewBox');

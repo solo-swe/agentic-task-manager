@@ -1,0 +1,332 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "b21525fca1d09f764bd2392bc2412d0842109790",
+    "head": "aa8002c5614720553b693ef7e3a36f6da4afb71b"
+  },
+  "files": [
+    {
+      "path": "CHANGELOG.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "Cargo.lock",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "Cargo.toml",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "WHATS-NEW.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/agents-agents-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/agents-agents-zoomed-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/all-projects-board-dark-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/all-projects-board-grouped-dark-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/all-projects-board-grouped-light-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/all-projects-board-light-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/edge-cases-graph-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/empty-graph-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/kanban-kanban-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/large-90-graph-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/light-agents-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/light-kanban-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/light-large-90-graph-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/light-progress-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/light-standard-page-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/list-by-sprint-dark-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/list-by-sprint-light-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/progress-progress-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/projects-overview-dark-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/projects-overview-light-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/projects-overview-narrow-dark-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/projects-overview-narrow-light-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/standard-graph-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/standard-kanban-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/standard-page-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-ayu-dark-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-ayu-light-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-catppuccin-dark-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-catppuccin-light-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-gruvbox-dark-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-gruvbox-light-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-hand-drawn-dark-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-hand-drawn-light-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-high-contrast-dark-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-high-contrast-light-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-night-owl-dark-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-night-owl-light-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-noctis-dark-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-noctis-light-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-nord-dark-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-nord-light-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-solarized-dark-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-solarized-light-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-sticky-notes-dark-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-sticky-notes-light-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-sublime-material-dark-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-sublime-material-light-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-tokyo-night-dark-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-tokyo-night-light-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/update-notice-dark-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/update-notice-light-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-dark-about-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-dark-help-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-dark-kanban-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-light-about-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-light-detail-blocked-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-light-help-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-light-kanban-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/visual.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/security-architecture.md",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:33cba067",
+  "at": "2026-11-25T01:23:17Z"
+}

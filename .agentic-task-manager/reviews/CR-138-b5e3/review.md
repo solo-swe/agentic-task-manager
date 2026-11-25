@@ -2,12 +2,12 @@
 id = "01a20af0-8d37-7594-86b1-c9bf4e54b5e3"
 number = 138
 title = "CR sub-tabs keep the diff position"
-status = "open"
+status = "approved"
 tasks = ["ATM-730"]
 author = "claude:ba530ebb"
 reviewers = []
 created = 2026-11-24T00:24:26Z
-updated = 2026-11-24T00:24:26Z
+updated = 2026-11-24T02:37:17Z
 +++
 
 Each of a code review's sub-tabs now keeps its place. Switching to Overview or Comments and back to Diffs returns the diff list to where it was, and so does Back or Forward.

@@ -1,0 +1,419 @@
+diff --git a/dashboard/src/lib/reviews/DiffView.svelte b/dashboard/src/lib/reviews/DiffView.svelte
+index 3d876872..6950759a 100644
+--- a/dashboard/src/lib/reviews/DiffView.svelte
++++ b/dashboard/src/lib/reviews/DiffView.svelte
+@@ -11,12 +11,14 @@
+   import {
+     changeStarts,
+     changedLines,
++    finalBlocks,
+     foldKey,
+     nextChange,
+     parseHunks,
+     splitBlocks,
+     unifiedBlocks,
+     type Block,
++    type DiffMode,
+     type SplitRow,
+     type UnifiedRow,
+   } from './diff';
+@@ -29,9 +31,10 @@
+ 
+   // The diff viewer (docs/code-review-design.md §3.7, ATM-573): one file of a round, its two sides read from document
+   // sources (the round's base and head; none for a side the file doesn't have) and its hunks from the round's patch.
+-  // Split or unified; source (each run of lines a code block CompMD renders) or rendered (a Markdown file rendered on
+-  // the document viewer's page, with its line numbers, the changed lines marked: both sides in split, the new one in
+-  // unified). Unchanged runs fold (*show more* opens one). Pressing a line's + (or its number) picks it, dragging
++  // Split, unified or final (ATM-731: the file as it is after the change, whole and unmarked); source (each run of
++  // lines a code block CompMD renders) or rendered (a Markdown file rendered on the document viewer's page, with its
++  // line numbers, the changed lines marked: both sides in split, the new one in unified, unmarked in final). Unchanged
++  // runs fold (*show more* opens one), but in final. Pressing a line's + (or its number) picks it, dragging
+   // extends the pick, Shift-press extends it too; the comment is written right under the lines (selecting text in the
+   // rendered view does the same). The file's chains show in place, after their last line. Keys (`keyboard`, when the
+   // viewer is the page's only one): n / p the next and previous change, ] / [ the next and previous file, v viewed.
+@@ -64,7 +67,7 @@
+     after: DocumentSource | null;
+     patch: string;
+     chains?: Chain[];
+-    mode?: 'split' | 'unified';
++    mode?: DiffMode;
+     view?: 'source' | 'rendered';
+     /** Long lines wrap (ATM-588); in Split each line as tall as the taller of its two sides, so they stay level
+      * (ATM-616, CompMD 0.8.0's line heights) */
+@@ -151,7 +154,11 @@
+   });
+ 
+   const blocks = $derived<Block<SplitRow | UnifiedRow>[]>(
+-    mode === 'split' ? splitBlocks(hunks, newText, expanded) : unifiedBlocks(hunks, newText, expanded),
++    mode === 'split'
++      ? splitBlocks(hunks, newText, expanded)
++      : mode === 'final'
++        ? finalBlocks(hunks, newDoc?.text ?? null)
++        : unifiedBlocks(hunks, newText, expanded),
+   );
+   const starts = $derived(changeStarts(blocks));
+   const startKeys = $derived(new Set(starts.map(([b, r]) => `${b}-${r}`)));
+@@ -401,16 +408,21 @@
+     act();
+   }
+ 
+-  // The rendered view: both sides in split, the new one (the old, for a file deleted) in unified
+-  const changed = $derived(changedLines(hunks));
++  // The rendered view: both sides in split, the new one (the old, for a file deleted) in unified, the new one alone
++  // and unmarked in final (a file deleted has none)
++  const changed = $derived(mode === 'final' ? { old: new Set<number>(), new: new Set<number>() } : changedLines(hunks));
+   const sides = $derived<Side[]>(
+-    mode === 'unified'
++    mode === 'final'
+       ? newDoc
+         ? ['new']
+-        : oldDoc
+-          ? ['old']
+-          : []
+-      : [oldDoc ? ('old' as const) : null, newDoc ? ('new' as const) : null].filter((s): s is Side => s !== null),
++        : []
++      : mode === 'unified'
++        ? newDoc
++          ? ['new']
++          : oldDoc
++            ? ['old']
++            : []
++        : [oldDoc ? ('old' as const) : null, newDoc ? ('new' as const) : null].filter((s): s is Side => s !== null),
+   );
+ </script>
+ 
+@@ -474,6 +486,7 @@
+       <div class="diff-switch" role="group" aria-label="Layout">
+         <button aria-pressed={mode === 'split'} onclick={() => (mode = 'split')}>Split</button>
+         <button aria-pressed={mode === 'unified'} onclick={() => (mode = 'unified')}>Unified</button>
++        <button aria-pressed={mode === 'final'} onclick={() => (mode = 'final')}>Final</button>
+       </div>
+       {#if markdown}
+         <div class="diff-switch" role="group" aria-label="View">
+@@ -491,6 +504,8 @@
+     <p class="diff-problem" role="alert">{problem}</p>
+   {:else if !loaded}
+     <p class="diff-loading">Loading…</p>
++  {:else if mode === 'final' && !newDoc}
++    <p class="diff-loading diff-gone">Deleted by this change: nothing after it.</p>
+   {:else if shownView === 'source'}
+     {#each drawnItems as item (`${item.b}-${item.kind === 'fold' ? 'fold' : item.segment.first}`)}
+       {@const b = item.b}
+@@ -535,7 +550,7 @@
+                 lines={unifiedLines(segment.rows as UnifiedRow[])}
+                 {language}
+                 {wrap}
+-                numbers="both"
++                numbers={mode === 'final' ? 'new' : 'both'}
+                 {keys}
+                 {changes}
+                 picked={isPicked('new')}
+@@ -568,16 +583,19 @@
+             selectedChain={selectedId}
+             picking={renderedPick?.side === s ? renderedPick.lines : null}
+             {docStyle}
++            whole={mode === 'final'}
+             chains={chains.filter((c) => c.anchor.side === s && c.anchor.lines)}
+             {chainBox}
+             composer={renderedPick?.side === s && oncomment ? renderedComposer : undefined}
+-            label={sides.length < 2
+-              ? s === 'old'
+-                ? 'Before (deleted)'
+-                : 'After, the changes marked'
+-              : s === 'old'
+-                ? 'Before'
+-                : 'After'}
++            label={mode === 'final'
++              ? 'After the change'
++              : sides.length < 2
++                ? s === 'old'
++                  ? 'Before (deleted)'
++                  : 'After, the changes marked'
++                : s === 'old'
++                  ? 'Before'
++                  : 'After'}
+             onpick={oncomment
+               ? (p) => {
+                   renderedPick = p;
+diff --git a/dashboard/src/lib/reviews/RenderedSide.svelte b/dashboard/src/lib/reviews/RenderedSide.svelte
+index e4a2ee66..0a9a3814 100644
+--- a/dashboard/src/lib/reviews/RenderedSide.svelte
++++ b/dashboard/src/lib/reviews/RenderedSide.svelte
+@@ -25,11 +25,14 @@
+     picking = null,
+     label,
+     docStyle = null,
++    whole = false,
+     chains = [],
+     chainBox,
+     composer,
+     onpick,
+   }: {
++    /** The whole document, nothing folded: the final view (ATM-731) */
++    whole?: boolean;
+     /** This side's chains with lines (ATM-651): each in a balloon in the margin, beside its text */
+     chains?: readonly Chain[];
+     /** How a chain shows: the source view's own box, with reply, resolve and edit */
+@@ -86,7 +89,13 @@
+   const near = $derived.by((): ReadonlySet<number> => {
+     return new Set([...changed, ...(selected ? range(selected) : []), ...commented.flatMap(range)]);
+   });
+-  const parts = $derived(blocks ? renderedParts(blocks, near, doc.lines, opened, CONTEXT) : null);
++  const parts = $derived(
++    !blocks
++      ? null
++      : whole
++        ? [{ type: 'shown' as const, from: 1, to: Math.max(doc.lines, 1) }]
++        : renderedParts(blocks, near, doc.lines, opened, CONTEXT),
++  );
+ 
+   /** Where the page drew the lines, in its coordinates */
+   let drawn = $state.raw<DrawnLine[]>([]);
+diff --git a/dashboard/src/lib/reviews/ReviewFile.svelte b/dashboard/src/lib/reviews/ReviewFile.svelte
+index 15cf2851..ebe1cb1b 100644
+--- a/dashboard/src/lib/reviews/ReviewFile.svelte
++++ b/dashboard/src/lib/reviews/ReviewFile.svelte
+@@ -54,6 +54,7 @@
+   import ChainBox from './ChainBox.svelte';
+   import ComposerActions from './ComposerActions.svelte';
+   import DiffView from './DiffView.svelte';
++  import type { DiffMode } from './diff';
+   import ReviewImage, { isImage } from './ReviewImage.svelte';
+   import { draftActions } from './drafts';
+   import { focusOnShow } from './focus';
+@@ -97,7 +98,7 @@
+     after: DocumentSource | null;
+     viewed: boolean;
+     folded: boolean;
+-    mode: 'split' | 'unified';
++    mode: DiffMode;
+     view: 'source' | 'rendered';
+     /** Long lines wrap, in Unified (ATM-588) */
+     wrap?: boolean;
+diff --git a/dashboard/src/lib/reviews/ReviewPage.svelte b/dashboard/src/lib/reviews/ReviewPage.svelte
+index e2384063..0dec6b70 100644
+--- a/dashboard/src/lib/reviews/ReviewPage.svelte
++++ b/dashboard/src/lib/reviews/ReviewPage.svelte
+@@ -16,6 +16,7 @@
+   import type { TaskLinks } from '../compmd';
+   import ReviewFile, { holdNearCards, whenIdle } from './ReviewFile.svelte';
+   import { forgetAllUnsent } from './unsent';
++  import { isDiffMode, type DiffMode } from './diff';
+   import {
+     chainsOf,
+     driftedOf,
+@@ -254,7 +255,7 @@
+   // The layout and view of every diff, and the tree's width: kept in this browser
+   const LAYOUT_KEY = 'atm-review-layout';
+   const stored = readStored(LAYOUT_KEY);
+-  let mode = $state<'split' | 'unified'>(stored.mode === 'unified' ? 'unified' : 'split');
++  let mode = $state<DiffMode>(isDiffMode(stored.mode) ? stored.mode : 'split');
+   let rendered = $state<'source' | 'rendered'>(stored.view === 'rendered' ? 'rendered' : 'source');
+   let width = $state(typeof stored.tree === 'number' ? stored.tree : TREE_WIDTH.default);
+   /** Long lines wrap (ATM-588), in Split too, its two sides kept level (ATM-616) */
+@@ -978,6 +979,13 @@
+               title="Unified"
+               onclick={() => (mode = 'unified')}><Icon name="rows-2" size={15} /></button
+             >
++            <!-- The file as it is after the change, nothing marked (ATM-731) -->
++            <button
++              aria-pressed={mode === 'final'}
++              aria-label="Final"
++              title="Final: the file after the change"
++              onclick={() => (mode = 'final')}><Icon name="file-text" size={15} /></button
++            >
+           </div>
+           <div class="review-segmented" role="group" aria-label="Lines">
+             <span class="review-wrap-hint">
+diff --git a/dashboard/src/lib/reviews/diff.ts b/dashboard/src/lib/reviews/diff.ts
+index ae8577ae..354af974 100644
+--- a/dashboard/src/lib/reviews/diff.ts
++++ b/dashboard/src/lib/reviews/diff.ts
+@@ -215,6 +215,31 @@ export function unifiedBlocks(hunks: Hunk[], newText: string | null, expanded: R
+   );
+ }
+ 
++/** How the diff view lays a file out (ATM-731): side by side, one column with the changes marked, or one column of
++ * the file as it is after the change, nothing marked */
++export type DiffMode = 'split' | 'unified' | 'final';
++
++export function isDiffMode(value: unknown): value is DiffMode {
++  return value === 'split' || value === 'unified' || value === 'final';
++}
++
++/**
++ * The final view (ATM-731): the file as it is after the change, whole (no run folded) and unmarked: the unified
++ * view's rows without the removed lines, the added ones plain. Each row keeps its numbers (an added line has no old
++ * one), so a chain on a line of the new side, or on an unchanged line of the old, stays under its line; one on a line
++ * the change removed has no line here, and shows after the file. A deleted file has no rows.
++ */
++export function finalBlocks(hunks: Hunk[], newText: string | null): Block<UnifiedRow>[] {
++  if (newText === null) return [];
++  const folded = unifiedBlocks(hunks, newText);
++  const every = new Set(folded.flatMap((b) => (b.type === 'fold' ? [foldKey(b.fold)] : [])));
++  const rows = unifiedBlocks(hunks, newText, every)
++    .flatMap((b) => (b.type === 'rows' ? b.rows : []))
++    .filter((r) => r.kind !== 'removed')
++    .map((r) => ({ ...r, kind: 'context' as const }));
++  return rows.length ? [{ type: 'rows', rows }] : [];
++}
++
+ /** The lines each side changed: the old side's removed, the new side's added (for the rendered view's marks) */
+ export function changedLines(hunks: Hunk[]): { old: Set<number>; new: Set<number> } {
+   const result = { old: new Set<number>(), new: new Set<number>() };
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 76ced6d1..00a157f8 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -1692,6 +1692,32 @@ test.describe('the diff viewer on a review’s page', () => {
+     await expect(diffOf(page, 'src/a.rs')).toHaveAttribute('data-mode', 'unified');
+   });
+ 
++  // ATM-731 (Hakan): the file as it is after the change, nothing marked
++  test('Final: each file as it is after the change, whole and unmarked; its chains on their lines; kept for the next page', async ({
++    page,
++    tasksServer,
++  }) => {
++    await openDiffs(page, tasksServer);
++    await page.getByRole('button', { name: 'Final' }).click();
++    const view = diffOf(page, 'src/a.rs');
++    await expect(page.locator('.diff-view[data-mode="final"]')).toHaveCount(3);
++    // src/a.rs after round 3: 41 lines (40, and line 30b added), each numbered once, nothing folded or marked
++    await expect(view.locator('.diff-line')).toHaveCount(41);
++    await expect(view.getByRole('button', { name: /Show \d+ unchanged/ })).toHaveCount(0);
++    for (const marked of ['.diff-removed', '.diff-added', '.diff-changed'])
++      await expect(view.locator(`.diff-line${marked}`), marked).toHaveCount(0);
++    await expect(view.locator('.diff-code.both')).toHaveCount(0);
++    // The chain on LINE 3 (new side) stays under its line, in the file
++    await expect(view.locator('.diff-run + [data-chain="t1"], .diff-run ~ [data-chain="t1"]').first()).toBeVisible();
++    await expect(view.locator('.diff-elsewhere [data-chain="t1"]')).toHaveCount(0);
++    await page.reload();
++    await page.getByRole('tab', { name: /^Diffs/ }).click();
++    await expect(diffOf(page, 'src/a.rs')).toHaveAttribute('data-mode', 'final');
++    // The Layout group's three, Final pressed
++    await expect(page.getByRole('group', { name: 'Layout' }).getByRole('button')).toHaveCount(3);
++    await expect(page.getByRole('button', { name: 'Final' })).toHaveAttribute('aria-pressed', 'true');
++  });
++
+   test('Rendered: a Markdown file on the document viewer’s page, with its line numbers; Unified shows one side', async ({
+     page,
+     tasksServer,
+diff --git a/dashboard/tests/unit/DiffView.component.test.ts b/dashboard/tests/unit/DiffView.component.test.ts
+index a39b499f..7b1f4c94 100644
+--- a/dashboard/tests/unit/DiffView.component.test.ts
++++ b/dashboard/tests/unit/DiffView.component.test.ts
+@@ -137,6 +137,49 @@ describe('DiffView: the layout', () => {
+     expect(container.querySelector('.diff-view')).toHaveAttribute('data-mode', 'split');
+   });
+ 
++  // ATM-731: the file as it is after the change
++  it('final: every line of the new file, its numbers only, nothing marked or folded; the header chooses it', async () => {
++    const { container } = show({ mode: 'final' });
++    await numbers();
++    expect(container.querySelector('.diff-view')).toHaveAttribute('data-mode', 'final');
++    // The new file's eleven lines, each numbered on the new side alone (the text is CompMD's, not loaded here)
++    const numbered = [...container.querySelectorAll('.diff-line')].map((l) => l.textContent?.trim());
++    expect(numbered).toEqual(Array.from({ length: 11 }, (_, i) => String(i + 1)));
++    for (const marked of ['.diff-removed', '.diff-added', '.diff-changed', '[data-change]'])
++      expect(container.querySelectorAll(marked), marked).toHaveLength(0);
++    expect(screen.queryAllByRole('button', { name: /^Show \d+ unchanged/ })).toHaveLength(0);
++    expect(container.querySelector('.diff-code.both'), 'one number a line').toBeNull();
++    await fireEvent.click(screen.getByRole('button', { name: 'Unified' }));
++    expect(container.querySelector('.diff-view')).toHaveAttribute('data-mode', 'unified');
++    await fireEvent.click(screen.getByRole('button', { name: 'Final' }));
++    expect(container.querySelector('.diff-view')).toHaveAttribute('data-mode', 'final');
++  });
++
++  it('final: a chain stays under its line; one on a line the change removed shows after the file', async () => {
++    const { container } = show({
++      mode: 'final',
++      chains: [
++        chain('t1', 'new', [9, 9], 'On eight b'),
++        chain('t2', 'old', [5, 5], 'On five, unchanged'),
++        chain('t3', 'old', [8, 8], 'On eight, removed'),
++      ],
++    });
++    await numbers();
++    const inRuns = [...container.querySelectorAll('.diff-run + .chain, .chain')].filter(
++      (c) => !c.closest('.diff-elsewhere'),
++    );
++    expect(inRuns.map((c) => c.getAttribute('data-chain'))).toEqual(['t2', 't1']);
++    const after = container.querySelector('.diff-elsewhere');
++    expect(after?.querySelector('[data-chain="t3"]')).not.toBeNull();
++  });
++
++  it('final: a file the change deleted says so, with nothing after it', async () => {
++    const { container } = show({ mode: 'final', after: null });
++    await vi.waitFor(() => expect(container.querySelector('.diff-gone')).not.toBeNull());
++    expect(container.querySelector('.diff-gone')).toHaveTextContent('Deleted by this change');
++    expect(container.querySelectorAll('.diff-line')).toHaveLength(0);
++  });
++
+   it('marks the first line of each change for the page’s Prev and Next: the new side’s in split, every one in unified', async () => {
+     const { container, unmount } = show();
+     await numbers();
+diff --git a/dashboard/tests/unit/diff.test.ts b/dashboard/tests/unit/diff.test.ts
+index b34df245..24b36226 100644
+--- a/dashboard/tests/unit/diff.test.ts
++++ b/dashboard/tests/unit/diff.test.ts
+@@ -3,7 +3,9 @@ import {
+   changeStarts,
+   changedLines,
+   fenced,
++  finalBlocks,
+   foldKey,
++  isDiffMode,
+   linesOf,
+   linesUnder,
+   nextChange,
+@@ -103,6 +105,50 @@ describe('the unified view', () => {
+   });
+ });
+ 
++// ATM-731: the file as it is after the change, whole and unmarked
++describe('the final view', () => {
++  it('is every line of the new file, in order, nothing folded, nothing removed, nothing marked', () => {
++    const blocks = finalBlocks(parseHunks(PATCH), NEW);
++    expect(blocks).toHaveLength(1);
++    const rows = blocks[0].type === 'rows' ? blocks[0].rows : [];
++    expect(rows.map((r) => r.text)).toEqual(linesOf(NEW));
++    expect(rows.map((r) => r.new)).toEqual(linesOf(NEW).map((_, i) => i + 1));
++    expect(new Set(rows.map((r) => r.kind))).toEqual(new Set(['context']));
++    // No change to go to
++    expect(changeStarts(blocks)).toEqual([]);
++  });
++
++  it('keeps each line’s old number where it had one, so a chain on an unchanged line of the old side stays on it', () => {
++    const rows = (finalBlocks(parseHunks(PATCH), NEW)[0] as { rows: { old: number | null; new: number | null }[] })
++      .rows;
++    const at = (n: number) => rows.find((r) => r.new === n)!;
++    expect(at(2).old).toBe(2);
++    expect(at(3).old, 'THREE replaced three: no old line').toBeNull();
++    expect([at(8).old, at(9).old], 'eight a and b were added').toEqual([null, null]);
++    expect(at(10).old, 'nine moved down one').toBe(9);
++    // The removed line (old 3, old 8) is on no row
++    expect(rows.some((r) => r.old === 8)).toBe(false);
++  });
++
++  it('a file with no change is shown whole; a deleted file has no rows; a new one is all its lines', () => {
++    expect(finalBlocks([], 'a\nb\n')[0]).toMatchObject({ type: 'rows', rows: [{ text: 'a' }, { text: 'b' }] });
++    expect(finalBlocks(parseHunks('@@ -1,2 +0,0 @@\n-a\n-b\n'), null)).toEqual([]);
++    const created = finalBlocks(parseHunks('@@ -0,0 +1,2 @@\n+a\n+b\n'), 'a\nb\n');
++    expect(created[0]).toMatchObject({
++      rows: [
++        { text: 'a', kind: 'context' },
++        { text: 'b', kind: 'context' },
++      ],
++    });
++    expect(finalBlocks([], '')).toEqual([]);
++  });
++
++  it('the modes are three, and anything else is none of them', () => {
++    for (const mode of ['split', 'unified', 'final']) expect(isDiffMode(mode)).toBe(true);
++    for (const other of ['Final', '', null, undefined, 3]) expect(isDiffMode(other)).toBe(false);
++  });
++});
++
+ describe('changes, keys and marks', () => {
+   it('n and p go from change to change, wrapping round', () => {
+     const blocks = splitBlocks(parseHunks(PATCH), NEW);

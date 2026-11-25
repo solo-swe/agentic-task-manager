@@ -2,12 +2,12 @@
 id = "01a20af8-6a9f-72ff-a072-74633da86c16"
 number = 139
 title = "Keep an unsent comment or reply when the review updates"
-status = "open"
+status = "approved"
 tasks = ["ATM-732"]
 author = "claude:ba530ebb"
 reviewers = []
 created = 2026-11-24T00:33:02Z
-updated = 2026-11-24T00:33:02Z
+updated = 2026-11-24T02:38:24Z
 +++
 
 A comment or reply being written in the diff view now survives updates to the review: its text, its cursor and the focus.

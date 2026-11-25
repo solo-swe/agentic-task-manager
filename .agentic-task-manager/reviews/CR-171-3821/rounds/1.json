@@ -1,0 +1,77 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "a2da819764efa635693ae396badabd5871b2ad03",
+    "head": "8b00478d930b3bb72bbb0222f060f605ced7352a"
+  },
+  "files": [
+    {
+      "path": "app/src-tauri/build.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/capabilities/main.json",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/src/commands/reads.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/src/integration_tests.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/src/lib.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-api/src/routes/documents.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-api/src/routes/source.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-api/src/routes/test_support.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/api/ipc.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/ipc.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/multi-project-api.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/security-architecture.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/serve.test.mjs",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:ba530ebb",
+  "at": "2026-11-24T19:08:55Z"
+}

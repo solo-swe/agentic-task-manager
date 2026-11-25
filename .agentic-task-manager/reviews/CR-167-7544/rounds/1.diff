@@ -1,0 +1,743 @@
+diff --git a/app/src-tauri/src/commands/reads.rs b/app/src-tauri/src/commands/reads.rs
+index 29440cc2..5cb35373 100644
+--- a/app/src-tauri/src/commands/reads.rs
++++ b/app/src-tauri/src/commands/reads.rs
+@@ -4,12 +4,13 @@
+ use std::sync::Arc;
+ 
+ use atm_lib::Workspaces;
+-use atm_lib::workspaces::{Member, Workspace};
++use atm_lib::query::Filters;
++use atm_lib::workspaces::{Member, Workspace, too_large};
+ use serde_json::{Value, json};
+ use tauri::State;
+ 
+ use super::reviews::review_ref;
+-use super::state::{AppError, AppState, FileData, Json, ReviewFilters, TaskFilters};
++use super::state::{AppError, AppState, FileData, Fresh, Json, ReviewFilters, TaskFilters};
+ 
+ pub(super) fn workspace(workspaces: &Workspaces, id: &str) -> Result<Arc<Workspace>, AppError> {
+     workspaces
+@@ -47,6 +48,83 @@ pub fn projects_of(workspaces: &Workspaces, w: &str) -> Result<Value, AppError>
+     Ok(json!({"projects": found.listing().projects()}))
+ }
+ 
++/// [`projects_of`] for a reload (ATM-768): none when `known` is still the tag of what the list depends on (the
++/// listing's stamp, as the route's `ETag`), and then the list isn't worked out.
++///
++/// # Errors
++/// No such workspace.
++pub fn fresh_projects(
++    workspaces: &Workspaces,
++    w: &str,
++    known: Option<&str>,
++) -> Result<Fresh, AppError> {
++    let found = workspace(workspaces, w)?;
++    let _ = workspaces.opened(w);
++    let listing = found.listing();
++    Fresh::of(known, &listing.stamp, || {
++        Ok(json!({"projects": listing.projects()}))
++    })
++}
++
++/// [`tasks_of`] for a reload: none when its task data, its archive, the filters and the other projects its tasks
++/// name are as they were (the tasks route's `ETag`). Task data too large is refused before anything else.
++///
++/// # Errors
++/// As [`tasks_of`].
++pub fn fresh_tasks(
++    workspaces: &Workspaces,
++    w: &str,
++    p: &str,
++    filters: TaskFilters,
++    known: Option<&str>,
++) -> Result<Fresh, AppError> {
++    let member = member(workspaces, w, p)?;
++    if too_large(&member.stamp) {
++        member.tasks(&Filters::default())?;
++    }
++    let parts = json!([
++        member.stamp["tasks"],
++        member.stamp["archive"],
++        filters,
++        member.others_version()
++    ]);
++    Fresh::of(known, &parts, || Ok(member.tasks(&filters.into())?))
++}
++
++/// [`claims_of`] for a reload: none when the claims store and the claims held now are as they were (an expired lease
++/// is left out without the store changing).
++///
++/// # Errors
++/// As [`claims_of`].
++pub fn fresh_claims(
++    workspaces: &Workspaces,
++    w: &str,
++    p: &str,
++    known: Option<&str>,
++) -> Result<Fresh, AppError> {
++    let member = member(workspaces, w, p)?;
++    let held = member.claims();
++    let parts = json!(["claims", member.stamp["claims"], held]);
++    Fresh::of(known, &parts, || Ok(json!({"claims": held})))
++}
++
++/// [`worktrees_of`] for a reload: none when the working copies and the claims are as they were.
++///
++/// # Errors
++/// As [`worktrees_of`].
++pub fn fresh_worktrees(
++    workspaces: &Workspaces,
++    w: &str,
++    p: &str,
++    known: Option<&str>,
++) -> Result<Fresh, AppError> {
++    let member = member(workspaces, w, p)?;
++    let parts = json!(["worktrees", member.stamp["copies"], member.stamp["claims"]]);
++    Fresh::of(known, &parts, || {
++        Ok(json!({"worktrees": member.worktrees()}))
++    })
++}
++
+ /// `GET /api/v2/workspaces/<w>/search?q=`.
+ ///
+ /// # Errors
+@@ -214,7 +292,8 @@ pub async fn list_workspaces(state: State<'_, AppState>) -> Result<Json, AppErro
+     Ok(Json(workspaces_of(&state.workspaces)))
+ }
+ 
+-/// A workspace's projects, with their summaries; it becomes the last opened.
++/// A workspace's projects, with their summaries; it becomes the last opened. `known`: the tag the page last got, so
++/// an unchanged list comes back without its body (ATM-768).
+ ///
+ /// # Errors
+ /// No such workspace.
+@@ -223,8 +302,9 @@ pub async fn list_workspaces(state: State<'_, AppState>) -> Result<Json, AppErro
+ pub async fn list_projects(
+     state: State<'_, AppState>,
+     workspace: String,
+-) -> Result<Json, AppError> {
+-    projects_of(&state.workspaces, &workspace).map(Json)
++    known: Option<String>,
++) -> Result<Fresh, AppError> {
++    fresh_projects(&state.workspaces, &workspace, known.as_deref())
+ }
+ 
+ /// Search a workspace's projects' tasks.
+@@ -241,7 +321,7 @@ pub async fn search(
+     search_in(&state.workspaces, &workspace, &q).map(Json)
+ }
+ 
+-/// A project's tasks, with what atm derives for them.
++/// A project's tasks, with what atm derives for them; without them when `known` is still their tag.
+ ///
+ /// # Errors
+ /// As [`tasks_of`].
+@@ -252,8 +332,15 @@ pub async fn project_tasks(
+     workspace: String,
+     project: String,
+     filters: TaskFilters,
+-) -> Result<Json, AppError> {
+-    tasks_of(&state.workspaces, &workspace, &project, filters).map(Json)
++    known: Option<String>,
++) -> Result<Fresh, AppError> {
++    fresh_tasks(
++        &state.workspaces,
++        &workspace,
++        &project,
++        filters,
++        known.as_deref(),
++    )
+ }
+ 
+ /// A project's stats, progress and forecast for a slice of its tasks and a period (ATM-722).
+@@ -273,7 +360,7 @@ pub async fn project_stats(
+     stats_of(&state.workspaces, &workspace, &project, tasks, from, to).map(Json)
+ }
+ 
+-/// A project's live claims.
++/// A project's live claims; none when `known` is still their tag.
+ ///
+ /// # Errors
+ /// As [`claims_of`].
+@@ -283,11 +370,12 @@ pub async fn claims(
+     state: State<'_, AppState>,
+     workspace: String,
+     project: String,
+-) -> Result<Json, AppError> {
+-    claims_of(&state.workspaces, &workspace, &project).map(Json)
++    known: Option<String>,
++) -> Result<Fresh, AppError> {
++    fresh_claims(&state.workspaces, &workspace, &project, known.as_deref())
+ }
+ 
+-/// A project's working copies.
++/// A project's working copies; none when `known` is still their tag.
+ ///
+ /// # Errors
+ /// As [`worktrees_of`].
+@@ -297,8 +385,9 @@ pub async fn worktrees(
+     state: State<'_, AppState>,
+     workspace: String,
+     project: String,
+-) -> Result<Json, AppError> {
+-    worktrees_of(&state.workspaces, &workspace, &project).map(Json)
++    known: Option<String>,
++) -> Result<Fresh, AppError> {
++    fresh_worktrees(&state.workspaces, &workspace, &project, known.as_deref())
+ }
+ 
+ /// A document of a project, as the viewer shows it: from the working copy, or `at` a commit or tree.
+diff --git a/app/src-tauri/src/commands/state.rs b/app/src-tauri/src/commands/state.rs
+index 1e2535fe..95984108 100644
+--- a/app/src-tauri/src/commands/state.rs
++++ b/app/src-tauri/src/commands/state.rs
+@@ -255,7 +255,7 @@ impl From<ReviewFilters> for atm_lib::review_pages::ReviewQuery {
+ 
+ /// What a project's tasks are filtered by: the REST route's query parameters (`atm task list`'s options); what isn't
+ /// given keeps everything.
+-#[derive(Debug, Clone, Default, Deserialize, Type)]
++#[derive(Debug, Clone, Default, Deserialize, Serialize, Type)]
+ #[serde(default)]
+ #[allow(clippy::struct_excessive_bools)] // reason: each is one of `atm task list`'s flags
+ pub struct TaskFilters {
+@@ -338,6 +338,39 @@ pub(super) enum JsonShape {
+ #[serde(transparent)]
+ pub struct Json(#[specta(type = JsonShape)] pub Value);
+ 
++/// A reload's answer (ATM-768): its tag, what the answer depends on hashed as atm serve hashes its `ETag`, and the
++/// answer, or none when the tag the page gave (`known`, the one it last got) still matches: the browser's `304`, so an
++/// unchanged reload carries no body across.
++#[derive(Debug, Clone, PartialEq, Serialize, Type)]
++pub struct Fresh {
++    /// What the answer depends on, hashed: the page gives it back on its next reload.
++    pub tag: String,
++    /// The answer; none when the page has it already.
++    pub body: Option<Json>,
++}
++
++impl Fresh {
++    /// The answer of what depends on `parts`: none when `known` is still its tag, else `body`'s, worked out only then.
++    ///
++    /// # Errors
++    /// `body`'s.
++    pub(super) fn of(
++        known: Option<&str>,
++        parts: &Value,
++        body: impl FnOnce() -> Result<Value, AppError>,
++    ) -> Result<Self, AppError> {
++        let digest = atm_common::sha1::sha1_hex(atm_common::py::to_json(parts).as_bytes());
++        let tag = format!("\"{}\"", &digest[..16]);
++        if known == Some(tag.as_str()) {
++            return Ok(Self { tag, body: None });
++        }
++        Ok(Self {
++            body: Some(Json(body()?)),
++            tag,
++        })
++    }
++}
++
+ /// What a subscription's channel says: something it watches changed, so the UI reads it again.
+ #[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+ pub struct Changed {
+diff --git a/app/src-tauri/src/commands/tests.rs b/app/src-tauri/src/commands/tests.rs
+index 07f3bbc8..ec93ea61 100644
+--- a/app/src-tauri/src/commands/tests.rs
++++ b/app/src-tauri/src/commands/tests.rs
+@@ -376,6 +376,61 @@ fn json_answers_and_bodies_are_transparent() {
+     );
+ }
+ 
++/// ATM-768: a reload's tag is what its answer depends on, hashed as atm serve's `ETag`; the body is worked out only
++/// when the page's tag isn't it
++#[test]
++fn a_reload_answers_its_body_unless_the_page_has_it() {
++    let parts = json!(["claims", [1, 2], []]);
++    let worked = std::cell::Cell::new(0);
++    let body = || {
++        worked.set(worked.get() + 1);
++        Ok(json!({"claims": []}))
++    };
++    // None known: the body, and its tag (16 hex digits, quoted)
++    let first = Fresh::of(None, &parts, body).expect("an answer");
++    assert_eq!(first.body, Some(Json(json!({"claims": []}))));
++    let digest = atm_common::sha1::sha1_hex(atm_common::py::to_json(&parts).as_bytes());
++    assert_eq!(first.tag, format!("\"{}\"", &digest[..16]));
++    // Its tag known: no body, and it wasn't worked out
++    let again = Fresh::of(Some(&first.tag), &parts, body).expect("an answer");
++    assert_eq!((again.tag.as_str(), again.body), (first.tag.as_str(), None));
++    assert_eq!(worked.get(), 1);
++    // A stale tag, or one unquoted: the body
++    for stale in ["\"0000000000000000\"", first.tag.trim_matches('"'), ""] {
++        assert!(
++            Fresh::of(Some(stale), &parts, body)
++                .expect("an answer")
++                .body
++                .is_some(),
++            "{stale}"
++        );
++    }
++    // Other parts, another tag; the same parts, the same tag
++    assert_ne!(
++        Fresh::of(None, &json!(["claims", [1, 3], []]), body)
++            .expect("an answer")
++            .tag,
++        first.tag
++    );
++    assert_eq!(
++        Fresh::of(None, &parts, body).expect("an answer").tag,
++        first.tag
++    );
++    // The body's error is the answer's, unless the page has it
++    let failing = || Err(AppError::NotFound("gone".into()));
++    assert!(matches!(
++        Fresh::of(None, &parts, failing),
++        Err(AppError::NotFound(_))
++    ));
++    assert!(Fresh::of(Some(&first.tag), &parts, failing).is_ok());
++    // As the page reads it: the tag, and the body or null
++    assert_eq!(
++        serde_json::to_value(Fresh::of(Some(&first.tag), &parts, body).expect("an answer"))
++            .expect("json"),
++        json!({"tag": first.tag, "body": null})
++    );
++}
++
+ #[test]
+ fn version_is_atms() {
+     assert_eq!(version(), atm_common::VERSION);
+diff --git a/app/src-tauri/src/integration_tests.rs b/app/src-tauri/src/integration_tests.rs
+index e87aa6bd..786ad45c 100644
+--- a/app/src-tauri/src/integration_tests.rs
++++ b/app/src-tauri/src/integration_tests.rs
+@@ -3,8 +3,9 @@
+ //! not in `tests/`: the commands' handler macros and the app's context are this crate's.)
+ 
+ use super::commands::{
+-    AppError, ReviewFilters, TaskFilters, claims_of, document_of, file_of, logo_of, projects_of,
+-    review_of, reviews_of, search_in, stats_of, tasks_of, workspaces_of, worktrees_of,
++    AppError, Fresh, ReviewFilters, TaskFilters, claims_of, document_of, file_of, fresh_claims,
++    fresh_projects, fresh_tasks, fresh_worktrees, logo_of, projects_of, review_of, reviews_of,
++    search_in, stats_of, tasks_of, workspaces_of, worktrees_of,
+ };
+ use super::*;
+ use serde_json::{Value, json};
+@@ -116,6 +117,92 @@ fn rest(home: &Path, path: &str, query: &str) -> (u16, Value, Vec<u8>) {
+     (status, body, bytes)
+ }
+ 
++/// ATM-768: a reload's answer is the read's, with a tag; given that tag back with nothing new, it carries no body; a
++/// stale tag, or a change to what it depends on, gets the body again
++#[test]
++fn a_reload_with_nothing_new_carries_no_body() {
++    let home = a_state_with_a_project("fresh");
++    let workspaces = atm_lib::Workspaces::at(&home);
++    let todo = || TaskFilters {
++        status: vec!["todo".into()],
++        ..TaskFilters::default()
++    };
++    let reads = |known: Option<&str>| -> Vec<Fresh> {
++        vec![
++            fresh_projects(&workspaces, "work", known).expect("the projects"),
++            fresh_tasks(&workspaces, "work", "abcd1234", todo(), known).expect("the tasks"),
++            fresh_claims(&workspaces, "work", "abcd1234", known).expect("the claims"),
++            fresh_worktrees(&workspaces, "work", "abcd1234", known).expect("the worktrees"),
++        ]
++    };
++    // None given: each answers what its plain read does
++    let first = reads(None);
++    let plain = [
++        projects_of(&workspaces, "work").expect("the projects"),
++        tasks_of(&workspaces, "work", "abcd1234", todo()).expect("the tasks"),
++        claims_of(&workspaces, "work", "abcd1234").expect("the claims"),
++        worktrees_of(&workspaces, "work", "abcd1234").expect("the worktrees"),
++    ];
++    for (answer, plain) in first.iter().zip(&plain) {
++        assert_eq!(answer.body.as_ref().map(|b| &b.0), Some(plain));
++        assert!(
++            answer.tag.starts_with('"') && answer.tag.len() == 18,
++            "{}",
++            answer.tag
++        );
++    }
++    // Each its own tag, given back: no body, the same tag
++    for (i, answer) in first.iter().enumerate() {
++        let again = &reads(Some(&answer.tag))[i];
++        assert_eq!(again.body, None, "read {i}");
++        assert_eq!(again.tag, answer.tag, "read {i}");
++    }
++    // A stale tag: the body
++    assert!(
++        reads(Some("\"0000000000000000\""))
++            .iter()
++            .all(|a| a.body.is_some())
++    );
++    // Other filters are another answer: another tag
++    let all = fresh_tasks(
++        &workspaces,
++        "work",
++        "abcd1234",
++        TaskFilters::default(),
++        None,
++    )
++    .expect("all the tasks");
++    assert_ne!(all.tag, first[1].tag);
++    // A task added: the tasks and the project list (its summary) change, with their tags
++    let file = home.join("project/.agentic-task-manager/tasks.json");
++    let mut data: Value =
++        serde_json::from_str(&std::fs::read_to_string(&file).expect("tasks.json")).expect("json");
++    data["tasks"].as_array_mut().expect("tasks").push(json!({
++        "id": "T-2", "name": "Another", "status": "todo",
++        "created_at": "2026-11-08T11:00:00Z", "updated_at": "2026-11-08T11:00:00Z"}));
++    std::fs::write(&file, data.to_string()).expect("tasks.json");
++    let tasks = fresh_tasks(&workspaces, "work", "abcd1234", todo(), Some(&first[1].tag))
++        .expect("the tasks");
++    assert_ne!(tasks.tag, first[1].tag);
++    assert_eq!(
++        tasks.body.expect("the new tasks").0["tasks"]
++            .as_array()
++            .map(Vec::len),
++        Some(2)
++    );
++    let projects = fresh_projects(&workspaces, "work", Some(&first[0].tag)).expect("the projects");
++    assert!(
++        projects.body.is_some(),
++        "the list changed with the task data"
++    );
++    // An error is the read's, whatever was known
++    assert!(matches!(
++        fresh_tasks(&workspaces, "work", "ffff0000", todo(), Some(&first[1].tag)),
++        Err(AppError::NotFound(_))
++    ));
++    std::fs::remove_dir_all(&home).expect("clean up");
++}
++
+ /// ADR-003 §5: each read the app's commands make answers what its REST route does
+ #[test]
+ fn each_command_answers_what_its_rest_route_does() {
+@@ -242,7 +329,7 @@ fn expected_answers(
+         (
+             "project_tasks",
+             with(json!({"filters": {"status": ["todo"]}})),
+-            tasks_of(
++            fresh(fresh_tasks(
+                 workspaces,
+                 "work",
+                 "abcd1234",
+@@ -250,8 +337,8 @@ fn expected_answers(
+                     status: vec!["todo".into()],
+                     ..TaskFilters::default()
+                 },
+-            )
+-            .expect("tasks"),
++                None,
++            )),
+         ),
+         (
+             "project_stats",
+@@ -269,12 +356,12 @@ fn expected_answers(
+         (
+             "claims",
+             at.clone(),
+-            claims_of(workspaces, "work", "abcd1234").expect("claims"),
++            fresh(fresh_claims(workspaces, "work", "abcd1234", None)),
+         ),
+         (
+             "worktrees",
+             at.clone(),
+-            worktrees_of(workspaces, "work", "abcd1234").expect("worktrees"),
++            fresh(fresh_worktrees(workspaces, "work", "abcd1234", None)),
+         ),
+         (
+             "document",
+@@ -313,11 +400,16 @@ fn expected_answers(
+         (
+             "list_projects",
+             json!({"workspace": "work"}),
+-            projects_of(workspaces, "work").expect("projects"),
++            fresh(fresh_projects(workspaces, "work", None)),
+         ),
+     ]
+ }
+ 
++/// A reload's answer as JSON
++fn fresh(answer: Result<Fresh, AppError>) -> Value {
++    serde_json::to_value(answer.expect("a reload's answer")).expect("json")
++}
++
+ /// Pages that may call no command: a remote one, one from `CompMD`'s own scheme, where its sandbox frames are
+ /// (ADR-004), and one from atm's asset scheme, which serves no page (T-503)
+ const ELSEWHERE: [&str; 5] = [
+diff --git a/dashboard/src/lib/api/http.ts b/dashboard/src/lib/api/http.ts
+index 566cef68..76bb49b9 100644
+--- a/dashboard/src/lib/api/http.ts
++++ b/dashboard/src/lib/api/http.ts
+@@ -17,7 +17,7 @@ export type Fetch = typeof fetch;
+ export const inApp = typeof window !== 'undefined' && isTauri();
+ 
+ /** The transport: the browser's fetch to atm serve, or in the app the IPC one */
+-export const browserFetch: Fetch = (input, init) => (inApp ? ipcFetch(input) : fetch(input, init));
++export const browserFetch: Fetch = (input, init) => (inApp ? ipcFetch(input, init) : fetch(input, init));
+ 
+ /** What atm serve computes for a project under p/<id>/ (the task files themselves come only through the v1 route) */
+ export type ProjectFile = 'claims.json' | 'worktrees.json';
+diff --git a/dashboard/src/lib/api/ipc.ts b/dashboard/src/lib/api/ipc.ts
+index d93e5a78..cae3b2cc 100644
+--- a/dashboard/src/lib/api/ipc.ts
++++ b/dashboard/src/lib/api/ipc.ts
+@@ -2,8 +2,9 @@
+ // commands (app/src-tauri/src/commands.rs, ADR-003 §5), which answer what the REST routes do. `ipcFetch` takes the
+ // dashboard's own URLs (api/http.ts builds them: `default`'s v1 routes, another workspace's v2 ones) and answers each
+ // as a `Response` (a JSON one handing the command's answer through as it is, ATM-769), so everything above the client
+-// layer works unchanged. No ETags: the app reads its own files, and
+-// its live changes come through the subscriptions' channels.
++// layer works unchanged. Its live changes come through the subscriptions' channels; the reloads they cause are
++// conditional as in the browser (ATM-768): the reload commands (`RELOADS`) take the tag the page last got and answer
++// none when it still matches, which is a `304` here.
+ import { invoke } from '@tauri-apps/api/core';
+ import { DEFAULT_WORKSPACE } from './workspace';
+ 
+@@ -163,30 +164,46 @@ export function callFor(url: string): Call | null {
+  * docs/memory-growth-analysis.md §3b). The client reads `ok`, `status`, `headers` and `json()`; `text()` is there for
+  * anything else, made only when asked. Each `json()` gives the same object: the client never changes what it reads.
+  */
+-export function answered(body: unknown, status = 200): Response {
++export function answered(body: unknown, status = 200, tag?: string): Response {
++  const headers = new Headers({ 'Content-Type': 'application/json' });
++  if (tag) headers.set('ETag', tag);
+   const answer = {
+     ok: status >= 200 && status < 300,
+     status,
+     statusText: '',
+-    headers: new Headers({ 'Content-Type': 'application/json' }),
++    headers,
+     redirected: false,
+     type: 'basic',
+     url: '',
+     json: () => Promise.resolve(body),
+     text: () => Promise.resolve(JSON.stringify(body)),
+-    clone: () => answered(body, status),
++    clone: () => answered(body, status, tag),
+   };
+   return answer as unknown as Response;
+ }
+ 
+ const json = answered;
+ 
+-/** `fetch`'s shape, answered by the app's commands (a request's options, such as its validators, don't apply) */
+-export async function ipcFetch(input: RequestInfo | URL): Promise<Response> {
++/** The commands a page reloads (ATM-768): each takes `known`, the tag the page last got, and answers `Fresh` */
++const RELOADS = new Set(['list_projects', 'project_tasks', 'claims', 'worktrees']);
++
++/** A reload command's answer (`Fresh`): its tag, and its body, or null when the page's tag still matches */
++interface Fresh {
++  tag: string;
++  body: unknown;
++}
++
++/** `fetch`'s shape, answered by the app's commands: of a request's options, only its `If-None-Match` applies */
++export async function ipcFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+   const call = callFor(url);
+   if (!call) return json({ error: 'not found' }, 404);
+   try {
++    if (RELOADS.has(call.command)) {
++      const known = new Headers(init?.headers).get('If-None-Match') ?? undefined;
++      const { tag, body } = await invoke<Fresh>(call.command, { ...call.args, known });
++      return body === null ? json(null, 304, tag) : json(body, 200, tag);
++    }
+     const answer = await invoke<unknown>(call.command, call.args);
+     if (!call.image) return json(answer);
+     if (answer === null) return json({ error: 'no logo' }, 404);
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index 87b18bea..942ac46c 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -1369,6 +1369,39 @@ test.describe('the dashboard in the atm app', () => {
+     expect(tasksServer.httpRequests).toEqual([]);
+   });
+ 
++  test('a reload with nothing new carries no body; a change carries the new answer (ATM-768)', async ({
++    page,
++    tasksServer,
++  }) => {
++    await tasksServer.asApp();
++    const data = loadFixture('standard');
++    const task = data.tasks[0] as { id: string; name: string };
++    tasksServer.use(data);
++    await page.goto(`/projects/${tasksServer.projectId}/kanban`);
++    const card = page.locator(`#kanban .kanban-card[data-id="${task.id}"]`);
++    await expect(card).toContainText(task.name);
++    await expect.poll(() => tasksServer.subscriptions.size).toBeGreaterThan(0);
++    const tasksLoads = () => tasksServer.reloads.filter((r) => r.command === 'project_tasks');
++    // The first load carried the tasks
++    expect(tasksLoads()[0]).toEqual({ command: 'project_tasks', body: true });
++
++    // A change message with nothing new: the page asks again, with the tag it got, and gets no body (the claims, a
++    // few hundred bytes, the page asks for without its tag, in the browser too)
++    const before = tasksServer.reloads.length;
++    await tasksServer.pushChange(tasksServer.projectId);
++    await expect.poll(() => tasksServer.reloads.slice(before).some((r) => r.command === 'project_tasks')).toBe(true);
++    expect(tasksServer.reloads.slice(before).filter((r) => r.body && r.command !== 'claims')).toEqual([]);
++    await expect(card).toContainText(task.name);
++
++    // The tasks change: the next reload carries them
++    tasksServer.use({ ...data, tasks: [{ ...task, name: 'Renamed by an agent' }, ...data.tasks.slice(1)] });
++    const changed = tasksServer.reloads.length;
++    await tasksServer.pushChange(tasksServer.projectId);
++    await expect(card).toContainText('Renamed by an agent');
++    expect(tasksServer.reloads.slice(changed)).toContainEqual({ command: 'project_tasks', body: true });
++    expect(tasksServer.httpRequests).toEqual([]);
++  });
++
+   test('a newer version of the app is offered, installed only on the click; a failure says why; Not now lasts (T-483)', async ({
+     page,
+     tasksServer,
+diff --git a/dashboard/tests/e2e/helpers.ts b/dashboard/tests/e2e/helpers.ts
+index 68ed7b00..1eb99722 100644
+--- a/dashboard/tests/e2e/helpers.ts
++++ b/dashboard/tests/e2e/helpers.ts
+@@ -1,4 +1,5 @@
+ import { spawnSync } from 'node:child_process';
++import { createHash } from 'node:crypto';
+ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+ import os from 'node:os';
+ import path from 'node:path';
+@@ -1001,7 +1002,7 @@ export class TasksServer {
+       if (/^\/(api|p)\//.test(pathname)) this.httpRequests.push(pathname);
+     });
+     await this.page.exposeFunction('__atmInvoke', (command: string, args: Record<string, unknown>) =>
+-      command === 'install_update' ? this.answerInstall(args) : this.answerCommand(command, args),
++      command === 'install_update' ? this.answerInstall(args) : this.reload(command, args),
+     );
+     await this.page.addInitScript((version) => {
+       const w = window as unknown as Record<string, unknown> & {
+@@ -1084,6 +1085,26 @@ export class TasksServer {
+     return JSON.stringify(parsed);
+   }
+ 
++  /** The reload commands' answers (ATM-768), in order: the command, and whether it carried a body (the page didn't
++   * have it) */
++  reloads: { command: string; body: boolean }[] = [];
++
++  /** A command's answer, a reload command's as the app's `Fresh` (ATM-768): its tag (a hash of the answer and what
++   * asked for it) and its body, or none when the page's `known` tag is still it */
++  private reload(command: string, args: Record<string, unknown>): { ok?: unknown; error?: unknown } {
++    const answer = this.answerCommand(command, args);
++    if (!['list_projects', 'project_tasks', 'claims', 'worktrees'].includes(command) || !('ok' in answer))
++      return answer;
++    const { known, ...asked } = args;
++    const digest = createHash('sha1')
++      .update(JSON.stringify([command, asked, answer.ok]))
++      .digest('hex');
++    const tag = `"${digest.slice(0, 16)}"`;
++    const body = known === tag ? null : answer.ok;
++    this.reloads.push({ command, body: body !== null });
++    return { ok: { tag, body } };
++  }
++
+   /** What the app's command answers: `{ok}`, or `{error}` as its `AppError` */
+   private answerCommand(command: string, args: Record<string, unknown>): { ok?: unknown; error?: unknown } {
+     const unknown = { error: { kind: 'not_found', message: 'unknown project' } };
+diff --git a/dashboard/tests/unit/ipc.test.ts b/dashboard/tests/unit/ipc.test.ts
+index 3bc834a6..504dd972 100644
+--- a/dashboard/tests/unit/ipc.test.ts
++++ b/dashboard/tests/unit/ipc.test.ts
+@@ -110,7 +110,10 @@ describe('the IPC transport (T-457)', () => {
+   it('answers with the command’s JSON, an image’s bytes, or the error as its HTTP status', async () => {
+     mockIPC((command, args) => {
+       if (command === 'list_projects')
+-        return { projects: [{ id: 'p1', workspace: (args as { workspace: string }).workspace }] };
++        return {
++          tag: '"l1"',
++          body: { projects: [{ id: 'p1', workspace: (args as { workspace: string }).workspace }] },
++        };
+       if (command === 'logo') return { content_type: 'image/png', data: [137, 80, 78, 71] };
+       if (command === 'claims') throw { kind: 'not_found', message: 'unknown workspace' };
+       return null;
+@@ -128,7 +131,7 @@ describe('the IPC transport (T-457)', () => {
+ 
+   it('hands a command’s answer through as it is, never turned back into text (ATM-769)', async () => {
+     const answer = { tasks: [{ task: { id: 'T-1' } }], bytes: 10 };
+-    mockIPC(() => answer);
++    mockIPC(() => ({ tag: '"t1"', body: answer }));
+     const resp = await ipcFetch('/api/v1/projects/p1/tasks');
+     expect([resp.ok, resp.status, resp.headers.get('Content-Type')]).toEqual([true, 200, 'application/json']);
+     expect(await resp.json()).toBe(answer);
+@@ -248,14 +251,73 @@ describe('the IPC transport (T-457)', () => {
+     mockIPC(() => null);
+     const logo = await ipcFetch('/api/v1/projects/p1/logo');
+     expect([logo.status, await logo.json()]).toEqual([404, { error: 'no logo' }]);
+-    const claims = await ipcFetch('/api/v1/projects/p1/claims');
+-    expect([claims.status, claims.headers.get('Content-Type'), await claims.json()]).toEqual([
++    const stats = await ipcFetch('/api/v1/projects/p1/stats');
++    expect([stats.status, stats.headers.get('Content-Type'), await stats.json()]).toEqual([
+       200,
+       'application/json',
+       null,
+     ]);
+   });
+ 
++  describe('a reload (ATM-768)', () => {
++    const reloads = [
++      '/api/v2/workspaces/w/projects',
++      '/api/projects',
++      '/api/v1/projects/p1/tasks?status=todo',
++      '/api/v1/projects/p1/claims',
++      '/p/p1/worktrees.json',
++    ];
++
++    it('gives its command the page’s If-None-Match as `known`, or none', async () => {
++      const known: unknown[] = [];
++      mockIPC((_command, args) => {
++        known.push((args as { known?: string }).known);
++        return { tag: '"t1"', body: {} };
++      });
++      for (const url of reloads) {
++        await ipcFetch(url, { headers: { 'If-None-Match': '"t0"' } });
++        await ipcFetch(url, { headers: new Headers({ 'If-None-Match': '"t0"' }) });
++        await ipcFetch(url);
++      }
++      expect(known).toEqual(reloads.flatMap(() => ['"t0"', '"t0"', undefined]));
++    });
++
++    it('answers its tag as the ETag, and no body as a 304', async () => {
++      let body: unknown = { claims: [] };
++      mockIPC(() => ({ tag: '"c1"', body }));
++      const first = await ipcFetch('/api/v1/projects/p1/claims');
++      expect([first.status, first.headers.get('ETag'), await first.json()]).toEqual([200, '"c1"', { claims: [] }]);
++      body = null;
++      const again = await ipcFetch('/api/v1/projects/p1/claims', { headers: { 'If-None-Match': '"c1"' } });
++      expect([again.ok, again.status, again.headers.get('ETag')]).toEqual([false, 304, '"c1"']);
++    });
++
++    it('through the client: the tag kept as its validator, then unchanged', async () => {
++      const asked: unknown[] = [];
++      mockIPC((_command, args) => {
++        const known = (args as { known?: string }).known;
++        asked.push(known);
++        return known === '"t1"' ? { tag: '"t1"', body: null } : { tag: '"t1"', body: { tasks: [] } };
++      });
++      const first = await fetchFile('/api/v1/projects/p1/tasks', ipcFetch as Fetch);
++      expect(first).toEqual({ unchanged: false, data: { tasks: [] }, validators: { etag: '"t1"' } });
++      const again = await fetchFile('/api/v1/projects/p1/tasks', ipcFetch as Fetch, { etag: '"t1"' });
++      expect(again).toEqual({ unchanged: true });
++      expect(asked).toEqual([undefined, '"t1"']);
++    });
++
++    it('the other commands are asked as they were, without `known`', async () => {
++      const args: unknown[] = [];
++      mockIPC((_command, given) => {
++        args.push(given);
++        return {};
++      });
++      await ipcFetch('/api/v1/projects/p1/documents?path=a.md', { headers: { 'If-None-Match': '"d0"' } });
++      await ipcFetch('/api/v2/workspaces', { headers: { 'If-None-Match': '"w0"' } });
++      expect(args).toEqual([{ workspace: 'default', project: 'p1', path: 'a.md', at: undefined }, {}]);
++    });
++  });
++
+   it('takes its URL as a string, a URL or a Request', async () => {
+     const asked: string[] = [];
+     mockIPC((command) => {

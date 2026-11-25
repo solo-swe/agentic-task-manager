@@ -1,0 +1,879 @@
+diff --git a/crates/atm-docs/src/lib.rs b/crates/atm-docs/src/lib.rs
+index cddb7acf..53a0a9c9 100644
+--- a/crates/atm-docs/src/lib.rs
++++ b/crates/atm-docs/src/lib.rs
+@@ -13,6 +13,9 @@ use atm_common::{Error, Result};
+ use atm_vcs::GitVcs;
+ use serde_json::{Value, json};
+ 
++mod listing;
++pub use listing::{LIST_MAX, document_title, documents_stamp, list_documents};
++
+ const DOC_MAX_PATH: usize = 512;
+ /// A document, code or text.
+ const DOC_MAX_BYTES: u64 = 1_000_000;
+diff --git a/crates/atm-docs/src/listing.rs b/crates/atm-docs/src/listing.rs
+new file mode 100644
+index 00000000..f444877c
+--- /dev/null
++++ b/crates/atm-docs/src/listing.rs
+@@ -0,0 +1,265 @@
++//! A project's documents for the Documents page (ATM-764, docs/documents-design.md §2–§3): its Markdown files where
++//! git has them (tracked, or untracked and not ignored), those the viewer refuses left out, each submodule's by its
++//! own repository's rules; each with its title, size, time and whether git tracks it. At most [`LIST_MAX`], the first
++//! by path; a query matches titles and paths before that cut, so every document can be found.
++
++use atm_common::time::format_iso;
++use atm_common::{Error, Result};
++use atm_vcs::GitVcs;
++use serde_json::{Value, json};
++
++use crate::{document_kind, document_path};
++
++/// The most documents a listing gives (Hakan, CR-137); past that, how many more.
++pub const LIST_MAX: usize = 500;
++/// The longest query, in characters.
++const QUERY_MAX: usize = 200;
++/// How much of a document its title is looked for in.
++const TITLE_BYTES: usize = 8192;
++/// The longest title, in characters.
++const TITLE_MAX: usize = 200;
++/// How deep submodules inside submodules are followed: past it, a submodule is listed without its documents.
++const SUBMODULE_DEPTH: usize = 8;
++
++/// A document found: its path from the project's root, the repository it is in and its path there, whether that
++/// repository tracks it, and its `(size, nanosecond mtime)`.
++struct Found {
++    path: String,
++    vcs: GitVcs,
++    inside: String,
++    tracked: bool,
++    stamp: (u64, u128),
++}
++
++/// What a walk of the project's repositories found: its documents (by path), its submodules (nested ones too), and
++/// each repository's `HEAD`, the project's first.
++struct Walk {
++    documents: Vec<Found>,
++    submodules: Vec<Value>,
++    heads: Vec<String>,
++}
++
++/// The documents of the repository `vcs` (shown under `prefix`, the submodule's folder from the project's root), and
++/// its submodules', down to [`SUBMODULE_DEPTH`].
++fn walk(vcs: &GitVcs, prefix: &str, depth: usize, into: &mut Walk) {
++    let Some(listing) = vcs.listed_files() else {
++        return;
++    };
++    into.heads.push(vcs.head().unwrap_or_default());
++    for file in listing.files {
++        let path = format!("{prefix}{}", file.path);
++        // Markdown only (§2), and nothing the viewer refuses: git's and atm's folders, environment and key files
++        if document_kind(&path).0 != "markdown" || document_path(&path).is_err() {
++            continue;
++        }
++        // A regular file reached through no symbolic link, as the viewer reads it
++        let Some(stamp) = vcs.file_stamp(&file.path) else {
++            continue;
++        };
++        into.documents.push(Found {
++            path,
++            vcs: vcs.clone(),
++            inside: file.path,
++            tracked: file.tracked,
++            stamp,
++        });
++    }
++    for sub in listing.submodules {
++        let path = format!("{prefix}{}", sub.path);
++        into.submodules
++            .push(json!({"path": path, "checked_out": sub.checked_out}));
++        if sub.checked_out
++            && depth < SUBMODULE_DEPTH
++            && let Some(inner) = vcs.submodule_at(&sub.path)
++        {
++            walk(&inner, &format!("{path}/"), depth + 1, into);
++        }
++    }
++}
++
++/// The project's documents and submodules, by path; none without git.
++fn found(vcs: Option<&GitVcs>) -> Option<Walk> {
++    let vcs = vcs.filter(|v| v.in_repository())?;
++    let mut into = Walk {
++        documents: Vec::new(),
++        submodules: Vec::new(),
++        heads: Vec::new(),
++    };
++    walk(vcs, "", 0, &mut into);
++    into.documents.sort_by(|a, b| a.path.cmp(&b.path));
++    into.documents.dedup_by(|a, b| a.path == b.path);
++    into.submodules
++        .sort_by(|a, b| a["path"].as_str().cmp(&b["path"].as_str()));
++    Some(into)
++}
++
++/// A document's title (§3): its first level-one heading in its first 8 KB, an ATX one (`# Title`) or a Setext one
++/// (`Title` over `===`), outside front matter and fenced code; else its file's name without `.md` or `.markdown`.
++#[must_use]
++pub fn document_title(start: &[u8], path: &str) -> String {
++    let text = String::from_utf8_lossy(start);
++    let mut lines = text.lines().peekable();
++    // Front matter: `---` on the first line, to the next `---` or `...`
++    if lines.peek().is_some_and(|l| l.trim_end() == "---") {
++        lines.next();
++        for line in lines.by_ref() {
++            if matches!(line.trim_end(), "---" | "...") {
++                break;
++            }
++        }
++    }
++    let mut fence: Option<&str> = None;
++    let mut previous: Option<&str> = None;
++    for line in lines {
++        let indent = line.len() - line.trim_start_matches(' ').len();
++        let body = if indent <= 3 { &line[indent..] } else { "" };
++        if let Some(open) = fence {
++            if body.trim_end().starts_with(open) {
++                fence = None;
++            }
++            previous = None;
++            continue;
++        }
++        if body.starts_with("```") || body.starts_with("~~~") {
++            fence = Some(&body[..3]);
++            previous = None;
++            continue;
++        }
++        if let Some(heading) = atx_title(body) {
++            return capped(heading);
++        }
++        let underline = body.trim_end();
++        if let Some(above) = previous
++            && !underline.is_empty()
++            && underline.chars().all(|c| c == '=')
++        {
++            return capped(above.trim());
++        }
++        previous = (!body.trim().is_empty() && indent <= 3).then_some(line);
++    }
++    let name = path.rsplit('/').next().unwrap_or(path);
++    let lower = name.to_ascii_lowercase();
++    let cut = [".markdown", ".md"]
++        .iter()
++        .find(|e| lower.ends_with(*e))
++        .map_or(name.len(), |e| name.len() - e.len());
++    capped(&name[..cut])
++}
++
++/// A level-one ATX heading's text (`# Title`, `# Title #`), or none for any other line.
++fn atx_title(body: &str) -> Option<&str> {
++    let rest = body.strip_prefix('#')?;
++    if !(rest.is_empty() || rest.starts_with([' ', '\t'])) {
++        return None;
++    }
++    let text = rest.trim();
++    // A closing sequence of #s after a space is not the title's
++    let closed = text.trim_end_matches('#');
++    let text = if closed.len() < text.len() && (closed.is_empty() || closed.ends_with([' ', '\t']))
++    {
++        closed.trim_end()
++    } else {
++        text
++    };
++    (!text.is_empty()).then_some(text)
++}
++
++/// `text` at most [`TITLE_MAX`] characters, cut with `…`.
++fn capped(text: &str) -> String {
++    if text.chars().count() <= TITLE_MAX {
++        return text.to_string();
++    }
++    text.chars().take(TITLE_MAX - 1).collect::<String>() + "…"
++}
++
++/// Whether every word of `query` (lowercased) is in the document's title or path.
++fn matches(words: &[String], title: &str, path: &str) -> bool {
++    let (title, path) = (title.to_lowercase(), path.to_lowercase());
++    words
++        .iter()
++        .all(|w| title.contains(w.as_str()) || path.contains(w.as_str()))
++}
++
++/// The project's documents (docs/documents-design.md §2–§3, §5): `{git, documents: [{path, title, bytes,
++/// modified_at, tracked}], submodules: [{path, checked_out}], more}`, the documents by path, at most [`LIST_MAX`], and
++/// `more` those past it. `query` (every word in a document's title or path, any case) is matched before the cut.
++/// Without git: no documents (`git` false), the page says why.
++///
++/// # Errors
++/// `Invalid` for a query of more than 200 characters.
++pub fn list_documents(vcs: Option<&GitVcs>, query: &str) -> Result<Value> {
++    let query = query.trim();
++    if query.chars().count() > QUERY_MAX {
++        return Err(Error::Invalid(format!(
++            "a search of at most {QUERY_MAX} characters"
++        )));
++    }
++    let Some(walk) = found(vcs) else {
++        return Ok(json!({"git": false, "documents": [], "submodules": [], "more": 0}));
++    };
++    let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
++    let title = |f: &Found| {
++        let start = f
++            .vcs
++            .read_file_start(&f.inside, TITLE_BYTES)
++            .unwrap_or_default();
++        document_title(&start, &f.path)
++    };
++    // Without a query only the documents listed are read for their titles; with one, every document is
++    let mut shown: Vec<(Found, String)> = Vec::new();
++    let mut total = 0;
++    for document in walk.documents {
++        if words.is_empty() {
++            total += 1;
++            if shown.len() < LIST_MAX {
++                let t = title(&document);
++                shown.push((document, t));
++            }
++            continue;
++        }
++        let t = title(&document);
++        if matches(&words, &t, &document.path) {
++            total += 1;
++            if shown.len() < LIST_MAX {
++                shown.push((document, t));
++            }
++        }
++    }
++    let documents: Vec<Value> = shown
++        .iter()
++        .map(|(f, title)| {
++            json!({
++                "path": f.path,
++                "title": title,
++                "bytes": f.stamp.0,
++                "modified_at": format_iso(i64::try_from(f.stamp.1 / 1_000_000_000).unwrap_or(i64::MAX)),
++                "tracked": f.tracked,
++            })
++        })
++        .collect();
++    Ok(json!({
++        "git": true,
++        "more": total - documents.len(),
++        "documents": documents,
++        "submodules": walk.submodules,
++    }))
++}
++
++/// What a listing is made from, cheap to read, for its `ETag` (§3): each repository's `HEAD`, and every document's
++/// path, size and time, the submodules' and the untracked ones too. The same text while none of them changes; none
++/// without git.
++#[must_use]
++pub fn documents_stamp(vcs: Option<&GitVcs>) -> Option<String> {
++    let walk = found(vcs)?;
++    let mut lines = vec![walk.heads.join(" ")];
++    lines.extend(
++        walk.documents
++            .iter()
++            .map(|f| format!("{}\t{}\t{}\t{}", f.path, f.stamp.0, f.stamp.1, f.tracked)),
++    );
++    lines.extend(walk.submodules.iter().map(Value::to_string));
++    Some(lines.join("\n"))
++}
++
++#[cfg(test)]
++mod tests;
+diff --git a/crates/atm-docs/src/listing/tests.rs b/crates/atm-docs/src/listing/tests.rs
+new file mode 100644
+index 00000000..e4dc56be
+--- /dev/null
++++ b/crates/atm-docs/src/listing/tests.rs
+@@ -0,0 +1,325 @@
++//! The listing's rules (ATM-764, docs/documents-design.md §2–§3): which files, their titles, submodules, the cap and
++//! the query, without git.
++
++use super::*;
++
++/// A throwaway repository, empty until a test writes to it.
++struct Repo(std::path::PathBuf);
++
++impl Repo {
++    fn new() -> Self {
++        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
++        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
++        let dir = std::env::temp_dir().join(format!("atm-docs-listing-{}-{n}", std::process::id()));
++        let _ = std::fs::remove_dir_all(&dir);
++        std::fs::create_dir_all(&dir).unwrap();
++        let repo = Self(dir);
++        repo.git(&["init", "-q"]);
++        repo.git(&["config", "user.email", "t@example.invalid"]);
++        repo.git(&["config", "user.name", "t"]);
++        repo
++    }
++
++    fn git(&self, args: &[&str]) {
++        assert!(atm_fs::git::git(args, &self.0).is_some(), "git {args:?}");
++    }
++
++    fn write(&self, file: &str, text: &str) {
++        let path = self.0.join(file);
++        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
++        std::fs::write(path, text).unwrap();
++    }
++
++    fn commit(&self, files: &[(&str, &str)]) {
++        for (file, text) in files {
++            self.write(file, text);
++        }
++        self.git(&["add", "-A"]);
++        self.git(&["commit", "-q", "-m", "files"]);
++    }
++
++    /// `sub` added as a submodule at `folder`, and committed
++    fn add_submodule(&self, sub: &Repo, folder: &str) {
++        let source = sub.0.to_string_lossy().into_owned();
++        self.git(&[
++            "-c",
++            "protocol.file.allow=always",
++            "submodule",
++            "add",
++            "-q",
++            &source,
++            folder,
++        ]);
++        self.git(&["commit", "-q", "-m", "add submodule"]);
++    }
++
++    fn vcs(&self) -> GitVcs {
++        GitVcs::new(&self.0)
++    }
++
++    fn list(&self, query: &str) -> Value {
++        list_documents(Some(&self.vcs()), query).unwrap()
++    }
++}
++
++impl Drop for Repo {
++    fn drop(&mut self) {
++        let _ = std::fs::remove_dir_all(&self.0);
++    }
++}
++
++/// The paths a listing gives, in its order
++fn paths(listing: &Value) -> Vec<String> {
++    listing["documents"]
++        .as_array()
++        .unwrap()
++        .iter()
++        .map(|d| d["path"].as_str().unwrap().to_string())
++        .collect()
++}
++
++#[test]
++fn a_title_is_the_first_level_one_heading_atx_or_setext_else_the_files_name() {
++    let cases: &[(&str, &str)] = &[
++        ("# The design\n\ntext", "The design"),
++        ("  #   Spaced out  \n", "Spaced out"),
++        ("# Closed #\n", "Closed"),
++        ("# Ends in C#\n", "Ends in C#"),
++        ("Intro line\n\nThe title\n=====\n", "The title"),
++        ("The title\n===  \n", "The title"),
++        // Only level one: a level-two heading, a Setext `---` and a `#hashtag` aren't titles
++        ("## Not it\n\nSub\n---\n#tag\n", "notes"),
++        // Front matter first, then the heading
++        ("---\ntitle: x\n# not a heading\n---\n# After\n", "After"),
++        // A heading in fenced code isn't the document's
++        ("```sh\n# a comment\n```\n# Real\n", "Real"),
++        ("~~~\n# a comment\n~~~\n\n# Real\n", "Real"),
++        // Indented four spaces: code, not a heading
++        ("    # code\n", "notes"),
++        ("#\n# \n", "notes"),
++        ("", "notes"),
++    ];
++    for (text, title) in cases {
++        assert_eq!(
++            document_title(text.as_bytes(), "docs/notes.md"),
++            *title,
++            "{text:?}"
++        );
++    }
++    assert_eq!(document_title(b"", "README.markdown"), "README");
++    assert_eq!(document_title(b"", "a.b.MD"), "a.b");
++    // Capped
++    let long = format!("# {}\n", "x".repeat(300));
++    let title = document_title(long.as_bytes(), "a.md");
++    assert_eq!(title.chars().count(), 200);
++    assert!(title.ends_with('…'));
++}
++
++#[test]
++fn the_documents_are_the_markdown_files_git_tracks_or_has_untracked_and_not_ignored() {
++    let repo = Repo::new();
++    repo.commit(&[
++        ("README.md", "# The project\n"),
++        ("docs/design.markdown", "Design\n===\n"),
++        ("src/main.rs", "fn main() {}\n"),
++        (".gitignore", "build/\n*.tmp.md\n"),
++        (".github/CONTRIBUTING.md", "# Contributing\n"),
++    ]);
++    repo.write("docs/draft.md", "# A draft\n");
++    repo.write("docs/scratch.tmp.md", "# Ignored\n");
++    repo.write("build/out.md", "# Ignored too\n");
++    repo.write("notes.txt", "not markdown\n");
++    let listing = repo.list("");
++    assert_eq!(listing["git"], json!(true));
++    assert_eq!(
++        paths(&listing),
++        [
++            ".github/CONTRIBUTING.md",
++            "README.md",
++            "docs/design.markdown",
++            "docs/draft.md"
++        ]
++    );
++    let entry = |path: &str| {
++        listing["documents"]
++            .as_array()
++            .unwrap()
++            .iter()
++            .find(|d| d["path"] == path)
++            .unwrap()
++            .clone()
++    };
++    let readme = entry("README.md");
++    assert_eq!(readme["title"], json!("The project"));
++    assert_eq!(readme["tracked"], json!(true));
++    assert_eq!(readme["bytes"], json!(14));
++    assert!(readme["modified_at"].as_str().unwrap().ends_with('Z'));
++    assert_eq!(entry("docs/design.markdown")["title"], json!("Design"));
++    assert_eq!(entry("docs/draft.md")["tracked"], json!(false));
++    assert_eq!(listing["more"], json!(0));
++    assert_eq!(listing["submodules"], json!([]));
++}
++
++#[test]
++fn what_the_viewer_refuses_is_not_listed_nor_a_symlink() {
++    let repo = Repo::new();
++    repo.commit(&[
++        ("a.md", "# A\n"),
++        (".agentic-task-manager/notes.md", "# atm's\n"),
++    ]);
++    // An environment file named like a document, and a link to a document
++    repo.write(".env.md", "# not env\n");
++    #[cfg(unix)]
++    std::os::unix::fs::symlink(repo.0.join("a.md"), repo.0.join("link.md")).unwrap();
++    let listing = repo.list("");
++    let listed = paths(&listing);
++    assert!(listed.contains(&"a.md".to_string()));
++    assert!(
++        !listed
++            .iter()
++            .any(|p| p.starts_with(".agentic-task-manager/")),
++        "{listed:?}"
++    );
++    assert!(!listed.contains(&"link.md".to_string()), "{listed:?}");
++    // Each one listed is one the viewer reads
++    for path in &listed {
++        assert!(crate::document_path(path).is_ok(), "{path}");
++    }
++}
++
++#[test]
++fn a_submodules_documents_are_listed_from_its_own_repository_nested_ones_too_one_not_checked_out_says_so()
++ {
++    let inner = Repo::new();
++    inner.commit(&[("deep.md", "# Deep\n")]);
++    let sub = Repo::new();
++    sub.commit(&[
++        ("guide.md", "# The guide\n"),
++        (".gitignore", "*.draft.md\n"),
++    ]);
++    sub.add_submodule(&inner, "inner");
++    let project = Repo::new();
++    project.commit(&[("README.md", "# Project\n")]);
++    project.add_submodule(&sub, "lib");
++    project.git(&[
++        "-c",
++        "protocol.file.allow=always",
++        "submodule",
++        "update",
++        "--init",
++        "--recursive",
++        "-q",
++    ]);
++    // Untracked in the submodule: listed by its own rules (its ignored one left out)
++    project.write("lib/new.md", "# New in lib\n");
++    project.write("lib/x.draft.md", "# Ignored in lib\n");
++    let listing = project.list("");
++    assert_eq!(
++        paths(&listing),
++        [
++            "README.md",
++            "lib/guide.md",
++            "lib/inner/deep.md",
++            "lib/new.md"
++        ]
++    );
++    let new = &listing["documents"][3];
++    assert_eq!(
++        (new["title"].clone(), new["tracked"].clone()),
++        (json!("New in lib"), json!(false))
++    );
++    assert_eq!(
++        listing["submodules"],
++        json!([{"path": "lib", "checked_out": true}, {"path": "lib/inner", "checked_out": true}])
++    );
++
++    // Not checked out: listed as such, with none of its documents
++    let other = Repo::new();
++    other.commit(&[("README.md", "# Other\n")]);
++    other.add_submodule(&sub, "lib");
++    other.git(&["submodule", "deinit", "-q", "-f", "lib"]);
++    let listing = other.list("");
++    assert_eq!(paths(&listing), ["README.md"]);
++    assert_eq!(
++        listing["submodules"],
++        json!([{"path": "lib", "checked_out": false}])
++    );
++}
++
++#[test]
++fn at_most_500_by_path_and_how_many_more_the_query_matching_before_the_cut() {
++    let repo = Repo::new();
++    let files: Vec<(String, String)> = (0..503)
++        .map(|i| (format!("d/{i:04}.md"), format!("# Note {i}\n")))
++        .chain([("z/last.md".to_string(), "# The needle\n".to_string())])
++        .collect();
++    let refs: Vec<(&str, &str)> = files
++        .iter()
++        .map(|(p, t)| (p.as_str(), t.as_str()))
++        .collect();
++    repo.commit(&refs);
++    let listing = repo.list("");
++    let listed = paths(&listing);
++    assert_eq!(listed.len(), LIST_MAX);
++    assert_eq!(
++        (listed[0].as_str(), listed[499].as_str()),
++        ("d/0000.md", "d/0499.md")
++    );
++    assert_eq!(listing["more"], json!(4));
++    // The last by path, past the cut: found by its title, any case, and by its path
++    let found = repo.list("NEEDLE");
++    assert_eq!(paths(&found), ["z/last.md"]);
++    assert_eq!(found["more"], json!(0));
++    assert_eq!(paths(&repo.list("z/ the")), ["z/last.md"]);
++    // Every word must be there
++    assert_eq!(paths(&repo.list("needle missing")), Vec::<String>::new());
++    // Many matches: cut too
++    assert_eq!(repo.list("note")["more"], json!(3));
++}
++
++#[test]
++fn a_query_longer_than_200_characters_is_refused() {
++    let repo = Repo::new();
++    assert!(matches!(
++        list_documents(Some(&repo.vcs()), &"x".repeat(201)),
++        Err(Error::Invalid(_))
++    ));
++    assert!(list_documents(Some(&repo.vcs()), &"x".repeat(200)).is_ok());
++}
++
++#[test]
++fn without_git_there_are_no_documents_and_no_stamp() {
++    let dir = std::env::temp_dir().join(format!("atm-docs-listing-nogit-{}", std::process::id()));
++    std::fs::create_dir_all(&dir).unwrap();
++    std::fs::write(dir.join("a.md"), "# A\n").unwrap();
++    let vcs = GitVcs::new(&dir);
++    let none = json!({"git": false, "documents": [], "submodules": [], "more": 0});
++    // A folder outside any repository (the temp dir may itself be inside one: then skip)
++    if !vcs.in_repository() {
++        assert_eq!(list_documents(Some(&vcs), "").unwrap(), none);
++        assert_eq!(documents_stamp(Some(&vcs)), None);
++    }
++    assert_eq!(list_documents(None, "").unwrap(), none);
++    assert_eq!(documents_stamp(None), None);
++    let _ = std::fs::remove_dir_all(&dir);
++}
++
++#[test]
++fn the_stamp_moves_with_a_document_changed_added_or_committed_and_only_then() {
++    let repo = Repo::new();
++    repo.commit(&[("a.md", "# A\n"), ("code.rs", "")]);
++    let vcs = repo.vcs();
++    let first = documents_stamp(Some(&vcs)).unwrap();
++    assert_eq!(documents_stamp(Some(&vcs)).unwrap(), first);
++    // Not a document: the same
++    repo.write("code.rs", "fn x() {}\n");
++    assert_eq!(documents_stamp(Some(&vcs)).unwrap(), first);
++    repo.write("b.md", "# B\n");
++    let added = documents_stamp(Some(&vcs)).unwrap();
++    assert_ne!(added, first);
++    repo.git(&["add", "b.md"]);
++    let staged = documents_stamp(Some(&vcs)).unwrap();
++    assert_ne!(staged, added, "tracked now");
++    repo.git(&["commit", "-q", "-m", "b"]);
++    assert_ne!(documents_stamp(Some(&vcs)).unwrap(), staged, "a new HEAD");
++}
+diff --git a/crates/atm-lib/src/workspaces.rs b/crates/atm-lib/src/workspaces.rs
+index 6db84422..bb6a2957 100644
+--- a/crates/atm-lib/src/workspaces.rs
++++ b/crates/atm-lib/src/workspaces.rs
+@@ -412,6 +412,25 @@ impl Member {
+         read_document(self.project()?.vcs().as_ref(), path)
+     }
+ 
++    /// Its documents, for the Documents page (ATM-764, docs/documents-design.md §2–§3): its Markdown files where git
++    /// has them, its submodules' too, those `query` names (titles and paths), at most 500.
++    ///
++    /// # Errors
++    /// A project that can't be opened; a query longer than 200 characters.
++    pub fn documents(&self, query: &str) -> Result<Value> {
++        crate::documents::list_documents(self.project()?.vcs().as_ref(), query)
++    }
++
++    /// What its documents' listing is made from, for its `ETag` (none without git): the same while it is.
++    ///
++    /// # Errors
++    /// A project that can't be opened.
++    pub fn documents_stamp(&self) -> Result<Option<String>> {
++        Ok(crate::documents::documents_stamp(
++            self.project()?.vcs().as_ref(),
++        ))
++    }
++
+     /// The document at `path` as the commit or tree `revision` has it (a review's round's side).
+     ///
+     /// # Errors
+@@ -1051,6 +1070,36 @@ mod tests {
+         std::fs::remove_dir_all(&home).unwrap();
+     }
+ 
++    /// ATM-764: a member's documents are its working copy's, through atm-docs, and its stamp moves with them
++    #[test]
++    fn a_members_documents_are_its_working_copys_markdown_with_a_stamp() {
++        let home = state("documents");
++        let project = home.join("project");
++        let folder = project.join(atm_common::TASK_DIR);
++        std::fs::create_dir_all(&folder).unwrap();
++        std::fs::write(
++            folder.join("tasks.json"),
++            r#"{"meta": {"id": "one"}, "tasks": []}"#,
++        )
++        .unwrap();
++        std::fs::write(project.join("README.md"), "# The project\n").unwrap();
++        assert!(atm_db::git::git(&["init", "-q"], &project).is_some());
++        let workspaces = Workspaces::at(&home);
++        let workspace = workspaces.default_workspace();
++        workspace
++            .add_project(Some(&project.to_string_lossy()), &home)
++            .unwrap();
++        let member = workspace.member("one").unwrap();
++        let listing = member.documents("").unwrap();
++        assert_eq!(listing["documents"][0]["path"], json!("README.md"));
++        assert_eq!(listing["documents"][0]["title"], json!("The project"));
++        assert_eq!(listing["documents"][0]["tracked"], json!(false));
++        assert!(member.documents(&"x".repeat(201)).is_err());
++        let stamp = member.documents_stamp().unwrap().unwrap();
++        std::fs::write(project.join("NEW.md"), "# New\n").unwrap();
++        assert_ne!(member.documents_stamp().unwrap().unwrap(), stamp);
++    }
++
+     /// ATM-767: through the real watcher, a lease renewed (the claims store rewritten, only the lease moved) tells a
+     /// project's subscription nothing; another holder tells it
+     #[test]
+diff --git a/crates/atm-vcs/src/files.rs b/crates/atm-vcs/src/files.rs
+index 1e665ece..26eb4399 100644
+--- a/crates/atm-vcs/src/files.rs
++++ b/crates/atm-vcs/src/files.rs
+@@ -46,6 +46,17 @@ impl GitVcs {
+             .ok_or_else(|| Error::NotFound(format!("{relative}: no such file")))
+     }
+ 
++    /// The first `limit` bytes of a file of the working copy (fewer when it is shorter), as [`GitVcs::read_file`] reads
++    /// it: a listing's titles read no more of a large file (ATM-764). None when it isn't one atm reads.
++    #[must_use]
++    pub fn read_file_start(&self, relative: &str, limit: usize) -> Option<Vec<u8>> {
++        use std::io::Read as _;
++        let file = std::fs::File::open(self.file(relative)?).ok()?;
++        let mut start = Vec::with_capacity(limit.min(64 * 1024));
++        file.take(limit as u64).read_to_end(&mut start).ok()?;
++        Some(start)
++    }
++
+     /// A regular file as `commit` (a SHA, as [`GitVcs::resolve`] gives it) has it: its size and its blob; none when the
+     /// commit has no regular file there (no entry, a symlink, a submodule, a folder).
+     #[must_use]
+@@ -279,4 +290,77 @@ impl GitVcs {
+             .and_then(|r| atm_common::repository::repository_url(&r));
+         Some(serde_json::json!({"path": folder, "commit": sub.head(), "repository": repository}))
+     }
++
++    /// The working copy's files, as git has them (ATM-764, docs/documents-design.md §2): those it tracks (`ls-files`)
++    /// and those untracked it doesn't ignore (`ls-files --others --exclude-standard`, by this repository's own rules),
++    /// each by its path from this root; and the submodules it records (mode 160000), each saying whether it is checked
++    /// out here (its folder has a checkout of its own). Nothing inside a submodule: list it from its own repository
++    /// ([`GitVcs::submodule_at`]). None outside a repository or when git can't say.
++    #[must_use]
++    pub fn listed_files(&self) -> Option<Listing> {
++        if !self.in_repository() {
++            return None;
++        }
++        // NUL-separated, so no name is quoted or split; literal pathspecs, though none is given (I7)
++        let tracked = run(&[LITERAL, "ls-files", "-z", "--stage"], &self.root)
++            .filter(|o| o.status.success())?;
++        let untracked = run(
++            &[LITERAL, "ls-files", "-z", "--others", "--exclude-standard"],
++            &self.root,
++        )
++        .filter(|o| o.status.success())?;
++        let mut listing = Listing::default();
++        for entry in String::from_utf8_lossy(&tracked.stdout).split('\0') {
++            // `<mode> <object> <stage>\t<path>`; a conflicted file is listed once per stage
++            let Some((meta, path)) = entry.split_once('\t') else {
++                continue;
++            };
++            if meta.starts_with("160000 ") {
++                let checked_out =
++                    std::fs::symlink_metadata(self.root.join(path).join(".git")).is_ok();
++                listing.submodules.push(ListedSubmodule {
++                    path: path.to_string(),
++                    checked_out,
++                });
++            } else if listing.files.last().is_none_or(|f| f.path != path) {
++                listing.files.push(ListedFile {
++                    path: path.to_string(),
++                    tracked: true,
++                });
++            }
++        }
++        for path in String::from_utf8_lossy(&untracked.stdout).split('\0') {
++            // A folder (`dir/`) is a repository of its own that this one doesn't record: not its files
++            if path.is_empty() || path.ends_with('/') {
++                continue;
++            }
++            listing.files.push(ListedFile {
++                path: path.to_string(),
++                tracked: false,
++            });
++        }
++        Some(listing)
++    }
++}
++
++/// The working copy's files and submodules ([`GitVcs::listed_files`]).
++#[derive(Debug, Default, Clone, PartialEq, Eq)]
++pub struct Listing {
++    pub files: Vec<ListedFile>,
++    pub submodules: Vec<ListedSubmodule>,
++}
++
++/// A file git tracks, or has untracked and doesn't ignore: its path from the repository's root.
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct ListedFile {
++    pub path: String,
++    pub tracked: bool,
++}
++
++/// A submodule the repository records: its folder, and whether it is checked out (`git submodule status` says `-`
++/// for one that isn't).
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct ListedSubmodule {
++    pub path: String,
++    pub checked_out: bool,
+ }
+diff --git a/crates/atm-vcs/src/lib.rs b/crates/atm-vcs/src/lib.rs
+index 65496d1e..7f1a58e5 100644
+--- a/crates/atm-vcs/src/lib.rs
++++ b/crates/atm-vcs/src/lib.rs
+@@ -16,6 +16,7 @@ mod commit;
+ pub mod diff;
+ pub use diff::{ChangedFile, Diff};
+ mod files;
++pub use files::{ListedFile, ListedSubmodule, Listing};
+ mod git;
+ use git::{ask, run, run_fed, step};
+ mod history;
+diff --git a/crates/atm-vcs/src/tests/files.rs b/crates/atm-vcs/src/tests/files.rs
+index 66e4b436..ce148e21 100644
+--- a/crates/atm-vcs/src/tests/files.rs
++++ b/crates/atm-vcs/src/tests/files.rs
+@@ -241,3 +241,79 @@ fn a_file_in_a_submodule_is_answered_by_the_submodules_own_repository() {
+     write(&nested, "b.txt", "b");
+     assert_eq!(vcs.submodule_of("nested/b.txt"), None);
+ }
++
++/// ATM-764: the working copy's files as git has them, for the Documents page
++#[test]
++fn the_listed_files_are_the_tracked_and_the_untracked_not_ignored_and_the_submodules_recorded() {
++    let dir = scratch();
++    let sub = init(&dir.0.join("sub-origin"));
++    write(&sub, "a.md", "a");
++    commit_all(&sub, "sub");
++    let vcs = init(&dir.0.join("repo"));
++    write(&vcs, ".gitignore", "*.log\n");
++    write(&vcs, "docs/a b.md", "spaced");
++    write(&vcs, "ünï.md", "unicode");
++    commit_all(&vcs, "first");
++    git(
++        &vcs.root,
++        &[
++            "-c",
++            "protocol.file.allow=always",
++            "submodule",
++            "--quiet",
++            "add",
++            "../sub-origin",
++            "lib",
++        ],
++    );
++    commit_all(&vcs, "the submodule");
++    write(&vcs, "new.md", "n");
++    write(&vcs, "out.log", "ignored");
++    // A repository of its own that this one doesn't record: neither its files nor it
++    let nested = init(&dir.0.join("repo/nested"));
++    write(&nested, "b.md", "b");
++    let listing = vcs.listed_files().unwrap();
++    let files: Vec<(&str, bool)> = listing
++        .files
++        .iter()
++        .map(|f| (f.path.as_str(), f.tracked))
++        .collect();
++    assert_eq!(
++        files,
++        [
++            (".gitignore", true),
++            (".gitmodules", true),
++            ("docs/a b.md", true),
++            ("ünï.md", true),
++            ("new.md", false)
++        ]
++    );
++    assert_eq!(
++        listing.submodules,
++        [crate::ListedSubmodule {
++            path: "lib".into(),
++            checked_out: true
++        }]
++    );
++    // From the submodule's own repository: its files
++    let inner = vcs.submodule_at("lib").unwrap().listed_files().unwrap();
++    assert_eq!(
++        inner.files,
++        [crate::ListedFile {
++            path: "a.md".into(),
++            tracked: true
++        }]
++    );
++    // Not checked out
++    git(&vcs.root, &["submodule", "deinit", "-q", "-f", "lib"]);
++    assert!(!vcs.listed_files().unwrap().submodules[0].checked_out);
++    // The start of a file, no more
++    assert_eq!(vcs.read_file_start("docs/a b.md", 3).unwrap(), b"spa");
++    assert_eq!(vcs.read_file_start("docs/a b.md", 100).unwrap(), b"spaced");
++    assert_eq!(vcs.read_file_start("missing.md", 3), None);
++    // Outside a repository: nothing
++    assert_eq!(
++        crate::GitVcs::new(&dir.0.join("sub-origin/..")).listed_files(),
++        None
++    );
++}

@@ -1,0 +1,311 @@
+diff --git a/dashboard/src/lib/api/http.ts b/dashboard/src/lib/api/http.ts
+index e245bcfc..a1f2e0e6 100644
+--- a/dashboard/src/lib/api/http.ts
++++ b/dashboard/src/lib/api/http.ts
+@@ -147,7 +147,9 @@ export interface Validators {
+   lastModified?: string;
+ }
+ 
+-export type FileResult = { unchanged: true } | { unchanged: false; text: string; validators: Validators };
++/** A file's answer: unchanged, or its JSON parsed (`data`), as the response gives it: in the app the command's answer
++ * itself, never turned back into text (ATM-769) */
++export type FileResult = { unchanged: true } | { unchanged: false; data: unknown; validators: Validators };
+ 
+ /**
+  * Fetches a URL from the server (D-5.1). With the validators of the last load, the request is conditional
+@@ -159,21 +161,21 @@ export async function fetchFile(
+   url: string,
+   fetchFn: Fetch,
+   since?: Validators,
+-  missing?: string,
++  missing?: unknown,
+ ): Promise<FileResult> {
+   const headers: Record<string, string> = {};
+   if (since?.etag) headers['If-None-Match'] = since.etag;
+   if (since?.lastModified) headers['If-Modified-Since'] = since.lastModified;
+   const resp = await fetchFn(url, { cache: 'no-store', headers });
+   if (resp.status === 304 && since) return { unchanged: true };
+-  if (resp.status === 404 && missing !== undefined) return { unchanged: false, text: missing, validators: {} };
++  if (resp.status === 404 && missing !== undefined) return { unchanged: false, data: missing, validators: {} };
+   if (!resp.ok) throw new Error('HTTP ' + resp.status);
+   const validators: Validators = {};
+   const etag = resp.headers.get('ETag');
+   const lastModified = resp.headers.get('Last-Modified');
+   if (etag) validators.etag = etag;
+   if (lastModified) validators.lastModified = lastModified;
+-  return { unchanged: false, text: await resp.text(), validators };
++  return { unchanged: false, data: await resp.json(), validators };
+ }
+ 
+ /** fetchFile for a project's file (p/<id>/<file>) */
+@@ -182,7 +184,7 @@ export function fetchProjectFile(
+   file: ProjectFile,
+   fetchFn: Fetch,
+   since?: Validators,
+-  missing?: string,
++  missing?: unknown,
+ ): Promise<FileResult> {
+   return fetchFile(projectFileUrl(project, file), fetchFn, since, missing);
+ }
+diff --git a/dashboard/src/lib/api/ipc.ts b/dashboard/src/lib/api/ipc.ts
+index 1ae8238c..0f5a532b 100644
+--- a/dashboard/src/lib/api/ipc.ts
++++ b/dashboard/src/lib/api/ipc.ts
+@@ -1,7 +1,8 @@
+ // The dashboard's IPC transport (T-457): in the atm app, the same requests the browser makes of atm serve are the app's
+ // commands (app/src-tauri/src/commands.rs, ADR-003 §5), which answer what the REST routes do. `ipcFetch` takes the
+ // dashboard's own URLs (api/http.ts builds them: `default`'s v1 routes, another workspace's v2 ones) and answers each
+-// with a `Response`, so everything above the client layer works unchanged. No ETags: the app reads its own files, and
++// as a `Response` (a JSON one handing the command's answer through as it is, ATM-769), so everything above the client
++// layer works unchanged. No ETags: the app reads its own files, and
+ // its live changes come through the subscriptions' channels.
+ import { invoke } from '@tauri-apps/api/core';
+ import { DEFAULT_WORKSPACE } from './workspace';
+@@ -151,8 +152,29 @@ export function callFor(url: string): Call | null {
+   return null;
+ }
+ 
+-const json = (body: unknown, status = 200) =>
+-  new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
++/**
++ * A command's JSON answer as the `Response` the client reads (ATM-769): `json()` hands back `body` itself, as `invoke`
++ * parsed it, never turned back into text to be parsed again (each answer was three copies, two in WebKit's own memory:
++ * docs/memory-growth-analysis.md §3b). The client reads `ok`, `status`, `headers` and `json()`; `text()` is there for
++ * anything else, made only when asked. Each `json()` gives the same object: the client never changes what it reads.
++ */
++export function answered(body: unknown, status = 200): Response {
++  const answer = {
++    ok: status >= 200 && status < 300,
++    status,
++    statusText: '',
++    headers: new Headers({ 'Content-Type': 'application/json' }),
++    redirected: false,
++    type: 'basic',
++    url: '',
++    json: () => Promise.resolve(body),
++    text: () => Promise.resolve(JSON.stringify(body)),
++    clone: () => answered(body, status),
++  };
++  return answer as unknown as Response;
++}
++
++const json = answered;
+ 
+ /** `fetch`'s shape, answered by the app's commands (a request's options, such as its validators, don't apply) */
+ export async function ipcFetch(input: RequestInfo | URL): Promise<Response> {
+diff --git a/dashboard/src/lib/load.ts b/dashboard/src/lib/load.ts
+index 6ceb4618..bac180d2 100644
+--- a/dashboard/src/lib/load.ts
++++ b/dashboard/src/lib/load.ts
+@@ -119,7 +119,7 @@ export type ProjectsResult =
+ export async function loadProjects(fetchFn: Fetch = browserFetch, since?: Validators): Promise<ProjectsResult> {
+   const file = await fetchFile(projectsUrl(), fetchFn, since);
+   if (file.unchanged) return file;
+-  const list = (JSON.parse(file.text) as { projects?: unknown }).projects;
++  const list = (file.data as { projects?: unknown } | null)?.projects;
+   const projects = (Array.isArray(list) ? list : []).filter(isProject).map((p) => ({
+     id: p.id,
+     name: typeof p.name === 'string' && p.name ? p.name : p.id,
+@@ -250,13 +250,14 @@ export async function loadTasks(
+ ): Promise<LoadResult> {
+   const file = await fetchFile(v1TasksUrl(project), fetchFn, since);
+   if (file.unchanged) return file;
+-  const list = JSON.parse(file.text) as TaskViewList;
++  const list = (file.data ?? {}) as TaskViewList;
+   const problems = Array.isArray(list.problems) ? list.problems.filter((p): p is string => typeof p === 'string') : [];
+   return {
+     unchanged: false,
+     loaded: parseTasksFile(
+       { meta: list.meta, tasks: viewedTasks(list) },
+-      typeof list.bytes === 'number' ? list.bytes : file.text.length,
++      // atm says how big its task data is; an answer without it (none is) counts as small
++      typeof list.bytes === 'number' ? list.bytes : 0,
+       problems,
+       isHint(list.archive_hint) ? list.archive_hint : null,
+       {
+@@ -280,7 +281,7 @@ export async function loadArchive(
+   fetchFn: Fetch = browserFetch,
+   since?: Validators,
+ ): Promise<ArchiveResult> {
+-  const file = await fetchFile(`${v1TasksUrl(project)}?archived=true`, fetchFn, since, '{"tasks": []}');
++  const file = await fetchFile(`${v1TasksUrl(project)}?archived=true`, fetchFn, since, { tasks: [] });
+   if (file.unchanged) return file;
+-  return { unchanged: false, tasks: viewedTasks(JSON.parse(file.text) as TaskViewList), validators: file.validators };
++  return { unchanged: false, tasks: viewedTasks((file.data ?? {}) as TaskViewList), validators: file.validators };
+ }
+diff --git a/dashboard/src/lib/worktrees.ts b/dashboard/src/lib/worktrees.ts
+index 72bd5817..7fb26e3e 100644
+--- a/dashboard/src/lib/worktrees.ts
++++ b/dashboard/src/lib/worktrees.ts
+@@ -65,9 +65,9 @@ export async function loadWorktrees(
+   fetchFn: Fetch = browserFetch,
+   since?: Validators,
+ ): Promise<WorktreesResult> {
+-  const file = await fetchProjectFile(project, 'worktrees.json', fetchFn, since, '{"worktrees": []}');
++  const file = await fetchProjectFile(project, 'worktrees.json', fetchFn, since, { worktrees: [] });
+   if (file.unchanged) return file;
+-  const list = (JSON.parse(file.text) as { worktrees?: unknown }).worktrees;
++  const list = (file.data as { worktrees?: unknown } | null)?.worktrees;
+   const worktrees = (Array.isArray(list) ? list : [])
+     .filter((w): w is Worktree => !!w && typeof w === 'object' && typeof (w as Worktree).path === 'string')
+     .map((w) => ({
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index c9ae0f2a..ea323d3a 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -664,13 +664,15 @@ test.describe('the dashboard in the atm app', () => {
+     const card = page.locator('.kanban-card[data-id="T-004"]');
+ 
+     // A card: Open, Open in New Tab, Open in New Window, Copy Link
++    // The link is the board's address as the page has it (with its Sprint filter, once written: T-323), and the task
++    await expect(page).toHaveURL(/[?&]sprint=active(&|$)/);
+     await card.click({ button: 'right' });
+     await expect(items).toHaveText(['Open', 'Open in New Tab', 'Open in New Window', 'Copy Link']);
+     await item('copy-link').click();
+     await expect(menu).toBeHidden();
+     await expect
+       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+-      .toBe(`atm://projects/${tasksServer.projectId}/kanban?task=T-004`);
++      .toBe(`atm://projects/${tasksServer.projectId}/kanban?sprint=active&task=T-004`);
+     await card.click({ button: 'right' });
+     await item('open-tab').click();
+     await expect(tabs).toHaveCount(2);
+diff --git a/dashboard/tests/unit/http.test.ts b/dashboard/tests/unit/http.test.ts
+index 2a4f67dd..f4f59915 100644
+--- a/dashboard/tests/unit/http.test.ts
++++ b/dashboard/tests/unit/http.test.ts
+@@ -49,21 +49,34 @@ describe('fetchFile', () => {
+       ],
+     ];
+     for (const [since, headers] of cases) {
+-      const { fetchFn, calls } = answering(200, 'x');
++      const { fetchFn, calls } = answering(200, '{}');
+       await fetchFile('/a', fetchFn, since);
+       expect(calls[0], JSON.stringify(since)).toEqual(['/a', { cache: 'no-store', headers }]);
+     }
+   });
+ 
+-  it('a 200 is its text, with the validators it came with, and none it didn’t', async () => {
+-    const both = answering(200, 'body', { ETag: '"v2"', 'Last-Modified': 'Thu, 02 Jan 2026 00:00:00 GMT' });
++  it('a 200 is its JSON parsed, with the validators it came with, and none it didn’t', async () => {
++    const both = answering(200, '{"a": [1]}', { ETag: '"v2"', 'Last-Modified': 'Thu, 02 Jan 2026 00:00:00 GMT' });
+     expect(await fetchFile('/a', both.fetchFn)).toEqual({
+       unchanged: false,
+-      text: 'body',
++      data: { a: [1] },
+       validators: { etag: '"v2"', lastModified: 'Thu, 02 Jan 2026 00:00:00 GMT' },
+     });
+-    const none = answering(200, '');
+-    expect(await fetchFile('/a', none.fetchFn)).toEqual({ unchanged: false, text: '', validators: {} });
++    const none = answering(200, 'null');
++    expect(await fetchFile('/a', none.fetchFn)).toEqual({ unchanged: false, data: null, validators: {} });
++  });
++
++  it('a 200 that isn’t JSON rejects (empty too)', async () => {
++    for (const body of ['', 'body', '{'])
++      await expect(fetchFile('/a', answering(200, body).fetchFn), body).rejects.toThrow();
++  });
++
++  it('hands the parsed answer through as the response’s json() gives it, the same object (ATM-769)', async () => {
++    const answer = { tasks: [{ id: 'T-1' }] };
++    const fetchFn = (async () =>
++      ({ ok: true, status: 200, headers: new Headers(), json: async () => answer }) as unknown as Response) as Fetch;
++    const file = await fetchFile('/a', fetchFn);
++    expect(file.unchanged ? null : file.data).toBe(answer);
+   });
+ 
+   it('a 304 after asking is unchanged; without having asked, an error', async () => {
+@@ -72,19 +85,19 @@ describe('fetchFile', () => {
+   });
+ 
+   it('a 404 is `missing` when given (even empty), else an error; any other error is its status', async () => {
+-    expect(await fetchFile('/a', answering(404).fetchFn, undefined, '[]')).toEqual({
++    expect(await fetchFile('/a', answering(404).fetchFn, undefined, [])).toEqual({
+       unchanged: false,
+-      text: '[]',
++      data: [],
+       validators: {},
+     });
+-    expect(await fetchFile('/a', answering(404).fetchFn, undefined, '')).toEqual({
++    expect(await fetchFile('/a', answering(404).fetchFn, undefined, null)).toEqual({
+       unchanged: false,
+-      text: '',
++      data: null,
+       validators: {},
+     });
+     await expect(fetchFile('/a', answering(404).fetchFn)).rejects.toThrow('HTTP 404');
+     for (const status of [400, 403, 413, 500, 503])
+-      await expect(fetchFile('/a', answering(status).fetchFn, undefined, '[]'), String(status)).rejects.toThrow(
++      await expect(fetchFile('/a', answering(status).fetchFn, undefined, []), String(status)).rejects.toThrow(
+         `HTTP ${status}`,
+       );
+   });
+@@ -98,7 +111,7 @@ describe('fetchFile', () => {
+ 
+   it('fetchProjectFile asks for the project’s file in the current workspace', async () => {
+     const { fetchFn, calls } = answering(200, '{}');
+-    await fetchProjectFile('a b', 'claims.json', fetchFn, { etag: '"c"' }, '{}');
++    await fetchProjectFile('a b', 'claims.json', fetchFn, { etag: '"c"' }, {});
+     expect(calls[0]).toEqual(['/p/a%20b/claims.json', { cache: 'no-store', headers: { 'If-None-Match': '"c"' } }]);
+     setApiWorkspace('w');
+     await fetchProjectFile('p1', 'worktrees.json', fetchFn);
+diff --git a/dashboard/tests/unit/ipc.test.ts b/dashboard/tests/unit/ipc.test.ts
+index 295bad75..3bc834a6 100644
+--- a/dashboard/tests/unit/ipc.test.ts
++++ b/dashboard/tests/unit/ipc.test.ts
+@@ -1,6 +1,7 @@
+ import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
+ import { afterEach, describe, expect, it } from 'vitest';
+-import { callFor, ipcFetch } from '../../src/lib/api/ipc';
++import { fetchFile, type Fetch } from '../../src/lib/api/http';
++import { answered, callFor, ipcFetch } from '../../src/lib/api/ipc';
+ 
+ describe('the IPC transport (T-457)', () => {
+   afterEach(() => clearMocks());
+@@ -125,6 +126,46 @@ describe('the IPC transport (T-457)', () => {
+     expect((await ipcFetch('/__atm/whoami')).status).toBe(404);
+   });
+ 
++  it('hands a command’s answer through as it is, never turned back into text (ATM-769)', async () => {
++    const answer = { tasks: [{ task: { id: 'T-1' } }], bytes: 10 };
++    mockIPC(() => answer);
++    const resp = await ipcFetch('/api/v1/projects/p1/tasks');
++    expect([resp.ok, resp.status, resp.headers.get('Content-Type')]).toEqual([true, 200, 'application/json']);
++    expect(await resp.json()).toBe(answer);
++    expect(await resp.json()).toBe(answer);
++    // Through the client's own reading, the same object
++    const file = await fetchFile('/api/v1/projects/p1/tasks', ipcFetch as Fetch);
++    expect(file.unchanged ? null : file.data).toBe(answer);
++    // Text only when asked for it; a clone answers the same
++    expect(await resp.text()).toBe(JSON.stringify(answer));
++    expect(await resp.clone().json()).toBe(answer);
++  });
++
++  it('a JSON answer is ok only for a 2xx status', () => {
++    for (const [status, ok] of [
++      [200, true],
++      [204, true],
++      [299, true],
++      [304, false],
++      [404, false],
++      [500, false],
++    ] as const)
++      expect([answered(null, status).ok, answered(null, status).status], String(status)).toEqual([ok, status]);
++    expect(answered({}).status).toBe(200);
++  });
++
++  it('a command’s error comes through the client as its status', async () => {
++    mockIPC(() => {
++      throw { kind: 'not_found', message: 'no such project' };
++    });
++    await expect(fetchFile('/api/v1/projects/p1/tasks', ipcFetch as Fetch)).rejects.toThrow('HTTP 404');
++    expect(await fetchFile('/api/v1/projects/p1/tasks', ipcFetch as Fetch, undefined, { tasks: [] })).toEqual({
++      unchanged: false,
++      data: { tasks: [] },
++      validators: {},
++    });
++  });
++
+   it('reads a tasks route’s flags as true only for "true" or "1", any case, and its single filters empty as none', () => {
+     const filters = (query: string) => callFor(`/api/v1/projects/p1/tasks${query}`)!.args.filters;
+     expect(filters('')).toEqual({

@@ -1,0 +1,62 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "1aa1d8f3699d7c59a3973f5fb1fa087222680ed8",
+    "head": "c7c4eff501436a23471afc6cf2d2d49cae1f464c"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/App.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/new-tab.ts",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/routes.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/shell/NewTabPage.svelte",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/tab-actions.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/app.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/NewTabPage.component.test.ts",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/app-tabs.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/new-tab.test.ts",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/routes.test.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:ba530ebb",
+  "at": "2026-11-24T16:47:45Z"
+}
