@@ -1449,6 +1449,23 @@ shown, as the user, as before.
   `a_registered_project_is_found_by_its_key_or_id_never_the_one_asking`; the CLI suite's `inbox add --project` scenarios
   (two registered projects: the item and its origin, `--json`, an unregistered project and this one refused, dry run).
 
+**CompMD 0.10.0 (ATM-780).** As 0.9.0 was (above): the four `@compmd/*` packages at 0.10.0 (`@compmd/host` and
+`@compmd/registry` 0.10.0 with them), the crates at `=0.10.0` (`compmd-pack` 0.10.0). No new package or crate. Where it
+differs from 0.9:
+- **What a document may write grows** (the spec's drafts 17 and 18): type in a box, image boxes, gradients in
+  `background` (checked part by part, no `url()`, `var()` or `calc()`: CompMD's F009), shadows, no-code components. All
+  are the processor's, checked by it; nothing reaches the page's CSS but the values it allows.
+- **A document's own fonts** (`md.fonts`: `.woff2` or `.woff` files beside it or in a pack, never a URL). atm's page
+  policies allow no font source, so such a font shows its fallback: nothing is loosened for them.
+- **Inline styles in a component's box:** the frames allowed them already; a host-language component in atm's page is
+  only the packs' (the sandbox still never runs one the text defines), and atm's page already allows inline styles.
+- **A pack's own files** (`pack: true` destinations) are served as the pack's other files are, by the bundle's hosting
+  (`compmd-host`, `tauri-plugin-compmd`): its contract (`GET` only, the bundle's frames and packs, `nosniff`) and I26
+  are unchanged.
+- `minimumReleaseAgeExclude` names the 0.10.0 packages, released yesterday by CompMD's author.
+- **CompMD's guide for agents** is its `spec/llms.txt` at `v0.10.0` (commit `7a06d7e7f071`): the new params and
+  components, nothing about running, fetching or loading; what renders in atm is still `atm-create-tasks`'s list.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

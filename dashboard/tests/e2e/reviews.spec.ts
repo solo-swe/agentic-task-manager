@@ -176,6 +176,11 @@ async function openDiffs(page: Page, tasksServer: TasksServer, rest = '') {
   await openReviews(page, tasksServer, `CR-2${rest}`);
   await page.getByRole('tab', { name: /^Diffs/ }).click();
   await expect(diffOf(page, 'src/a.rs').getByRole('button', { name: 'Line 3', exact: true }).first()).toBeVisible();
+  // CompMD done drawing its code (ATM-780): until then the rows still move, and a test that measures a line first and
+  // points at it after can point at another
+  const view = diffOf(page, 'src/a.rs');
+  await expect(view.locator('.compmd[data-compmd="ready"]').first()).toBeAttached();
+  await expect(view.locator('.compmd:not([data-compmd="ready"])')).toHaveCount(0);
 }
 
 test.describe('the reviews tab', () => {

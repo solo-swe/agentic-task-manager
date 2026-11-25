@@ -21467,7 +21467,7 @@
       "description": "From Hakan: the agent that left a note in another project's inbox (ATM-772) can check what became of it.\n\n**No new API.** This reads through the same atm-lib functions the dashboard's route and the app's command call (`inbox::show`, `inbox::list`), on the project the workspaces find for `--project` (as ATM-772 opens it). The injected tasks' statuses are added **in those functions**, so the dashboard's inbox answer, its page and `atm inbox show` get them from the one answer. There is no second reader and no new route.\n\n## Change\n- **`inbox::show` and `inbox::list`:** an injected item's `tasks` come with what each task is now: its key, name, status and its status's kind, `done` when archived. A task not found says so.\n  - The project's own tasks are read from its store.\n  - A task in a third project (by its key) is read as [ADR-007 §7](docs/adr/ADR-007-cross-project-references.md) reads another project's task (atm-lib's `foreign`).\n  - The page's injected items then show each task's status beside its link.\n- **`atm inbox show IN-3 --project <key or ID> [--json]`:** the item as that project has it, in its inbox or its archive: its state, its reason when discarded, its tasks with their statuses when injected. `<KEY>:IN-3` (the project's key before the item's) works too.\n- **`atm inbox list --project <key or ID> --mine [--json]`:** the items this agent added there (by their `created_by`, as kept now), so an agent finds its notes without keeping their IDs.\n- Read-only; registered projects only.\n\n## Tests\n- atm-lib unit tests of `inbox::show` and `inbox::list`: each state's answer (created; discarded with its reason; injected with each task's status, including an archived task, a task not found, and one in another project); an archived item; `--mine`.\n- The route's tests and `InboxPage`'s: the tasks' statuses in the answer and on the page.\n- CLI suite scenarios with two registered projects: add from one, inject in the other, show from the first.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "01a20e86-f20a-70b2-9d4a-35cff3a353eb"
       ],
@@ -21484,7 +21484,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-24T17:07:34Z",
-      "updated_at": "2026-11-24T23:36:35Z",
+      "updated_at": "2026-11-24T23:44:27Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:33cba067",
       "sprint_history": [
@@ -21502,7 +21502,44 @@
         "dashboard"
       ],
       "started_at": "2026-11-24T23:24:10Z",
-      "started_by": "claude:33cba067"
+      "started_by": "claude:33cba067",
+      "commit": "ab087d8755cde92558f452ddd00b5ea2d2729d99",
+      "code_reviews": [
+        {
+          "id": "01a20feb-50b8-7273-a682-3a2b4533ed10",
+          "ref": "CR-181"
+        }
+      ],
+      "review_requested_at": "2026-11-24T23:36:49Z",
+      "notes": [
+        {
+          "at": "2026-11-24T23:36:49Z",
+          "kind": "review",
+          "text": "CR-181: Inbox: another project's item's status, with its tasks' statuses once injected",
+          "by": "claude:33cba067"
+        },
+        {
+          "at": "2026-11-24T23:44:06Z",
+          "kind": "note",
+          "text": "Approved: in CR-181 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-24T23:44:27Z",
+          "kind": "outcome",
+          "text": "Approved in CR-181. inbox show and list --project read another project’s item back, its tasks’ statuses once injected (task_states).",
+          "by": "claude:33cba067"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T23:36:49Z",
+          "to": "2026-11-24T23:44:06Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T23:44:27Z",
+      "completed_by": "claude:33cba067"
     },
     {
       "id": "01a20ea0-9cc0-77e3-8aa6-ec22e4e6b22b",
@@ -22031,17 +22068,21 @@
       "description": "From Hakan: move atm from CompMD 0.9.0 to 0.10.0.\n\n## Change\n- The dashboard's CompMD npm packages and the crates atm and the app use (`compmd-host`, `compmd-pack`, `tauri-plugin-compmd`) at 0.10.0, from the **published** packages and crates, their release notes and their guide; never the local CompMD checkout.\n- Adapt to what changed between 0.9.0 and 0.10.0, as the release notes say: APIs, options, the runtime's files.\n- The CompMD runtime the dashboard ships is rebuilt at its new version (`dashboard/dist/assets/compmd/0.10.0/`, from `vite.compmd.config.ts`).\n- `atm docs compmd` (`docs/agent/compmd-llms.txt`), the guide for agents, from 0.10.0's published guide.\n\n## Tests\n`pnpm run check`, the unit tests, the functional e2e suite, `cargo test` and clippy; the app built once (`cargo build -p atm-app`).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/package.json",
-        "pnpm-lock.yaml",
         "Cargo.toml",
         "Cargo.lock",
-        "docs/agent/compmd-llms.txt"
+        "docs/agent/compmd-llms.txt",
+        "dashboard/pnpm-lock.yaml",
+        "dashboard/pnpm-workspace.yaml",
+        "dashboard/tests/e2e/reviews.spec.ts",
+        "docs/review-performance.md",
+        "docs/security-architecture.md"
       ],
       "created_at": "2026-11-24T23:25:12Z",
-      "updated_at": "2026-11-24T23:25:12Z",
+      "updated_at": "2026-11-25T00:06:40Z",
       "created_by": "claude:33cba067",
       "updated_by": "claude:33cba067",
       "sprint_history": [
@@ -22052,7 +22093,9 @@
       ],
       "sprint": "Sidebar overhaul",
       "review": "async",
-      "number": 780
+      "number": 780,
+      "started_at": "2026-11-24T23:36:53Z",
+      "started_by": "claude:33cba067"
     }
   ]
 }
