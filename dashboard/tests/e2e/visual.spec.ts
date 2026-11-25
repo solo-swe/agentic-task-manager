@@ -514,7 +514,8 @@ for (const colorScheme of ['dark', 'light'] as const) {
 
     test(`visual: scope bar (${colorScheme})`, async ({ page, tasksServer }) => {
       await page.clock.setFixedTime(new Date('2026-04-14T12:00:00Z'));
-      await openDashboard(page, tasksServer, 'sprints');
+      // The Board's (a project opens on its Overview since ATM-751, which has no scope bar)
+      await openDashboard(page, tasksServer, 'sprints', { tab: 'kanban' });
       await expect(page.locator('#scope-bar')).toHaveScreenshot(`scope-bar-${colorScheme}.png`);
     });
 
@@ -543,7 +544,7 @@ for (const colorScheme of ['dark', 'light'] as const) {
 
     test(`visual: scope menu (${colorScheme})`, async ({ page, tasksServer }) => {
       await page.clock.setFixedTime(new Date('2026-04-14T12:00:00Z'));
-      await openDashboard(page, tasksServer, 'sprints');
+      await openDashboard(page, tasksServer, 'sprints', { tab: 'kanban' });
       await page.locator('#scope-trigger').click();
       await expect(page.locator('#scope-menu')).toHaveScreenshot(`scope-menu-${colorScheme}.png`);
     });

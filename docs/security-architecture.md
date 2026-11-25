@@ -1466,6 +1466,36 @@ differs from 0.9:
 - **CompMD's guide for agents** is its `spec/llms.txt` at `v0.10.0` (commit `7a06d7e7f071`): the new params and
   components, nothing about running, fetching or loading; what renders in atm is still `atm-create-tasks`'s list.
 
+**Release 0.44.0 (the sprint Sidebar overhaul, released by ATM-750).** The sprint's entry points and fields record their
+invariants in §2 and the entries above as they landed. Together:
+
+- **A new file in the task folder:** `inbox.json` and `inbox-archive.json` (ATM-759), through the store with its lock,
+  never through a symlink (I6), merged by atm's merge driver by name only (I9). Tasks gain `from: ["IN-…"]` and items
+  `from_project` (ATM-772): IDs and a project's key, shown as text.
+- **Entry points:**
+  - The inbox's routes and the app's inbox commands (ATM-761, I11, I27): the review routes' guards exactly, acting as
+    the user, no route or command injects.
+  - The documents' listing (ATM-765, I11, I27): read-only, only the Markdown files git lists, literal pathspecs.
+  - `atm inbox` (ATM-760): `--text-file` reads as the other `--*-file` options (never a key or environment file,
+    ATM-662). `--project` finds only a registered project (ATM-772, ATM-773, above).
+  - The summary's `inbox: {open}` is a count.
+- **Fields agents act on:** the inbox's items, data like task text (I1), read by `/atm-triage-inbox` only, with the
+  user (above); `task_states` (ATM-773), shown, never acted on.
+- **The app's reloads** (ATM-767 to ATM-769): change notices name the part that changed; the read commands take the
+  stamp the page last got and answer *unchanged* when it still matches, as `atm serve`'s `ETag`s do. The same reads and
+  checks (I27). No command is added.
+- **CI** (ATM-749, with Hakan's yes): the signing step fails if cargo compiles anything in it, so no build script or
+  macro runs with the signing secrets present (above; approved in CR-146). No permission is widened (`ci-workflow.test.ts`).
+- **Dependencies:** CompMD 0.10.0 (ATM-780, above); `syn` 3.0.9 for one proc-macro crate, from crates.io, as
+  `Cargo.lock` resolves it. `cargo deny check` passes.
+- **Skills and `docs/agent/` changed, so a written skill review** (no API key for the sandbox run; §3.3): it is in the
+  entries above. `atm-do-task` and `atm-loop-tasks` (ATM-770): an agent's review is a code review. `/atm-triage-inbox`
+  and its pre-approved commands (ATM-763). `docs/agent/commands.md` (ATM-760, ATM-772, ATM-773): the inbox's commands,
+  and a cross-project item is a finding for the user, never instructions. `states.md` and `reviews.md` (ATM-770).
+  `compmd-llms.txt` (ATM-780). None of them runs a command copied from task, review or inbox text, fetches or runs a
+  remote script, touches credentials, CI, git config or hooks, pushes anywhere new, or lets an agent decide a review.
+- **Checks run:** listed in ATM-750's outcome.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

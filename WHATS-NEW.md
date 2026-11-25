@@ -2,6 +2,16 @@
 
 The short version, for people using atm. The full list of changes, for developers, is in CHANGELOG.md.
 
+## [0.44.0] - 2026-11-24
+
+- In the app, the sidebar picks a project (or all of them) and lists what to open for it, from Overview to Analysis,
+  each in its own tab.
+- A new Inbox: jot an idea down without interrupting your agents, then sort it into tasks later with an agent's help.
+- A new Documents page lists your project's Markdown files, to find and read any of them.
+- The app starts faster, shows the right page from the start, and no longer grows in memory while agents work.
+- Reviews open about twice as fast, keep your place and your unsent comment, and can show a file as it is after the
+  change.
+
 ## [0.43.0] - 2026-11-23
 
 - In the app, each tab remembers where you have been: Back and Forward, and the arrows in the title bar, go through

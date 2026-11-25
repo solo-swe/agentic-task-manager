@@ -19819,7 +19819,7 @@
       "description": "Ship the sprint *Sidebar overhaul* as 0.44.0, as AGENTS.md's *Versions* and *CI* sections describe: the sidebar as a scope selector, the review and doc viewer fixes, and the release signing fix (ATM-749).\n\n## Change\n- **The version:** 0.44.0 in `Cargo.toml` (`[workspace.package]`), if no task of the sprint bumped it already.\n- **`CHANGELOG.md` and `WHATS-NEW.md`:** the `[0.44.0]` entries dated the release day; WHATS-NEW's 3–6 plain-language bullets written from the changelog entry.\n- **Screenshots:** regenerate the Linux baselines the sprint changed (`pnpm run test:e2e:visual:update`, Docker), look at them, commit them; delete baselines whose test is gone.\n- **The security checklist** (`docs/security-architecture.md` §3): the 0.44.0 entry. If skills, `docs/agent/` or agent-facing output changed, the agent sandbox, or without an API key the written skill review in §3.3; any new entry point, agent-facing field or CI permission recorded in the document.\n- **Verify:** `pnpm run verify` in `dashboard/` (the screenshots included), `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo deny check`.\n- **After the release:** check that the app job's signing step compiled nothing (ATM-749).\n\n## Push\nPushing, the release PR to `main`, merging, tagging and publishing are Hakan's.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a207f0-a2e1-7602-b260-d97d26c2073b",
         "01a207f0-a2e1-7602-b260-d97e12924d39",
@@ -19833,9 +19833,7 @@
         "01a207f0-a2e1-7602-b260-d98638440e40",
         "01a207f0-a2e1-7602-b260-d9875c4593f8",
         "01a207f5-b8d8-77e2-b9e8-b65158981919",
-        "01a20808-570f-738e-a5c5-e9142ff2e1c9",
         "01a20a7f-82f6-7703-ac29-a943660d65f3",
-        "01a20a7f-82f6-7703-ac29-a9476f7fe2b6",
         "01a20a7f-82f6-7703-ac29-a94aeae5b5e0",
         "01a20ae0-5493-734f-9c10-e889c1f825f3",
         "01a20ae0-5493-734f-9c10-e88adf1461c5",
@@ -19862,9 +19860,9 @@
         "dashboard/tests/e2e/__screenshots__/"
       ],
       "created_at": "2026-11-23T22:40:34Z",
-      "updated_at": "2026-11-24T00:06:51Z",
+      "updated_at": "2026-11-25T01:04:34Z",
       "created_by": "claude:ba530ebb",
-      "updated_by": "claude:ba530ebb",
+      "updated_by": "claude:33cba067",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -19874,7 +19872,9 @@
       "sprint": "Sidebar overhaul",
       "release": "0.44.0",
       "review": "async",
-      "number": 750
+      "number": 750,
+      "started_at": "2026-11-25T01:04:34Z",
+      "started_by": "claude:33cba067"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e889c1f825f3",
@@ -22146,7 +22146,7 @@
       "description": "Found during ATM-780: in a full e2e run on one worker (`--workers 1`, 5.2 min, still on CompMD 0.9.0), three tests failed that pass in the default 5-worker runs and alone (3 of 3 each).\n\n- `memory.spec.ts` *the kanban tab: 60 refreshes with new data keep the page's memory where it was*: in `refreshWithNewData`, `tasksServer.requests` stayed 35 after `page.clock.runFor(5000)`.\n- `refresh.spec.ts` *an unchanged file is a 304: nothing is parsed or re-rendered; a change still shows*: 2 requests where 3 were expected after `runFor(10_000)`.\n- `reviews.spec.ts` *Rendered: the + of a block under the pointer, clicked, opens the comment box under it, on its lines*: the + never showed; likely the rendered side still drawing, as ATM-780 found for the source view (`openDiffs` now waits for `data-compmd=\"ready\"`).\n\n## Change\nFind why each depends on timing (a clock-driven poll a slow page misses, a render not settled) and fix the test or the page. Never by raising a timeout or adding a sleep.\n\n## Tests\nThe three passing with `--workers 1 --repeat-each 3`, and the full functional suite.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/tests/e2e/reviews.spec.ts",
@@ -22155,7 +22155,7 @@
         "dashboard/tests/e2e/documents-page.spec.ts"
       ],
       "created_at": "2026-11-25T00:22:06Z",
-      "updated_at": "2026-11-25T00:50:19Z",
+      "updated_at": "2026-11-25T01:00:16Z",
       "created_by": "claude:33cba067",
       "updated_by": "claude:33cba067",
       "sprint_history": [
@@ -22168,7 +22168,44 @@
       "review": "async",
       "number": 781,
       "started_at": "2026-11-25T00:22:07Z",
-      "started_by": "claude:33cba067"
+      "started_by": "claude:33cba067",
+      "commit": "b21525fca1d09f764bd2392bc2412d0842109790",
+      "code_reviews": [
+        {
+          "id": "01a2102e-cf1c-75e7-a932-b8b465bc0eea",
+          "ref": "CR-183"
+        }
+      ],
+      "review_requested_at": "2026-11-25T00:50:32Z",
+      "notes": [
+        {
+          "at": "2026-11-25T00:50:32Z",
+          "kind": "review",
+          "text": "CR-183: A missed poll tick is done once the load is over; e2e tests wait for CompMD's drawing",
+          "by": "claude:33cba067"
+        },
+        {
+          "at": "2026-11-25T01:00:06Z",
+          "kind": "note",
+          "text": "Approved: in CR-183 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-25T01:00:16Z",
+          "kind": "outcome",
+          "text": "Approved in CR-183: a skipped poll tick reloads once the loads are over, the e2e tests wait for CompMD to finish drawing, and the Documents selector names the button.",
+          "by": "claude:33cba067"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-25T00:50:32Z",
+          "to": "2026-11-25T01:00:06Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-25T01:00:16Z",
+      "completed_by": "claude:33cba067"
     }
   ]
 }

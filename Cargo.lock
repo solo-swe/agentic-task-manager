@@ -259,7 +259,7 @@ dependencies = [
 
 [[package]]
 name = "atm-api"
-version = "0.43.0"
+version = "0.44.0"
 dependencies = [
  "atm-common",
  "atm-lib",
@@ -272,7 +272,7 @@ dependencies = [
 
 [[package]]
 name = "atm-app"
-version = "0.43.0"
+version = "0.44.0"
 dependencies = [
  "atm-api",
  "atm-common",
@@ -295,7 +295,7 @@ dependencies = [
 
 [[package]]
 name = "atm-cli"
-version = "0.43.0"
+version = "0.44.0"
 dependencies = [
  "anstream",
  "anstyle",
@@ -312,7 +312,7 @@ dependencies = [
 
 [[package]]
 name = "atm-common"
-version = "0.43.0"
+version = "0.44.0"
 dependencies = [
  "dirs",
  "jiff",
@@ -323,7 +323,7 @@ dependencies = [
 
 [[package]]
 name = "atm-db"
-version = "0.43.0"
+version = "0.44.0"
 dependencies = [
  "atm-common",
  "atm-fs",
@@ -334,7 +334,7 @@ dependencies = [
 
 [[package]]
 name = "atm-docs"
-version = "0.43.0"
+version = "0.44.0"
 dependencies = [
  "atm-common",
  "atm-fs",
@@ -344,7 +344,7 @@ dependencies = [
 
 [[package]]
 name = "atm-fs"
-version = "0.43.0"
+version = "0.44.0"
 dependencies = [
  "atm-common",
  "notify",
@@ -356,7 +356,7 @@ dependencies = [
 
 [[package]]
 name = "atm-lib"
-version = "0.43.0"
+version = "0.44.0"
 dependencies = [
  "atm-common",
  "atm-db",
@@ -370,7 +370,7 @@ dependencies = [
 
 [[package]]
 name = "atm-review"
-version = "0.43.0"
+version = "0.44.0"
 dependencies = [
  "atm-common",
  "atm-fs",
@@ -383,7 +383,7 @@ dependencies = [
 
 [[package]]
 name = "atm-vcs"
-version = "0.43.0"
+version = "0.44.0"
 dependencies = [
  "atm-common",
  "serde_json",
