@@ -10,6 +10,7 @@ pub mod edits;
 pub mod error;
 pub mod home;
 pub mod ids;
+pub mod inbox;
 pub mod keys;
 pub mod pathtext;
 pub mod py;

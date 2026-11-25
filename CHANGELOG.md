@@ -4,6 +4,98 @@ All notable changes to atm and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0, with the Claude Code plugin).
 
+## [0.44.0] - 2026-11-24
+
+The sprint *Sidebar overhaul*: the app's sidebar becomes a scope selector (All, or a project) with six items, each
+opening its own tab (Overview, Inbox, Tasks, Code Reviews, Documents, Analysis); the webapp shows the same items as its
+tabs. Two new pages, the Inbox and Documents; the review page's fixes; the app's memory growth found and its reloads
+made small; a faster start; CompMD 0.10.0.
+
+### Added
+- **The app's sidebar by scope and item** (ATM-728, ATM-751, ATM-753; `docs/sidebar-overhaul-design.md`): a scope
+  selector (All, then the workspace's projects with logo, progress and needs-you badge) and the scope's items, with
+  Inbox's open count and Code Reviews' waiting-on-you count. An item always opens a new tab beside the active one
+  (⌘-click or a middle click in the background). The title bar loses its project chooser and view tabs; the webapp
+  keeps the chooser.
+- **The page by item** (ATM-752, ATM-778): the webapp's tabs are the items (six for a project, four for All); Tasks has
+  Board · List · Dependencies, Analysis has Progress · Agents, as sub-tabs. All gains a List over every project's tasks.
+  In the app only the sub-tabs show. Kanban is now *Board* and Graph *Dependencies*; their addresses are unchanged.
+  `/projects/<id>` opens the project's Overview, no longer the Board.
+- **The hidden sidebar is a rail of icons** (ATM-771): the scope and the items with their badges; a hover or the
+  keyboard's focus shows the whole sidebar over the page.
+- **Tab titles** `<scope> - <item>` with the item's icon (ATM-754): `ATM - Tasks`, `All - Code Reviews`; a review or a
+  document names itself (`ATM - CR-134`).
+- **The new tab's chooser** (ATM-755): + , File ▸ New Tab and ⌘T open `/new`, scopes and their items in two columns,
+  driven by the keys too; a choice opens in the tab, and Back returns to the chooser.
+- **The Inbox** (ATM-759 to ATM-763, ATM-772, ATM-773; `docs/inbox-design.md`): raw input to triage later, without
+  interrupting agents. Items are `created`, `discarded` (with a reason) or `injected` (with the tasks they became),
+  in `.agentic-task-manager/inbox.json` (taken by the merge driver) and archived with `atm db archive`.
+  - `atm inbox add | edit | list | show | discard | inject | restore`, `atm db unarchive IN-3`; `atm project status`
+    counts the open items; `atm vcs commit` takes `inbox.json` with `tasks.json`. Tasks made from an item get
+    `from: ["IN-…"]`.
+  - REST routes (`GET`, `POST …/inbox`, `PATCH …/inbox/<IN>`, `POST …/inbox/<IN>/decisions`) behind the review
+    routes' guards, and the app's `project_inbox`, `add_inbox_item`, `edit_inbox_item`, `decide_inbox_item`. No route
+    injects.
+  - The Inbox page: a quick-add box, the Open · Discarded · Injected · All filter in the address, each item's actions,
+    the tasks of an injected item with their statuses.
+  - The `/atm-triage-inbox` skill: proposes what each open item becomes, and on the user's word makes the tasks
+    through `/atm-create-tasks` and injects or discards the item.
+  - `atm inbox add --project <key or ID>`: an agent leaves an item in another registered project's inbox, recorded as
+    `from_project`; an agent can't add to its own. `atm inbox list --project … [--mine]` and `atm inbox show IN-3
+    --project …` (or `KEY:IN-3`) read it back, with `task_states`, the injected tasks' statuses.
+- **Documents** (ATM-764 to ATM-766; `docs/documents-design.md`): the project's Markdown files that git lists (tracked
+  or new, submodules too, never ignored ones), in a tree or by last change, searched in the header line, each opening in
+  the viewer over the page. `GET …/projects/<id>/documents` without `path` lists them (at most 500, `?q=`, an `ETag`);
+  the app's `project_documents`.
+- **A project's Overview links into the Board and the List** (ATM-756): a sprint or the backlog opens the Board on it,
+  a count by status the List filtered by it.
+- **All reviews: a project filter** (ATM-757), in the address (`?projects=atm,compmd`).
+- **The diff view's Final layout** (ATM-731): the file after the change, with no diff marks; comments stay on their
+  lines.
+- **A badge for what's new in the review in view** (ATM-733): a new comment, reply or round, where it happened, until
+  seen.
+- **The review page's heading starts with its task** (ATM-779): `[ATM-1] CR-15 Title`, the task a link; in the app, no
+  back link (the title bar's Back is there).
+
+### Changed
+- **An agent's review is a code review** (ATM-770): an agent's `atm task state <id> in_review` is refused without a
+  review open on the task, naming `atm review create` or `atm review round`; `atm doctor` warns of a task in review that
+  no review waits on. A person's moves and decisions are unchanged.
+- **The app's reloads carry only what changed** (ATM-734, ATM-767 to ATM-769; `docs/memory-growth-analysis.md`): the
+  page grew with every reload in WebKit. Now a lease renewal reloads nothing, a change reloads only its part (tasks,
+  claims, reviews), an unchanged answer comes back as *unchanged* with no body (as a `304`), and an answer is parsed
+  once, not turned back into text.
+- **The app's start** (ATM-776, ATM-777): nothing is drawn before the page is known, from the projects kept at the last
+  start; only the active tab loads; the project's data comes before the project list; projects are listed side by side
+  (`list_projects` cold 1.5 s → 0.7 s, a board's tasks 2.8 s → 1.5 s). The first switch to another project's tab loads
+  its data first.
+- **The All-projects activity pill, search and the Reviews search sit inside their tab** (ATM-736 to ATM-738), placed
+  as the project's search is.
+- **CompMD 0.10.0** (ATM-780): a review opens about twice as fast (first drawn 400 → 201 ms in Chromium, 401 → 235 ms
+  in WebKit); `docs/agent/compmd-llms.txt` is its guide at `v0.10.0`.
+- **The release's signing step compiles nothing** (ATM-749): in 0.43.0 it recompiled atm-app with the signing secrets
+  present; it now fails if anything compiles.
+
+### Fixed
+- **The Code Reviews list** reads each working copy's reviews once, not the whole folder per review (ATM-775): for
+  this repo's 166 reviews, 166 reads instead of about 27,000.
+- **A code review's tabs keep the diff's position** (ATM-730), and **an unsent comment or reply survives** an agent's
+  comment arriving (ATM-732).
+- **The Activity pill shows the same chart every time** (ATM-739): it charts the task file alone, not the archive some
+  views had loaded.
+- **The app's scope chooser opens under its button**, over the window, not below its bottom (ATM-774).
+- The document viewer's contents box sits in its corner (ATM-729); the zoomed-out dependency graph's nodes show
+  placeholder lines for their text (ATM-735).
+- A refresh tick skipped while a load is out is done once the load is over (ATM-781).
+
+### Developer
+- Flaky e2e tests fixed (ATM-742, ATM-781): the graph's keys once it takes them, the long review's nodes counted once
+  settled, no fixed dates, tests waiting for CompMD's drawing; the whole suite passes on one worker.
+- `cargo build`'s dependencies are optimized in the dev profile (`opt-level = 2`); atm-lib's `par_map` lists projects in
+  parallel.
+- Designs: `docs/sidebar-overhaul-design.md`, `docs/inbox-design.md`, `docs/documents-design.md`,
+  `docs/memory-growth-analysis.md`, `docs/fresh-session-loop.md` (ATM-740's evaluation; not built).
+
 ## [0.43.0] - 2026-11-23
 
 The sprint *Audit and tabs*: the codebase audit's findings fixed (security, the review store, the CLI, the server,

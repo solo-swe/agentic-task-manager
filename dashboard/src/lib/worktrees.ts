@@ -65,9 +65,9 @@ export async function loadWorktrees(
   fetchFn: Fetch = browserFetch,
   since?: Validators,
 ): Promise<WorktreesResult> {
-  const file = await fetchProjectFile(project, 'worktrees.json', fetchFn, since, '{"worktrees": []}');
+  const file = await fetchProjectFile(project, 'worktrees.json', fetchFn, since, { worktrees: [] });
   if (file.unchanged) return file;
-  const list = (JSON.parse(file.text) as { worktrees?: unknown }).worktrees;
+  const list = (file.data as { worktrees?: unknown } | null)?.worktrees;
   const worktrees = (Array.isArray(list) ? list : [])
     .filter((w): w is Worktree => !!w && typeof w === 'object' && typeof (w as Worktree).path === 'string')
     .map((w) => ({

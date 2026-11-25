@@ -4,9 +4,12 @@
   import Icon from '../ui/Icon.svelte';
   import ComposerActions from './ComposerActions.svelte';
   import { draftActions } from './drafts';
+  import { untrack } from 'svelte';
   import { focusOnShow } from './focus';
   import { commentEdits, documentLinks, taskLinks } from './links';
   import type { Chain, ReviewComment } from './types';
+  import { forgetUnsent, keepsUnsent, unsent } from './unsent';
+  import { seenInView, unseenMarks } from './unseen';
 
   // A chain of comments (docs/code-review-design.md §3.4, §3.7, ATM-573, ATM-574), in place under its lines in the diff
   // viewer: its lines (the diff shows the file and the text, so the chain doesn't repeat them), each comment with its
@@ -41,12 +44,27 @@
 
   /** What drafting does on this page (ATM-612); none where drafts can't be kept */
   const drafts = draftActions();
+  /** Which comments came since the page opened (ATM-733): marked New until they have been in view */
+  const marks = unseenMarks();
 
-  let replyingTo = $state<string | null>(null);
-  let draft = $state('');
+  // A reply or an edit being written here comes back when this chain's box is made again (ATM-732: an update of the
+  // review that cuts the diff's rows again above it, a comment from an agent arriving): kept in `unsent`, by comment
+  const everyComment = (list: ReviewComment[]): ReviewComment[] => list.flatMap((c) => [c, ...everyComment(c.replies)]);
+  const keptFor = (prefix: string) =>
+    untrack(() =>
+      everyComment(chain.comments)
+        .map((c) => ({ c, kept: unsent(`${prefix}:${c.id}`) }))
+        .find((k) => k.kept),
+    );
+  const keptReply = keptFor('reply');
+  const keptEdit = keptFor('edit');
+
+  let replyingTo = $state<string | null>(keptReply?.c.id ?? null);
+  let draft = $state(keptReply?.kept?.text ?? '');
   let refused = $state<string | null>(null);
 
   function closeReply() {
+    if (replyingTo) forgetUnsent(`reply:${replyingTo}`);
     replyingTo = null;
     draft = '';
     refused = null;
@@ -74,9 +92,9 @@
   const editable = (c: ReviewComment) => (c.draft ? !!drafts : !!edits && !!c.editable);
 
   // A draft's text, or one's own comment's, changed in place (ATM-612, ATM-638)
-  let editing = $state<string | null>(null);
-  let editingDraft = false;
-  let editText = $state('');
+  let editing = $state<string | null>(keptEdit?.c.id ?? null);
+  let editingDraft = !!keptEdit?.c.draft;
+  let editText = $state(keptEdit?.kept?.text ?? '');
   let editRefused = $state<string | null>(null);
   function startEdit(c: ReviewComment) {
     editing = c.id;
@@ -84,13 +102,17 @@
     editText = c.body;
     editRefused = null;
   }
+  function stopEdit() {
+    if (editing) forgetUnsent(`edit:${editing}`);
+    editing = null;
+  }
   async function saveEdit() {
     const body = editText.trim();
     if (!body || !editing) return;
     const by = editingDraft ? drafts?.edit : edits?.edit;
     if (!by) return;
     editRefused = await by(editing, body);
-    if (editRefused === null) editing = null;
+    if (editRefused === null) stopEdit();
   }
 
   const a = $derived(chain.anchor);
@@ -126,7 +148,13 @@
 </script>
 
 {#snippet comment(c: ReviewComment, depth: number)}
-  <li class="chain-comment" data-comment={c.id} data-depth={depth}>
+  <li
+    class="chain-comment"
+    class:unseen={marks?.isNew(c.id)}
+    data-comment={c.id}
+    data-depth={depth}
+    {@attach seenInView(c.id, marks)}
+  >
     {#if c.resolved !== null && onresolve && !c.resolved}
       <div class="chain-state">
         <button class="chain-button chain-resolve" onclick={() => onresolve?.(c.id, true)}
@@ -153,6 +181,7 @@
       {#if c.draft}<span class="chain-draft" title="Only you see it: sent with your review"
           ><Icon name="pencil" size={12} /> Draft</span
         >{/if}
+      {#if marks?.isNew(c.id)}<span class="chain-new" title="Came while you had the review open">New</span>{/if}
       <time class="chain-time" datetime={c.at}>{when(c.at)}</time>
       {#if editable(c) && editing !== c.id}
         <span class="chain-draft-actions">
@@ -183,14 +212,14 @@
           aria-label={c.draft ? 'Edit your draft' : 'Edit your comment'}
           bind:value={editText}
           rows="3"
-          {@attach focusOnShow}
+          {@attach keepsUnsent(`edit:${c.id}`, focusOnShow)}
           onkeydown={(e) => {
-            if (e.key === 'Escape') editing = null;
+            if (e.key === 'Escape') stopEdit();
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void saveEdit();
           }}></textarea>
         {#if editRefused}<p class="chain-problem" role="alert">Not saved: {editRefused}</p>{/if}
         <div class="chain-actions">
-          <button type="button" class="chain-button" onclick={() => (editing = null)}>Cancel</button>
+          <button type="button" class="chain-button" onclick={stopEdit}>Cancel</button>
           <button type="submit" class="chain-button primary" disabled={!editText.trim()}>Save</button>
         </div>
       </form>
@@ -213,7 +242,7 @@
             bind:value={draft}
             rows="3"
             placeholder="Reply…"
-            {@attach focusOnShow}
+            {@attach keepsUnsent(`reply:${c.id}`, focusOnShow)}
             onkeydown={(e) => {
               if (e.key === 'Escape') closeReply();
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitReply();
@@ -411,6 +440,18 @@
   .chain-time {
     color: var(--text-muted);
     font-size: var(--text-xs);
+  }
+  /* A comment that came while the page was open (ATM-733), until it has been in view */
+  .chain-new {
+    padding: 0 var(--space-3);
+    border-radius: var(--radius-pill);
+    background: var(--accent);
+    color: var(--on-accent);
+    font-size: var(--text-xs);
+    font-weight: 600;
+  }
+  .chain-comment.unseen {
+    box-shadow: inset 2px 0 0 var(--accent);
   }
   /* A poke (ATM-611): marked by its author, never resolved */
   .chain-poke {

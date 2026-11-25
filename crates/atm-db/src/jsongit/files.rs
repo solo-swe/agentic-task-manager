@@ -291,6 +291,23 @@ pub fn archive_document(paths: &Paths) -> Result<Value> {
         })
 }
 
+/// An inbox document (`inbox.json` or its archive, ATM-759) as stored, or an empty one when there is none. Read
+/// through no symlink (the task folder's check refuses one, `paths::check_task_folder`), and checked
+/// (`atm_common::inbox::check_inbox`), so a change never writes back a file it couldn't read.
+///
+/// # Errors
+/// When the file exists but isn't JSON or isn't an inbox.
+pub fn inbox_document(path: &std::path::Path) -> Result<Value> {
+    if !path.is_file() {
+        return Ok(atm_common::inbox::empty_inbox());
+    }
+    let document = read_json(path)
+        .ok_or_else(|| Error::failed(format!("{} is not valid JSON", path.shown())))?;
+    atm_common::inbox::check_inbox(&document)
+        .map_err(|e| Error::failed(format!("{}: {e}", path.shown())))?;
+    Ok(document)
+}
+
 /// The last task with this ID in a list of tasks (a later entry wins, as a dict of them by ID has it).
 #[must_use]
 pub fn last_with_id<'a>(tasks: &'a [Task], id: &str) -> Option<&'a Task> {

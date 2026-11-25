@@ -11,16 +11,19 @@
   import {
     changeStarts,
     changedLines,
+    finalBlocks,
     foldKey,
     nextChange,
     parseHunks,
     splitBlocks,
     unifiedBlocks,
     type Block,
+    type DiffMode,
     type SplitRow,
     type UnifiedRow,
   } from './diff';
   import type { Chain, Picked, Side } from './types';
+  import { forgetUnsent, keepsUnsent } from './unsent';
 
   /** How many rows of a file are drawn at a time (ATM-587): 300 made a frame of about 120 ms when scrolled into a
    * long file, 100 about 30 */
@@ -28,9 +31,10 @@
 
   // The diff viewer (docs/code-review-design.md §3.7, ATM-573): one file of a round, its two sides read from document
   // sources (the round's base and head; none for a side the file doesn't have) and its hunks from the round's patch.
-  // Split or unified; source (each run of lines a code block CompMD renders) or rendered (a Markdown file rendered on
-  // the document viewer's page, with its line numbers, the changed lines marked: both sides in split, the new one in
-  // unified). Unchanged runs fold (*show more* opens one). Pressing a line's + (or its number) picks it, dragging
+  // Split, unified or final (ATM-731: the file as it is after the change, whole and unmarked); source (each run of
+  // lines a code block CompMD renders) or rendered (a Markdown file rendered on the document viewer's page, with its
+  // line numbers, the changed lines marked: both sides in split, the new one in unified, unmarked in final). Unchanged
+  // runs fold (*show more* opens one), but in final. Pressing a line's + (or its number) picks it, dragging
   // extends the pick, Shift-press extends it too; the comment is written right under the lines (selecting text in the
   // rendered view does the same). The file's chains show in place, after their last line. Keys (`keyboard`, when the
   // viewer is the page's only one): n / p the next and previous change, ] / [ the next and previous file, v viewed.
@@ -63,7 +67,7 @@
     after: DocumentSource | null;
     patch: string;
     chains?: Chain[];
-    mode?: 'split' | 'unified';
+    mode?: DiffMode;
     view?: 'source' | 'rendered';
     /** Long lines wrap (ATM-588); in Split each line as tall as the taller of its two sides, so they stay level
      * (ATM-616, CompMD 0.8.0's line heights) */
@@ -150,7 +154,11 @@
   });
 
   const blocks = $derived<Block<SplitRow | UnifiedRow>[]>(
-    mode === 'split' ? splitBlocks(hunks, newText, expanded) : unifiedBlocks(hunks, newText, expanded),
+    mode === 'split'
+      ? splitBlocks(hunks, newText, expanded)
+      : mode === 'final'
+        ? finalBlocks(hunks, newDoc?.text ?? null)
+        : unifiedBlocks(hunks, newText, expanded),
   );
   const starts = $derived(changeStarts(blocks));
   const startKeys = $derived(new Set(starts.map(([b, r]) => `${b}-${r}`)));
@@ -272,6 +280,7 @@
     } else {
       picked = { block, side: s, at: row, from: row, to: row };
       draft = '';
+      forgetUnsent(`comment:${path}`);
     }
     dragging = true;
   }
@@ -319,6 +328,7 @@
   const composing = $derived(shownView === 'rendered' ? renderedPick : dragging ? null : pickedLines);
 
   function cancel() {
+    forgetUnsent(`comment:${path}`);
     picked = null;
     renderedPick = null;
     draft = '';
@@ -398,16 +408,21 @@
     act();
   }
 
-  // The rendered view: both sides in split, the new one (the old, for a file deleted) in unified
-  const changed = $derived(changedLines(hunks));
+  // The rendered view: both sides in split, the new one (the old, for a file deleted) in unified, the new one alone
+  // and unmarked in final (a file deleted has none)
+  const changed = $derived(mode === 'final' ? { old: new Set<number>(), new: new Set<number>() } : changedLines(hunks));
   const sides = $derived<Side[]>(
-    mode === 'unified'
+    mode === 'final'
       ? newDoc
         ? ['new']
-        : oldDoc
-          ? ['old']
-          : []
-      : [oldDoc ? ('old' as const) : null, newDoc ? ('new' as const) : null].filter((s): s is Side => s !== null),
+        : []
+      : mode === 'unified'
+        ? newDoc
+          ? ['new']
+          : oldDoc
+            ? ['old']
+            : []
+        : [oldDoc ? ('old' as const) : null, newDoc ? ('new' as const) : null].filter((s): s is Side => s !== null),
   );
 </script>
 
@@ -445,7 +460,7 @@
       rows="3"
       placeholder="Leave a comment…"
       bind:value={draft}
-      {@attach shownView === 'rendered' ? focusWhenPlaced : focusOnShow}
+      {@attach keepsUnsent(`comment:${path}`, shownView === 'rendered' ? focusWhenPlaced : focusOnShow)}
       onkeydown={(e) => {
         if (e.key === 'Escape') cancel();
         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit();
@@ -471,6 +486,7 @@
       <div class="diff-switch" role="group" aria-label="Layout">
         <button aria-pressed={mode === 'split'} onclick={() => (mode = 'split')}>Split</button>
         <button aria-pressed={mode === 'unified'} onclick={() => (mode = 'unified')}>Unified</button>
+        <button aria-pressed={mode === 'final'} onclick={() => (mode = 'final')}>Final</button>
       </div>
       {#if markdown}
         <div class="diff-switch" role="group" aria-label="View">
@@ -488,6 +504,8 @@
     <p class="diff-problem" role="alert">{problem}</p>
   {:else if !loaded}
     <p class="diff-loading">Loading…</p>
+  {:else if mode === 'final' && !newDoc}
+    <p class="diff-loading diff-gone">Deleted by this change: nothing after it.</p>
   {:else if shownView === 'source'}
     {#each drawnItems as item (`${item.b}-${item.kind === 'fold' ? 'fold' : item.segment.first}`)}
       {@const b = item.b}
@@ -532,7 +550,7 @@
                 lines={unifiedLines(segment.rows as UnifiedRow[])}
                 {language}
                 {wrap}
-                numbers="both"
+                numbers={mode === 'final' ? 'new' : 'both'}
                 {keys}
                 {changes}
                 picked={isPicked('new')}
@@ -565,20 +583,24 @@
             selectedChain={selectedId}
             picking={renderedPick?.side === s ? renderedPick.lines : null}
             {docStyle}
+            whole={mode === 'final'}
             chains={chains.filter((c) => c.anchor.side === s && c.anchor.lines)}
             {chainBox}
             composer={renderedPick?.side === s && oncomment ? renderedComposer : undefined}
-            label={sides.length < 2
-              ? s === 'old'
-                ? 'Before (deleted)'
-                : 'After, the changes marked'
-              : s === 'old'
-                ? 'Before'
-                : 'After'}
+            label={mode === 'final'
+              ? 'After the change'
+              : sides.length < 2
+                ? s === 'old'
+                  ? 'Before (deleted)'
+                  : 'After, the changes marked'
+                : s === 'old'
+                  ? 'Before'
+                  : 'After'}
             onpick={oncomment
               ? (p) => {
                   renderedPick = p;
                   draft = '';
+                  forgetUnsent(`comment:${path}`);
                 }
               : undefined}
           />

@@ -1,0 +1,61 @@
+[
+  {
+    "name": "an agent's in_review with no code review is refused, saying how to open one (ATM-770); nothing changes",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "review": "async" },
+          "tasks": [{ "id": "T-1", "name": "Work", "status": "in_progress", "started_by": "claude:a" }]
+        }
+      }
+    },
+    "env": { "ATM_AGENT": "claude:a" },
+    "args": ["task", "state", "T-1", "in_review", "--note", "Look at it"],
+    "expect": {
+      "exit": 1,
+      "stderrIncludes": [
+        "atm: T-1 is reviewed through a code review: `atm review create --task T-1 --range BASE..HEAD --summary-file F` opens one and puts it in review"
+      ],
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "review": "async" },
+          "tasks": [{ "id": "T-1", "name": "Work", "status": "in_progress", "started_by": "claude:a" }]
+        }
+      }
+    }
+  },
+  {
+    "name": "an agent finishing a reviewed task is told to open its code review (ATM-770)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "review": "async" },
+          "tasks": [{ "id": "T-1", "name": "Work", "status": "in_progress", "started_by": "claude:a" }]
+        }
+      }
+    },
+    "env": { "ATM_AGENT": "claude:a" },
+    "args": ["task", "state", "T-1", "done", "--note", "x"],
+    "expect": {
+      "exit": 2,
+      "stderrIncludes": ["T-1 is reviewed (async): open its code review with atm review create --task T-1"]
+    }
+  },
+  {
+    "name": "a person may still ask for a review without one; doctor then names the task stranded in review",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [{ "id": "T-1", "name": "Work", "type": "feature", "status": "in_progress" }]
+        }
+      },
+      "commands": [["sh", "-c", "ATM_AGENT=Ana \"$ATM\" task state T-1 in_review --note 'Check it'"]]
+    },
+    "args": ["doctor"],
+    "expect": {
+      "stdoutIncludes": [
+        "warning: T-1: in review with no code review waiting on it, so the dashboard can't decide it: `atm review create --task T-1 …` opens one, or `atm task review approve|request-changes|reject T-1` decides it"
+      ]
+    }
+  }
+]

@@ -87,6 +87,84 @@ fn the_list_says_whether_each_review_has_ended() {
     assert_eq!(ended(&hakan), json!(true));
 }
 
+/// ATM-775: each working copy's reviews are read once, and each review listed whole from the copy it was found in: one
+/// only in a worktree comes with its comments and its words, on that copy's branch
+#[test]
+fn the_list_reads_each_review_whole_from_its_own_working_copy() {
+    let (main, other) = (dir(), dir());
+    git(&["init", "-q", "-b", "main"], &main.0);
+    let mut here = project(&main.0, "claude:1");
+    git(&["add", "-A"], &main.0);
+    git(&["commit", "-q", "-m", "tasks"], &main.0);
+    let copy = other.0.join("wt");
+    git(
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "side",
+            copy.to_str().unwrap(),
+        ],
+        &main.0,
+    );
+    waiting(&mut here, &["T-1"]).unwrap();
+    let mut there = reopen(&copy, "claude:1");
+    let cr = atm_lib::reviews::create(
+        &mut there,
+        NewReview {
+            title: "Elsewhere".into(),
+            summary: "A walrus in the worktree.".into(),
+            tasks: vec!["T-2".into()],
+            author: Some("claude:1".into()),
+            reviewers: vec!["Hakan".into()],
+            status: Status::Waiting,
+            first: round(),
+        },
+    )
+    .unwrap()
+    .reference;
+    let mut reviews = atm_lib::reviews::store(&there).unwrap();
+    atm_lib::reviews::Reviews::new(&mut reviews)
+        .comment(
+            &cr,
+            atm_lib::reviews::Anchor {
+                round: 1,
+                ..atm_lib::reviews::Anchor::default()
+            },
+            "Why a walrus?",
+            &"Hakan".into(),
+        )
+        .unwrap();
+    let list = |q: &str| {
+        atm_lib::review_pages::list_reviews(
+            &here,
+            &atm_lib::review_pages::ReviewQuery {
+                q: q.into(),
+                ..atm_lib::review_pages::ReviewQuery::default()
+            },
+        )
+        .unwrap()["reviews"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| json!([r["review"]["title"], r["branch"], r["chains"], r["open"]]))
+            .collect::<Vec<_>>()
+    };
+    let mut all = list("");
+    all.sort_by_key(ToString::to_string);
+    assert_eq!(
+        all,
+        vec![
+            json!(["Elsewhere", "side", 1, 1]),
+            json!(["The change", "main", 0, 0]),
+        ]
+    );
+    // Its words are its copy's: its summary's and its comment's
+    assert_eq!(list("walrus why"), vec![json!(["Elsewhere", "side", 1, 1])]);
+    assert_eq!(list("nowhere"), Vec::<serde_json::Value>::new());
+}
+
 /// ATM-610: the list says since when each review waits on its reviewers, its latest round's time
 #[test]
 fn the_list_says_since_when_each_review_waits() {

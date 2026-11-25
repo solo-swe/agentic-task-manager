@@ -1,0 +1,289 @@
+diff --git a/dashboard/tests/e2e/memory.spec.ts b/dashboard/tests/e2e/memory.spec.ts
+new file mode 100644
+index 00000000..0737e2b6
+--- /dev/null
++++ b/dashboard/tests/e2e/memory.spec.ts
+@@ -0,0 +1,187 @@
++import type { Page } from '@playwright/test';
++import {
++  addressOf,
++  expect,
++  follow,
++  loadFixture,
++  openDashboard,
++  projectDocument,
++  test,
++  type TasksServer,
++} from './helpers';
++
++// ATM-734: the app's page was seen growing from about 70 MB to 4.5 GB over a few hours. The page refreshes every
++// 5 s; each refresh that brings new data must leave no more behind than the one before. Measured in Chromium (its
++// DevTools protocol: a garbage collection forced, then the JS heap and the DOM nodes alive, detached ones too).
++
++test.skip(({ browserName }) => browserName !== 'chromium', 'measured through Chromium’s DevTools protocol');
++
++async function alive(page: Page) {
++  const cdp = await page.context().newCDPSession(page);
++  await cdp.send('Performance.enable');
++  for (let i = 0; i < 3; i++) await cdp.send('HeapProfiler.collectGarbage');
++  const { metrics } = await cdp.send('Performance.getMetrics');
++  const of = (name: string) => metrics.find((m) => m.name === name)!.value;
++  const result = {
++    heapMB: Math.round((of('JSHeapUsedSize') / 1e6) * 10) / 10,
++    nodes: of('Nodes'),
++    listeners: of('JSEventListeners'),
++  };
++  await cdp.detach();
++  return result;
++}
++
++/** One refresh with new data: a task's name changed, so nothing is answered 304, and the page draws it */
++async function refreshWithNewData(
++  page: Page,
++  tasksServer: TasksServer,
++  data: ReturnType<typeof loadFixture>,
++  n: number,
++) {
++  const name = `First task, version ${n}`;
++  data.tasks[0].name = name;
++  tasksServer.use(data);
++  const before = tasksServer.requests;
++  await page.clock.runFor(5_000);
++  await expect.poll(() => tasksServer.requests).toBeGreaterThan(before);
++  await expect(page.getByText(name).first()).toBeAttached();
++}
++
++// A review's page (its Diffs: three files, a chain on each), read again with a change each time
++const lines = (n: number, change: (i: number) => string | null = () => null) =>
++  Array.from({ length: n }, (_, i) => change(i + 1) ?? `line ${i + 1}`).join('\n') + '\n';
++function reviewOf(version: number) {
++  const files = ['src/a.rs', 'src/b.rs', 'docs/c.md'].map((path) => ({
++    path,
++    old_path: path,
++    status: 'modified',
++    binary: false,
++    patch: `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -9,3 +9,3 @@\n line 9\n-line 10\n+LINE 10\n line 11\n`,
++    before: 'base1',
++    after: 'head3',
++  }));
++  const at = '2026-11-17T10:00:00Z';
++  return {
++    review: {
++      id: 'r2',
++      reference: 'CR-2',
++      number: 2,
++      title: `Review 2, version ${version}`,
++      status: 'waiting',
++      tasks: ['T-001'],
++      author: 'claude:a',
++      reviewers: [],
++      created: at,
++      updated: at,
++    },
++    summary: 'Trims the names.',
++    branch: 'dev/1',
++    rounds: [{ number: 1, kind: { kind: 'files' }, files: [], by: 'claude:a', at }],
++    chains: files.map((f, i) => ({
++      id: `t${i + 1}`,
++      anchor: { round: 1, path: f.path, side: 'new', lines: [10, 10], quote: 'LINE 10' },
++      comments: [
++        {
++          id: `c${i + 1}`,
++          author: 'claude:a',
++          at,
++          body: `Comment ${i + 1}, version ${version}`,
++          resolved: false,
++          replies: [],
++        },
++      ],
++      placed: [10, 10],
++      drifted: null,
++    })),
++    view: { round: 1, against: null, files },
++    needs_you: true,
++    you: 'Ana',
++  };
++}
++
++test('a review’s Diffs: read again 100 times with a change each time, the page’s memory stays where it was', async ({
++  page,
++  tasksServer,
++}) => {
++  test.setTimeout(120_000);
++  const header = reviewOf(0).review;
++  tasksServer.setReviews({
++    reviews: [{ review: header, branch: 'dev/1', chains: 3, open: 3, needs_you: true }],
++    you: 'Ana',
++  });
++  for (const path of ['src/a.rs', 'src/b.rs', 'docs/c.md']) {
++    const fields = path.endsWith('.md') ? {} : { kind: 'code', language: 'rust', line_offset: 1 };
++    tasksServer
++      .setRevisionDocument('base1', { path, text: lines(40), ...fields })
++      .setRevisionDocument('head3', { path, text: lines(40, (i) => (i === 10 ? 'LINE 10' : null)), ...fields });
++  }
++  tasksServer.setReview('CR-2', reviewOf(0));
++  await openDashboard(page, tasksServer, 'standard', { tab: 'reviews' });
++  await page.goto(`/projects/${tasksServer.projectId}/reviews/CR-2/diffs`);
++  await expect(page.locator('.diff-view').first()).toBeVisible();
++  const readAgain = async (version: number) => {
++    tasksServer.setReview('CR-2', reviewOf(version));
++    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
++    await expect(page.getByText(`Comment 3, version ${version}`).first()).toBeVisible();
++  };
++  // The first reads settle what the page keeps once (measured: 24 listeners more by the 60th, none after)
++  for (let v = 1; v <= 60; v++) await readAgain(v);
++  const start = await alive(page);
++  for (let v = 61; v <= 160; v++) await readAgain(v);
++  const end = await alive(page);
++  console.log('review diffs: after 60 reads', JSON.stringify(start), 'after 160', JSON.stringify(end));
++  expect(end.nodes).toBeLessThan(start.nodes * 1.2 + 200);
++  expect(end.listeners).toBeLessThan(start.listeners + 20);
++  expect(end.heapMB).toBeLessThan(start.heapMB * 1.2 + 2);
++});
++
++test('the document viewer: documents opened and closed 40 times leave nothing behind', async ({
++  page,
++  tasksServer,
++}) => {
++  test.setTimeout(120_000);
++  const text = (n: number) =>
++    `# Plan ${n}\n\n${Array.from({ length: 40 }, (_, i) => `Paragraph ${i + 1} with **bold** and \`code\`.`).join('\n\n')}\n\n\`\`\`rust\nfn main() {}\n\`\`\`\n`;
++  tasksServer.setDocument(projectDocument('docs/one.md', text(1)));
++  tasksServer.setDocument(projectDocument('docs/two.md', text(2)));
++  await openDashboard(page, tasksServer, 'standard', { tab: 'list' });
++  const viewer = page.locator('#doc-viewer');
++  const base = addressOf(page);
++  // Opened from a link, in place (no load of the page), then closed: one document, then the other
++  const cycle = async () => {
++    for (const n of [1, 2]) {
++      await follow(page, `${base}${base.includes('?') ? '&' : '?'}doc=docs/${n === 1 ? 'one' : 'two'}.md`);
++      await expect(viewer.locator('.compmd')).toHaveAttribute('data-compmd', 'ready');
++      await expect(page.locator('#doc-title')).toHaveText(`Plan ${n}`);
++      await page.keyboard.press('Escape');
++      await expect(viewer).toHaveCount(0);
++    }
++  };
++  for (let i = 0; i < 5; i++) await cycle();
++  const start = await alive(page);
++  for (let i = 0; i < 20; i++) await cycle();
++  const end = await alive(page);
++  console.log('document viewer: after 10 opened', JSON.stringify(start), 'after 50', JSON.stringify(end));
++  expect(end.nodes).toBeLessThan(start.nodes * 1.2 + 200);
++  expect(end.heapMB).toBeLessThan(start.heapMB * 1.2 + 2);
++});
++
++for (const tab of ['kanban', 'list', 'graph', 'progress', 'agents', 'project'] as const) {
++  test(`the ${tab} tab: 60 refreshes with new data keep the page’s memory where it was`, async ({
++    page,
++    tasksServer,
++  }) => {
++    test.setTimeout(120_000);
++    await page.clock.install();
++    const data = loadFixture('standard');
++    await openDashboard(page, tasksServer, data, { autoRefresh: true, tab });
++    for (let n = 1; n <= 10; n++) await refreshWithNewData(page, tasksServer, data, n);
++    const start = await alive(page);
++    for (let n = 11; n <= 60; n++) await refreshWithNewData(page, tasksServer, data, n);
++    const end = await alive(page);
++    console.log(`${tab}: after 10 refreshes`, JSON.stringify(start), 'after 60', JSON.stringify(end));
++    expect(end.nodes).toBeLessThan(start.nodes * 1.2 + 200);
++    expect(end.listeners).toBeLessThan(start.listeners + 20);
++    expect(end.heapMB).toBeLessThan(start.heapMB * 1.2 + 2);
++  });
++}
+diff --git a/docs/memory-growth-analysis.md b/docs/memory-growth-analysis.md
+new file mode 100644
+index 00000000..5187ad09
+--- /dev/null
++++ b/docs/memory-growth-analysis.md
+@@ -0,0 +1,90 @@
++# atm's memory growth: what grows, and what doesn't (ATM-734)
++
++**Status:** analysis, for review with Hakan. Hakan saw "atm" grow from about 70 MB to 4.5 GB after a few hours. This
++records what was measured on 2026-11-24 (macOS, the app 0.43.0 from the release, this repository's own project
++open in it, agents at work), what is ruled out, and the follow-up work proposed (§5).
++
++## 1. Which process
++
++`footprint` (macOS's physical footprint, what Activity Monitor's Memory column shows) on every atm process, about
++two hours after the app started:
++
++| Process | What it is | Footprint | Peak |
++|---|---|---|---|
++| `com.apple.WebKit.WebContent` (the app's) | the app's page: the dashboard's JS, DOM, layout, images | **427 MB** | 769 MB |
++| `atm-app` | the app: Tauri, atm-lib in process, the subscriptions | 105 MB | 160 MB |
++| `atm _serve` (Homebrew, 15 days old) | the dashboard server for the browser | 14 MB | 27 MB |
++| `atm _serve` (the app's own) | the app's server | 4 MB | 4 MB |
++| `atm _claim-watch` × 13 | `atm claim hold`'s watchers (§4) | 6 MB each | |
++
++**The page process is the one that grows.** Its footprint is almost all *WebKit malloc* (288 MB: the DOM, styles,
++layout, rendered text) and graphics memory (103 MB), not the JS heap (3 MB in the JS VM's cage). The servers stay
++small; the app's own process grows slowly (§2).
++
++## 2. When it grows
++
++The page process and the app, sampled once a minute (`footprint`), while an agent worked in this repository:
++
++| UTC | Page | App | What happened |
++|---|---|---|---|
++| 00:32 | 427 MB | 105 MB | (the first measurement) |
++| 00:38 | 483 MB | 119 MB | e2e runs writing `dashboard/test-results/`, commits, `atm claim hold` writing `claims.json` |
++| 00:39 | 498 MB | 120 MB | the same |
++| 00:40 | 513 MB | 121 MB | the same |
++| 00:41 | 526 MB | 123 MB | the agent stopped changing files |
++| 00:42–00:45 | 526 MB | 123 → 106 MB | nothing changed (the app gave memory back) |
++| 00:46 | 540 MB | 110 MB | the agent writing this document, holding its claim, an e2e run |
++
++**It grows while files change, about 15 MB a minute, and not at all while nothing changes.** In the app the page
++doesn't poll: it reloads when the app says something changed (`api/changes.ts`: the workspace, the project, and a
++live review's working copy). So each reload the app asks for leaves memory behind in WebKit. At an agent's pace
++(several changes a minute for hours) that is gigabytes: 15 MB a minute is 4.5 GB in five hours.
++
++## 3. What is ruled out (Chromium)
++
++`dashboard/tests/e2e/memory.spec.ts` (new) measures the page in Chromium through its DevTools protocol: a garbage
++collection forced, then the JS heap, the DOM nodes alive (detached ones too) and the event listeners. Each scenario
++measures after 10 rounds and again after 50 more:
++
++| Scenario | After 10 | After 60 (or more) |
++|---|---|---|
++| each task tab (Kanban, List, Graph, Progress, Agents, Project), 60 refreshes with new data | 7.0–7.6 MB, 3,121–4,362 nodes | +0.3 MB, the same nodes and listeners |
++| a review's Diffs (three files, a chain on each), read again with a change each time | 7.9 MB, 2,572 nodes, 147 listeners | 9.1 MB, 2,616 nodes, 171 listeners after **160**: it levels off |
++| the document viewer, two documents opened and closed 50 times | 10.2 MB, 4,449 nodes | +0.3 MB, the same nodes |
++
++**The dashboard's own state doesn't leak in Chromium**: no DOM node, listener or JS object is kept per refresh.
++What grows in the app is WebKit's own memory (*WebKit malloc* and graphics), which Chromium's figures don't show and
++WebKit has no protocol to measure from a test. So the cause is in what WebKit keeps per reload: a candidate list,
++none confirmed yet:
++
++- **CompMD's rendered pages**: each render of a document or a Markdown diff makes its page (and, for diagrams, a
++  sandboxed frame) again; WebKit may keep the frames' documents, or their layers (graphics memory grew too).
++- **Layers and images**: the Kanban's and the review page's cards drawn again on each reload, their compositing
++  layers or decoded images kept (the *graphics* part of the footprint).
++- **WebKit's memory cache** of the IPC answers (each `invoke` answer is a response WebKit may cache).
++
++## 4. A second finding: claim watchers that outlive their command
++
++`atm claim hold <id> && <command>` leaves a watcher (`atm _claim-watch`) that renews the claim while the calling
++shell lives, at most two hours. An agent's harness keeps one shell for the whole session (Claude Code's does), so
++the watcher outlives the command it was for: 13 were alive here after an hour of work, 6 MB each, each renewing the
++claim of a task long finished (the renewal of a claim that is gone is refused, so no harm to the tasks). Over a
++long loop this is tens of processes and a few hundred MB. Not the 4.5 GB, but its own fix: the watcher should end
++with the command, not the shell (§5, follow-up 3).
++
++## 5. Follow-up work proposed
++
++1. **Measure the app's page per scenario, in WebKit** (P1): a harness that drives the real app (or Playwright's
++   WebKit, sampling its WebContent process with `footprint`) through each reload the app makes (a task change, a
++   claim, a working-copy change under a live review, a review comment) and reports the footprint per 100 reloads,
++   view by view. That names the view and the kind of reload that leaks.
++2. **Fix what it names** (P1), with the harness as its test: a bound on the footprint per 100 reloads.
++3. **Claim watchers end with their command** (P2): `atm claim hold` ties the watcher to the command's process (or
++   a shell that exits with it) rather than the calling shell, or the watcher ends when the task's claim does.
++4. **Fewer reloads in the app** (P2): the page reloads on every change the app reports; changes that don't touch
++   what the page shows (`dashboard/test-results/`, a claim's lease renewed) could be left out, or reloads coalesced
++   (one per second at most), which also bounds whatever leaks per reload.
++
++**Question for Hakan:** the 4.5 GB you saw, was it the *Agentic Task Manager* process or its *Web Content*
++(Activity Monitor lists the page process separately, as "Agentic Task Manager Web Content" or under WebKit), and
++which views were open?

@@ -1,0 +1,959 @@
+diff --git a/app/src-tauri/src/links.rs b/app/src-tauri/src/links.rs
+index 70517e0d..c7ba2a57 100644
+--- a/app/src-tauri/src/links.rs
++++ b/app/src-tauri/src/links.rs
+@@ -13,8 +13,11 @@ use tauri::ipc::Channel;
+ pub const SCHEME: &str = "atm";
+ /// A link longer than this is refused: no page's address comes near it.
+ const MAX_LINK: usize = 4096;
+-/// The first part of a page's path: the dashboard's pages (`docs/multi-project-api.md` §2.7).
+-const PAGES: [&str; 6] = ["projects", "board", "progress", "agents", "reviews", "w"];
++/// The first part of a page's path: the dashboard's pages (`docs/multi-project-api.md` §2.7; All's `list` and the
++/// new tab, `new`, ATM-751).
++const PAGES: [&str; 8] = [
++    "projects", "board", "list", "progress", "agents", "reviews", "new", "w",
++];
+ 
+ /// The dashboard address an `atm://` link opens (`/projects/abc/list?task=T-1`), or none for anything else: another
+ /// scheme, a path that isn't one of the dashboard's pages, `.` or `..` segments, a fragment, characters an address
+diff --git a/crates/atm-api/src/pages.rs b/crates/atm-api/src/pages.rs
+index f9639768..1844dd8a 100644
+--- a/crates/atm-api/src/pages.rs
++++ b/crates/atm-api/src/pages.rs
+@@ -1,14 +1,15 @@
+ //! The dashboard's pages (T-429; `dashboard/src/lib/address.ts` `PAGE_PATH`): the same page at each, which shows the
+ //! one its path names. Nothing else is served under them: a project's ID or tab is only text the page reads.
+ 
+-/// A page's path without its leading `/` and an optional trailing `/`: the root, `board`, `progress`, `agents`,
+-/// `reviews` (every project's, ATM-575), `projects`, `projects/<id>`, `projects/<id>/<tab>` (a tab in lowercase
+-/// letters) or a review's page, `projects/<id>/reviews/<CR>` (its reference: letters, digits, `-` and `.`, as
+-/// `CR-8.2`), on its Overview, or `…/<CR>/diffs` or `…/<CR>/comments`, its other sub-tabs (ATM-697).
++/// A page's path without its leading `/` and an optional trailing `/`: the root, `board`, `list` (every project's
++/// tasks as a list, ATM-751), `progress`, `agents`, `reviews` (every project's, ATM-575), `new` (the app's new tab,
++/// ATM-751), `projects`, `projects/<id>`, `projects/<id>/<tab>` (a tab in lowercase letters: `inbox` and `documents`
++/// too) or a review's page, `projects/<id>/reviews/<CR>` (its reference: letters, digits, `-` and `.`, as `CR-8.2`),
++/// on its Overview, or `…/<CR>/diffs` or `…/<CR>/comments`, its other sub-tabs (ATM-697).
+ fn is_form(rest: &str) -> bool {
+     if matches!(
+         rest,
+-        "" | "board" | "progress" | "agents" | "reviews" | "projects"
++        "" | "board" | "list" | "progress" | "agents" | "reviews" | "new" | "projects"
+     ) {
+         return true;
+     }
+@@ -79,6 +80,13 @@ mod tests {
+             "/projects/abcd1234/reviews/CR-7/comments",
+             "/projects/abcd1234/reviews/CR-7/diffs/",
+             "/w/work/projects/abcd1234/reviews/CR-8.2/diffs",
++            // The sidebar overhaul's pages (ATM-751): All's List, the app's new tab, a project's Inbox and Documents
++            "/list",
++            "/w/work/list/",
++            "/new",
++            "/w/work/new",
++            "/projects/abcd1234/inbox",
++            "/projects/abcd1234/documents",
+         ] {
+             assert!(is_page(page), "{page}");
+         }
+@@ -107,6 +115,9 @@ mod tests {
+             "/projects/abcd1234/reviews/<x>",
+             "/projects/abcd1234/list/CR-7",
+             "/projects//reviews/CR-7",
++            "/new/x",
++            "/list/x",
++            "/news",
+             "",
+         ] {
+             assert!(!is_page(other), "{other}");
+diff --git a/dashboard/src/lib/address.ts b/dashboard/src/lib/address.ts
+index e6ce9a49..2a9c6904 100644
+--- a/dashboard/src/lib/address.ts
++++ b/dashboard/src/lib/address.ts
+@@ -1,11 +1,15 @@
+ // The dashboard's address (T-429): the page in the path, what is open over it in the query.
+ //
+ //   /                          the landing page (the overview with two or more projects, the project with one)
+-//   /projects                  the overview's project cards; /board, /progress, /agents its other tabs
+-//   /projects/<id>[/<tab>]     a project, on a tab (kanban, list, graph, progress, agents, project)
++//   /projects                  the overview's project cards; /board, /list, /progress, /agents, /reviews its other tabs
++//   /projects/<id>[/<tab>]     a project, on a tab (kanban, list, graph, progress, agents, project, reviews, inbox,
++//                              documents); without one, its Overview (the `project` tab, docs/sidebar-overhaul-design.md)
++//   /new                       the app's new tab: a chooser of scope and item (ATM-755)
+ //   ?sprint=…&task=T-1&doc=docs/x.md:L40&about    the Sprint filter, a task's details, a document, a dialog
+ //   /w/<w>/…                   any of these in workspace <w> (ADR-003 §5); without it, `default` (every link so far)
+ //
++// Each page belongs to one of the sidebar's items (docs/sidebar-overhaul-design.md §4, ATM-751): `itemOf`.
++//
+ // The page's state is read and written as parameters with the names the hash used before (`project`, `overview`,
+ // `view`, then the query's own), so the helpers that change one (tabs.ts, dialogs.ts, …) don't need to know which
+ // part of the address it lives in. An old link (`#project=x&view=list`) has the same parameters in its hash: it is
+@@ -20,8 +24,16 @@ export function isOverviewTab(value: unknown): value is OverviewTab {
+   return OVERVIEW_TABS.includes(value as OverviewTab);
+ }
+ 
++/** The All projects page's paths: its tabs, and All's List (ATM-751: the Tasks item's List; its page is ATM-752's) */
++export const OVERVIEW_PATHS = [...OVERVIEW_TABS, 'list'] as const;
++type OverviewPath = (typeof OVERVIEW_PATHS)[number];
++const isOverviewPath = (value: unknown): value is OverviewPath => OVERVIEW_PATHS.includes(value as OverviewPath);
++
++/** The app's new tab (ATM-755): `/new`, the chooser of scope and item */
++const NEW_TAB = 'new';
++
+ /** Parameters in the path, not the query */
+-const PATH_KEYS = ['workspace', 'project', 'overview', 'view', 'review', 'section'];
++const PATH_KEYS = ['workspace', 'project', 'overview', 'view', 'review', 'section', NEW_TAB];
+ /** The project tab a review's page is under: /projects/<id>/reviews/<CR> (ATM-574) */
+ const REVIEWS = 'reviews';
+ /** A review page's sub-tabs (ATM-697): the Overview at the review's own path, the others after it (…/<CR>/diffs) */
+@@ -76,9 +88,11 @@ export function addressParams(address: string): URLSearchParams {
+       params.set('view', REVIEWS);
+       params.set('review', rest[0]);
+       if (rest[1]) params.set('section', rest[1]);
+-    } else if (segments.length === 1 && isOverviewTab(first)) {
++    } else if (segments.length === 1 && isOverviewPath(first)) {
+       params.set('overview', '');
+       params.set('view', first);
++    } else if (segments.length === 1 && first === NEW_TAB) {
++      params.set(NEW_TAB, '');
+     }
+   }
+   for (const [key, value] of new URLSearchParams(query)) {
+@@ -109,8 +123,10 @@ export function formatAddress(params: URLSearchParams): string {
+       (isSection(section) && section !== 'overview' ? `/${section}` : '');
+     pathView = true;
+   } else if (params.has('overview')) {
+-    path = `${prefix}/` + (view && isOverviewTab(view) ? view : PROJECTS);
++    path = `${prefix}/` + (view && isOverviewPath(view) ? view : PROJECTS);
+     pathView = true;
++  } else if (params.has(NEW_TAB)) {
++    path = `${prefix}/${NEW_TAB}`;
+   }
+   const parts = [...params]
+     .filter(
+@@ -119,6 +135,7 @@ export function formatAddress(params: URLSearchParams): string {
+           key === 'workspace' ||
+           key === 'project' ||
+           key === 'overview' ||
++          key === NEW_TAB ||
+           (key === 'view' && pathView) ||
+           // A review is a path's alone, on the reviews tab, and so is its sub-tab
+           key === 'review' ||
+@@ -135,10 +152,47 @@ export function formatAddress(params: URLSearchParams): string {
+ 
+ /** The dashboard's page paths, as `src/routes/` has them and `atm serve` answers them (atm-api's pages.rs):
+  * `/`, `/projects`, `/projects/<id>`, `/projects/<id>/<tab>`, `/projects/<id>/reviews/<CR>` (and its sub-tabs,
+- * `…/<CR>/diffs` and `…/<CR>/comments`, ATM-697), `/board`, `/progress`, `/agents`, `/reviews` (ATM-575), each also
+- * under `/w/<w>` (and `/w/<w>` itself) */
++ * `…/<CR>/diffs` and `…/<CR>/comments`, ATM-697), `/board`, `/list`, `/progress`, `/agents`, `/reviews` (ATM-575),
++ * `/new` (ATM-751), each also under `/w/<w>` (and `/w/<w>` itself) */
+ export const PAGE_PATH =
+-  /^(?:\/w\/[^/]+)?(?:\/(?:projects(?:\/[^/]+(?:\/[a-z]+|\/reviews\/[A-Za-z0-9.-]{1,64}(?:\/(?:diffs|comments))?)?)?|board|progress|agents|reviews)?\/?)?$/;
++  /^(?:\/w\/[^/]+)?(?:\/(?:projects(?:\/[^/]+(?:\/[a-z]+|\/reviews\/[A-Za-z0-9.-]{1,64}(?:\/(?:diffs|comments))?)?)?|board|list|progress|agents|reviews|new)?\/?)?$/;
++
++/** The sidebar's items (docs/sidebar-overhaul-design.md §1, ATM-751): each page belongs to one */
++export const ITEMS = ['overview', 'inbox', 'tasks', 'reviews', 'documents', 'analysis'] as const;
++export type Item = (typeof ITEMS)[number];
++/** All projects' items: no Inbox or Documents (Hakan, CR-135) */
++export const ALL_ITEMS: readonly Item[] = ['overview', 'tasks', 'reviews', 'analysis'];
++
++/** A view's item: a project's tabs and All's, which share their names but the cards (`projects`) and the board */
++const ITEM_OF: Record<string, Item> = {
++  project: 'overview',
++  projects: 'overview',
++  inbox: 'inbox',
++  kanban: 'tasks',
++  board: 'tasks',
++  list: 'tasks',
++  graph: 'tasks',
++  reviews: 'reviews',
++  documents: 'documents',
++  progress: 'analysis',
++  agents: 'analysis',
++};
++
++/** The item the page `address` shows belongs to: a project's or All's page, by its view (a project without one, or one
++ * it doesn't know, is on its Overview); none for the landing page (which shows All's or the one project's Overview, as
++ * the projects listed decide: routes.ts `routeFor`) and the new tab */
++export function itemOf(address: string): Item | null {
++  const params = addressParams(address);
++  const view = params.get('view') ?? '';
++  if (params.has('project')) return ITEM_OF[view] ?? 'overview';
++  if (params.has('overview')) return ITEM_OF[view] ?? 'overview';
++  return null;
++}
++
++/** Whether `address` is the app's new tab (`/new`) */
++export function namesNewTab(address: string): boolean {
++  return addressParams(address).has(NEW_TAB);
++}
+ 
+ /** The review a review's page shows (/projects/<id>/reviews/<CR>), its sub-tab (the path's end, ATM-697), and the view
+  * of it its query names: the round, the round against, the file, the comment in view (`?comment=c12`, never a `#`
+diff --git a/dashboard/src/lib/places.ts b/dashboard/src/lib/places.ts
+index 7865c6c0..1b506ca3 100644
+--- a/dashboard/src/lib/places.ts
++++ b/dashboard/src/lib/places.ts
+@@ -1,28 +1,39 @@
+-// A place's name, from its address (ATM-686): what a back button says it goes back to ("← Kanban", "← ATM-12",
++// A place's name, from its address (ATM-686): what a back button says it goes back to ("← Board", "← ATM-12",
+ // "← All reviews"). What is open over a page names it first (a task's details, a document), then a review, then the
+ // page itself.
+-import { addressParams } from './address';
++import { addressParams, type Item } from './address';
+ 
+-/** A project's tabs, as their buttons name them */
++/** A project's tabs, as their buttons name them (the Kanban is the Board and the graph Dependencies, ATM-751) */
+ const PROJECT_TABS: Record<string, string> = {
+-  kanban: 'Kanban',
++  kanban: 'Board',
+   list: 'List',
+-  graph: 'Graph',
++  graph: 'Dependencies',
+   progress: 'Progress',
+   agents: 'Agents',
+   project: 'Project',
+   reviews: 'Reviews',
+ };
+ 
+-/** The overview's tabs (address.ts OVERVIEW_TABS), as their buttons name them */
++/** The overview's pages (address.ts OVERVIEW_PATHS), as their buttons name them */
+ const OVERVIEW_TABS: Record<string, string> = {
+   projects: 'Projects',
+   board: 'Omniboard',
++  list: 'List',
+   progress: 'Progress',
+   agents: 'Agents',
+   reviews: 'All reviews',
+ };
+ 
++/** The sidebar's items, as the sidebar and the tabs' titles name them (docs/sidebar-overhaul-design.md §1) */
++export const ITEM_NAMES: Record<Item, string> = {
++  overview: 'Overview',
++  inbox: 'Inbox',
++  tasks: 'Tasks',
++  reviews: 'Code Reviews',
++  documents: 'Documents',
++  analysis: 'Analysis',
++};
++
+ /** What `address` shows, in a word or two */
+ export function placeName(address: string): string {
+   const params = addressParams(address);
+@@ -33,6 +44,7 @@ export function placeName(address: string): string {
+   if (review) return review;
+   const view = params.get('view') ?? '';
+   if (params.has('overview')) return OVERVIEW_TABS[view] ?? 'Projects';
+-  if (params.has('project')) return PROJECT_TABS[view] ?? 'Kanban';
++  // A project without a tab (or one it doesn't know) opens on its Overview, the Project tab (ATM-751)
++  if (params.has('project')) return PROJECT_TABS[view] ?? PROJECT_TABS.project;
+   return 'Projects';
+ }
+diff --git a/dashboard/src/lib/state.svelte.ts b/dashboard/src/lib/state.svelte.ts
+index 40af9077..300cb404 100644
+--- a/dashboard/src/lib/state.svelte.ts
++++ b/dashboard/src/lib/state.svelte.ts
+@@ -1162,14 +1162,12 @@ export class DashboardState {
+     this.applyView(defaultView(), true);
+   }
+ 
+-  /** After the first load: bring back this project's view. A tab in the address wins over the saved tab. */
++  /** After the first load: bring back this project's view: its filters, sorts and each tab's settings. The tab is the
++   * address's: one without a tab is the project's Overview (ATM-751), not the tab seen last */
+   private restoreView() {
+     // The server's project id is meta.id (or stands in for it), so views saved before 0.15.0 are found again
+     this.viewKey = projectKey(this.projectId ? { id: this.projectId } : this.meta);
+-    this.applyView(
+-      sanitizeView(readView(this.viewKey), this.tasks, this.vocab, this.sprints),
+-      !namesView(currentAddress()),
+-    );
++    this.applyView(sanitizeView(readView(this.viewKey), this.tasks, this.vocab, this.sprints), false);
+     // A ?sprint= in the link wins over the saved Sprint filter (T-323)
+     const linked = sprintParamOf(currentAddress(), this.sprints);
+     if (linked) this.setSprintScope(linked);
+diff --git a/dashboard/src/lib/tabs.ts b/dashboard/src/lib/tabs.ts
+index af8dcb0a..014acc86 100644
+--- a/dashboard/src/lib/tabs.ts
++++ b/dashboard/src/lib/tabs.ts
+@@ -6,12 +6,16 @@ import { addressParams, formatAddress } from './address';
+ // sits between the groups, after GROUP_END
+ export const VIEWS = ['kanban', 'list', 'graph', 'progress', 'agents', 'project', 'reviews'] as const;
+ export type ViewId = (typeof VIEWS)[number];
+-export const DEFAULT_VIEW: ViewId = 'kanban';
++/** A project without a tab in its address opens on its Overview (the `project` tab; docs/sidebar-overhaul-design.md §7,
++ * ATM-751), which links into its Board */
++export const DEFAULT_VIEW: ViewId = 'project';
+ export const GROUP_END: ViewId = 'graph';
+ 
++/** The tabs' names: the Kanban is the Board and the graph Dependencies, as the sidebar's Tasks item names them
++ * (ATM-751); their addresses keep `kanban` and `graph`, so old links still work */
+ export const VIEW_LABELS: Record<ViewId, string> = {
+-  graph: 'Dependency Graph',
+-  kanban: 'Kanban Board',
++  graph: 'Dependencies',
++  kanban: 'Board',
+   list: 'Task List',
+   agents: 'Agents',
+   progress: 'Progress',
+diff --git a/dashboard/src/params.ts b/dashboard/src/params.ts
+index 3c1fc305..57acc23f 100644
+--- a/dashboard/src/params.ts
++++ b/dashboard/src/params.ts
+@@ -1,13 +1,13 @@
+ // The route parameters with a fixed set of values (T-429): a project's tab (/projects/<id>/[tab=view]) and the All
+-// projects page's tabs but the project cards, which are /projects ([tab=overview]: /board, /progress, /agents,
+-// /reviews).
++// projects page's paths but the project cards, which are /projects ([tab=overview]: /board, /progress, /agents,
++// /reviews, /list).
+ // SvelteKit takes each as a Standard Schema of the parameter's text. SvelteKit's build loads this module on its own,
+-// so it imports nothing: the lists are lib/tabs.ts VIEWS and lib/address.ts OVERVIEW_TABS, which
++// so it imports nothing: the lists are lib/tabs.ts VIEWS and lib/address.ts OVERVIEW_PATHS, which
+ // tests/unit/address.test.ts checks them against.
+ import type { ParamMatcher } from '@sveltejs/kit/params';
+ 
+ export const PROJECT_TABS = ['kanban', 'list', 'graph', 'progress', 'agents', 'project', 'reviews'];
+-export const OVERVIEW_PATHS = ['board', 'progress', 'agents', 'reviews'];
++export const OVERVIEW_PATHS = ['board', 'progress', 'agents', 'reviews', 'list'];
+ /** A review page's sub-tabs after its path (ATM-697: /projects/<id>/reviews/<CR>/[section=section]); the Overview is
+  * the review's own path (lib/address.ts REVIEW_SECTIONS) */
+ export const REVIEW_SECTION_PATHS = ['diffs', 'comments'];
+diff --git a/dashboard/src/routes/new/+page.svelte b/dashboard/src/routes/new/+page.svelte
+new file mode 100644
+index 00000000..00e62d52
+--- /dev/null
++++ b/dashboard/src/routes/new/+page.svelte
+@@ -0,0 +1 @@
++<!-- The app's new tab (/new, ATM-751): the layout's app shows it (its chooser of scope and item, ATM-755) -->
+diff --git a/dashboard/src/routes/w/[workspace]/new/+page.svelte b/dashboard/src/routes/w/[workspace]/new/+page.svelte
+new file mode 100644
+index 00000000..59e840bb
+--- /dev/null
++++ b/dashboard/src/routes/w/[workspace]/new/+page.svelte
+@@ -0,0 +1 @@
++<!-- The app's new tab in a workspace (/w/<w>/new, ATM-751): the layout's app shows it (ATM-755) -->
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index df12bff5..fe0deb1a 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -9,7 +9,7 @@ test.describe('the dashboard in the atm app', () => {
+   }) => {
+     await tasksServer.asApp();
+     tasksServer.use('standard');
+-    await page.goto('/');
++    await page.goto(`/projects/${tasksServer.projectId}/kanban`);
+     await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+     await expect(page.locator('#kanban .kanban-card').first()).toBeVisible();
+     expect(tasksServer.httpRequests).toEqual([]);
+@@ -38,7 +38,7 @@ test.describe('the dashboard in the atm app', () => {
+   }) => {
+     await tasksServer.asApp();
+     tasksServer.use('standard');
+-    await page.goto('/');
++    await page.goto(`/projects/${tasksServer.projectId}/kanban`);
+     await expect(page.locator('#kanban .kanban-card').first()).toBeVisible();
+     await expect.poll(() => tasksServer.menuState?.view).toBe('kanban');
+ 
+@@ -844,13 +844,13 @@ test.describe('the dashboard in the atm app', () => {
+     // A right-click on › lists what is ahead, nearest first; choosing one jumps there
+     await forwardArrow.click({ button: 'right' });
+     const ahead = page.locator('#app-forward-menu .app-history-menu-item');
+-    await expect(ahead).toHaveText(['Graph — Standard Project']);
++    await expect(ahead).toHaveText(['Dependencies — Standard Project']);
+     await ahead.first().click();
+     await expect.poll(at).toBe(`${base}/graph`);
+     // On ‹, what is behind, nearest first
+     await backArrow.click({ button: 'right' });
+     const behind = page.locator('#app-back-menu .app-history-menu-item');
+-    await expect(behind).toHaveText(['Kanban — Standard Project', 'List — Standard Project']);
++    await expect(behind).toHaveText(['Board — Standard Project', 'List — Standard Project']);
+     await behind.nth(1).click();
+     await expect.poll(at).toBe(`${base}/list`);
+     await expect(backArrow).toBeDisabled();
+@@ -916,6 +916,8 @@ test.describe('the dashboard in the atm app', () => {
+     // ⌘-click on a task's card opens its details in a new tab
+     await tabs.nth(0).click();
+     await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
++    // A project opens on its Overview (ATM-751): to its board
++    await page.locator('#tab-kanban').click();
+     const card = page.locator('#kanban .kanban-card').first();
+     const id = await card.getAttribute('data-id');
+     await card.click({ modifiers: ['ControlOrMeta'] });
+diff --git a/dashboard/tests/e2e/archive.spec.ts b/dashboard/tests/e2e/archive.spec.ts
+index e3460213..95b24624 100644
+--- a/dashboard/tests/e2e/archive.spec.ts
++++ b/dashboard/tests/e2e/archive.spec.ts
+@@ -25,8 +25,8 @@ test.describe('archive', () => {
+     await expect(page.locator('#archived-count')).toHaveText('3 archived');
+     await expect(page.locator('#subtitle')).toContainText('12 tasks across 3 sprints · 3 archived — loaded');
+     await expect(page.locator('.task-card')).toHaveCount(12);
+-    await page.getByRole('tab', { name: 'Kanban Board' }).click();
+-    await page.getByRole('tab', { name: 'Dependency Graph' }).click();
++    await page.getByRole('tab', { name: 'Board', exact: true }).click();
++    await page.getByRole('tab', { name: 'Dependencies' }).click();
+     expect(tasksServer.archiveRequests).toBe(0);
+   });
+ 
+@@ -79,7 +79,7 @@ test.describe('archive', () => {
+     await expect(page.locator('#detail-archived')).toBeVisible();
+     await page.keyboard.press('Escape');
+     await page.locator('#task-search').fill('');
+-    await page.getByRole('tab', { name: 'Dependency Graph' }).click();
++    await page.getByRole('tab', { name: 'Dependencies' }).click();
+     await expect(page.locator('#dep-graph [data-id="T-090"]')).toHaveCount(1);
+   });
+ 
+diff --git a/dashboard/tests/e2e/performance.spec.ts b/dashboard/tests/e2e/performance.spec.ts
+index 056c0bb3..46270bd4 100644
+--- a/dashboard/tests/e2e/performance.spec.ts
++++ b/dashboard/tests/e2e/performance.spec.ts
+@@ -129,7 +129,8 @@ test.describe('performance with 500 tasks and a large archive', { tag: '@timed'
+     const data = loadFixture('large-500');
+     data.meta = { ...data.meta, archived: ARCHIVE_SIZE };
+     tasksServer.archive(largeArchive());
+-    await openDashboard(page, tasksServer, data);
++    // On the board: a project's Overview (its default since ATM-751) reads the history
++    await openDashboard(page, tasksServer, data, { tab: 'kanban' });
+     await expect(page.locator('#kanban .kanban-card').first()).toBeAttached();
+   });
+ 
+@@ -156,7 +157,7 @@ test.describe('performance with 500 tasks and a large archive', { tag: '@timed'
+ test.describe('performance with 500 tasks', { tag: '@timed' }, () => {
+   test.beforeEach(async ({ page, tasksServer }) => {
+     await page.clock.setFixedTime(new Date('2026-04-20T12:00:00Z'));
+-    await openDashboard(page, tasksServer, 'large-500');
++    await openDashboard(page, tasksServer, 'large-500', { tab: 'kanban' });
+     await expect(page.locator('#kanban .kanban-card').first()).toBeAttached();
+   });
+ 
+diff --git a/dashboard/tests/e2e/projects.spec.ts b/dashboard/tests/e2e/projects.spec.ts
+index 87ac07a0..5374e016 100644
+--- a/dashboard/tests/e2e/projects.spec.ts
++++ b/dashboard/tests/e2e/projects.spec.ts
+@@ -570,7 +570,8 @@ test.describe('projects', () => {
+     await page.locator('#about-project-details').click();
+     await expect(page.locator('#about-overlay.open')).toHaveCount(0);
+     await expect(page.locator('#tab-project')).toHaveAttribute('aria-selected', 'true');
+-    await expect(page).toHaveURL(/\/project(\?|$)/);
++    // The project's Overview: its address without a tab, or with `project` (ATM-751)
++    await expect(page).toHaveURL(/\/projects\/busy(\/project)?(\?|$)/);
+   });
+ 
+   test('a project whose folder is gone says how to remove it', async ({ page, tasksServer }) => {
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 6b468426..76ced6d1 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -366,7 +366,7 @@ test.describe('the reviews tab', () => {
+       await withReviewedTask(page, tasksServer, 'kanban');
+       await page.locator('.kanban-card[data-id="T-004"] .card-review .review-link').click();
+       await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+-      await expect(back(page)).toHaveText('Kanban');
++      await expect(back(page)).toHaveText('Board');
+       await back(page).click();
+       await expect(page.locator('#kanban')).toBeVisible();
+       expect(new URL(page.url()).pathname).toBe(`/projects/${tasksServer.projectId}/kanban`);
+@@ -402,7 +402,7 @@ test.describe('the reviews tab', () => {
+       await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+       await page.keyboard.press('Escape');
+       await expect(page.locator('#detail-overlay')).not.toHaveClass(/open/);
+-      await expect(back(page)).toHaveText('Kanban');
++      await expect(back(page)).toHaveText('Board');
+       await back(page).click();
+       await expect(page.locator('#kanban')).toBeVisible();
+     });
+diff --git a/dashboard/tests/e2e/saved-view.spec.ts b/dashboard/tests/e2e/saved-view.spec.ts
+index 6fb39bf8..06f305c1 100644
+--- a/dashboard/tests/e2e/saved-view.spec.ts
++++ b/dashboard/tests/e2e/saved-view.spec.ts
+@@ -19,8 +19,11 @@ const project = (id: string) => {
+ };
+ 
+ test.describe('saved view', () => {
+-  test('filters, search, tab and Kanban options come back after a reload', async ({ page, tasksServer }) => {
+-    await openDashboard(page, tasksServer, project('p1'));
++  test('filters, search and Kanban options come back after a reload; the tab is the address’s', async ({
++    page,
++    tasksServer,
++  }) => {
++    await openDashboard(page, tasksServer, project('p1'), { tab: 'kanban' });
+     // Grouping is offered while the board shows several sprints (T-323): all of them, before picking one
+     await page.locator('#kanban-group-by-sprint').check();
+     await page.locator('#kanban-show-skipped').check();
+@@ -31,13 +34,14 @@ test.describe('saved view', () => {
+     await closeFilters(page);
+     await page.locator('#tab-graph').click();
+ 
+-    await page.goto('/'); // no tab in the address: the saved tab applies, the graph (not the default Kanban)
++    // No tab in the address: the project's Overview, not the tab seen last (ATM-751); the rest of the view is back
++    await page.goto('/');
+     await expect(page.locator('.filter-chip')).toHaveText(['Sprint: Phase 1', 'Type: Feature']);
+     await expect(page.locator('#task-search')).toHaveValue('user');
+     await expect(matchCount(page)).toHaveText('1 of 12 tasks');
+-    await expect(page.locator('#tab-graph')).toHaveAttribute('aria-selected', 'true');
+-    // The project's address, with the saved tab, and the saved Sprint filter in it too (?sprint=, T-323)
+-    await expect(page).toHaveURL(/\/projects\/p1\/graph\?sprint=Phase%201$/);
++    await expect(page.locator('#tab-project')).toHaveAttribute('aria-selected', 'true');
++    // The project's address, with the saved Sprint filter in it (?sprint=, T-323)
++    await expect(page).toHaveURL(/\/projects\/p1\?sprint=Phase%201$/);
+     await page.locator('#tab-kanban').click();
+     await expect(page.locator('#kanban-show-skipped')).toBeChecked();
+     await openFilters(page);
+@@ -127,7 +131,8 @@ test.describe('saved view', () => {
+     await expect(page.locator('#settings-menu')).toHaveCount(0);
+     await expect(page.locator('.filter-btn.active')).toHaveCount(0);
+     await expect(page.locator('#task-search')).toHaveValue('');
+-    await expect(page.locator('#tab-kanban')).toHaveAttribute('aria-selected', 'true');
++    // The default tab: the Overview (ATM-751)
++    await expect(page.locator('#tab-project')).toHaveAttribute('aria-selected', 'true');
+     await page.goto('/');
+     await expect(matchCount(page)).toHaveText('12 of 12 tasks');
+   });
+diff --git a/dashboard/tests/e2e/sprints.spec.ts b/dashboard/tests/e2e/sprints.spec.ts
+index 8a053f9b..ab87dfd8 100644
+--- a/dashboard/tests/e2e/sprints.spec.ts
++++ b/dashboard/tests/e2e/sprints.spec.ts
+@@ -28,7 +28,7 @@ test.describe('scope bar (T-323)', () => {
+     page,
+     tasksServer,
+   }) => {
+-    await openDashboard(page, tasksServer, 'sprints');
++    await openDashboard(page, tasksServer, 'sprints', { tab: 'kanban' });
+     const bar = page.locator('#scope-bar');
+     await expect(bar).toHaveAttribute('data-state', 'active');
+     await expect(bar.locator('#scope-trigger')).toHaveText('Ada Lovelace');
+@@ -122,7 +122,7 @@ test.describe('scope bar (T-323)', () => {
+     const name = 'Library, gallery and blog';
+     for (const sprint of sprintsOf(data)) if (sprint.id === 'Alan Turing') sprint.id = name;
+     for (const task of data.tasks) if (task.sprint === 'Alan Turing') task.sprint = name;
+-    await openDashboard(page, tasksServer, data);
++    await openDashboard(page, tasksServer, data, { tab: 'kanban' });
+     const trigger = page.locator('#scope-trigger');
+     await trigger.click();
+     await page.locator(`.scope-choice[data-scope="${name}"]`).click();
+@@ -136,7 +136,7 @@ test.describe('scope bar (T-323)', () => {
+     page,
+     tasksServer,
+   }) => {
+-    await openDashboard(page, tasksServer, 'sprints');
++    await openDashboard(page, tasksServer, 'sprints', { tab: 'kanban' });
+     await page.locator('#task-search').fill('Sessions');
+     await expect(page.locator('#scope-filtered')).toHaveText('showing 1, filtered: “Sessions”');
+     await expect(page.locator('#scope-bar .sprint-progress')).toHaveText('0 of 3 done');
+@@ -151,7 +151,7 @@ test.describe('scope bar (T-323)', () => {
+   }) => {
+     const data = loadFixture('sprints');
+     for (const task of data.tasks) if (String(task.sprint).toLowerCase() === 'ada lovelace') task.status = 'done';
+-    await openDashboard(page, tasksServer, data);
++    await openDashboard(page, tasksServer, data, { tab: 'kanban' });
+     await expect(page.locator('#scope-done')).toHaveText('All 3 tasks done');
+     await expect(page.locator('#scope-hint')).toHaveText(
+       'Close it with /atm-close-sprint · release 1.0 is ready to ship',
+@@ -168,7 +168,7 @@ test.describe('scope bar (T-323)', () => {
+     const data = loadFixture('sprints');
+     const ada = sprintsOf(data).find((s) => s.id === 'Ada Lovelace')!;
+     Object.assign(ada, { state: 'closed', end: '2026-04-08T18:00:00Z' });
+-    await openDashboard(page, tasksServer, data);
++    await openDashboard(page, tasksServer, data, { tab: 'kanban' });
+     await expect(page.locator('#scope-trigger')).toHaveText('All tasks');
+     await expect(page.locator('#scope-hint')).toHaveText(
+       /^No active sprint\s·\slast: Ada Lovelace, closed .+\s·\snext planned: Alan Turing \(0 tasks\)\s·\sstart\s+it with \/atm-plan-sprint$/,
+@@ -288,7 +288,7 @@ test.describe('scope bar (T-323)', () => {
+     const later = new Date('2026-04-14T12:00:00Z');
+     await page.clock.setFixedTime(later);
+     atmNowFor(later);
+-    await openDashboard(page, tasksServer, 'sprints');
++    await openDashboard(page, tasksServer, 'sprints', { tab: 'kanban' });
+     const due = page.locator('#scope-bar .sprint-due');
+     await expect(due).toHaveText('2 days overdue');
+     await expect(due).toHaveClass(/overdue/);
+@@ -301,7 +301,7 @@ test.describe('scope bar (T-323)', () => {
+     const data = loadFixture('standard');
+     for (const task of data.tasks) delete task.phase;
+     delete data.meta?.phases;
+-    await openDashboard(page, tasksServer, data);
++    await openDashboard(page, tasksServer, data, { tab: 'kanban' });
+     await expect(page.locator('#kanban .kanban-card').first()).toBeVisible();
+     await expect(page.locator('#scope-bar')).toHaveCount(0);
+     await expect(page.locator('#kanban-show-skipped')).toBeVisible();
+@@ -313,7 +313,7 @@ test.describe('scope bar (T-323)', () => {
+       if (task.id === 'T-003') task.with = 'user';
+       if (task.id === 'T-004') Object.assign(task, { status: 'in_review', review_state: 'changes_requested' });
+     }
+-    await openDashboard(page, tasksServer, data);
++    await openDashboard(page, tasksServer, data, { tab: 'kanban' });
+     const card = (id: string) => page.locator(`.kanban-card[data-id="${id}"]`);
+     await expect(card('T-003').locator('.with-user-chip')).toHaveText('with you');
+     await expect(card('T-004').locator('.review-state-chip')).toHaveText('Changes requested');
+diff --git a/dashboard/tests/e2e/tabs.spec.ts b/dashboard/tests/e2e/tabs.spec.ts
+index 93ebc20d..f2c14c99 100644
+--- a/dashboard/tests/e2e/tabs.spec.ts
++++ b/dashboard/tests/e2e/tabs.spec.ts
+@@ -17,16 +17,17 @@ async function expectSelected(page: Page, id: string) {
+ }
+ 
+ test.describe('view tabs', () => {
+-  test('a tablist: the task views, a divider, the project views; the Kanban selected by default (T-251)', async ({
++  test('a tablist: the task views, a divider, the project views; the Project tab, its Overview, by default (ATM-751)', async ({
+     page,
+     tasksServer,
+   }) => {
+     await openDashboard(page, tasksServer, 'standard');
+     await expect(page.getByRole('tablist')).toBeVisible();
++    // The Kanban is the Board, the graph Dependencies (ATM-751)
+     await expect(page.getByRole('tab')).toHaveText([
+-      'Kanban Board',
++      'Board',
+       'Task List',
+-      'Dependency Graph',
++      'Dependencies',
+       'Progress',
+       'Agents',
+       'Project',
+@@ -34,11 +35,24 @@ test.describe('view tabs', () => {
+     ]);
+     // The divider sits between the graph and Progress
+     await expect(page.locator('#tab-graph + .view-tab-divider + #tab-progress')).toHaveCount(1);
+-    await expectSelected(page, 'kanban');
++    await expectSelected(page, 'project');
+     await expect(panel(page, 'kanban')).toHaveAttribute('role', 'tabpanel');
+     await expect(panel(page, 'kanban')).toHaveAttribute('aria-labelledby', 'tab-kanban');
+   });
+ 
++  test('a project’s address without a tab is its Overview, whatever tab was seen last (ATM-751)', async ({
++    page,
++    tasksServer,
++  }) => {
++    await openDashboard(page, tasksServer, 'standard', { tab: 'graph' });
++    await expectSelected(page, 'graph');
++    await page.goto(`/projects/${tasksServer.projectId}`);
++    await expectSelected(page, 'project');
++    // A tab in the address is still that tab
++    await page.goto(`/projects/${tasksServer.projectId}/list`);
++    await expectSelected(page, 'list');
++  });
++
+   test('#view=graph still opens the graph', async ({ page, tasksServer }) => {
+     await openDashboard(page, tasksServer, 'standard', { tab: 'graph' });
+     await expectSelected(page, 'graph');
+@@ -58,7 +72,7 @@ test.describe('view tabs', () => {
+   });
+ 
+   test('arrow keys move between tabs and wrap', async ({ page, tasksServer }) => {
+-    await openDashboard(page, tasksServer, 'standard');
++    await openDashboard(page, tasksServer, 'standard', { tab: 'kanban' });
+     await tab(page, 'kanban').focus();
+     await page.keyboard.press('ArrowRight');
+     await expectSelected(page, 'list');
+diff --git a/dashboard/tests/unit/AboutDialog.component.test.ts b/dashboard/tests/unit/AboutDialog.component.test.ts
+index 3f80ad81..65cd0f2a 100644
+--- a/dashboard/tests/unit/AboutDialog.component.test.ts
++++ b/dashboard/tests/unit/AboutDialog.component.test.ts
+@@ -83,6 +83,8 @@ describe('AboutDialog', () => {
+   });
+ 
+   it('Project details closes the dialog and opens the Project tab (T-255)', async () => {
++    // From another tab: a project opens on its Project tab, its Overview (ATM-751)
++    dashboard.selectTab('kanban');
+     render(AboutDialog);
+     dashboard.openDialog('about');
+     flushSync();
+diff --git a/dashboard/tests/unit/address.test.ts b/dashboard/tests/unit/address.test.ts
+index 632f469a..1ea30136 100644
+--- a/dashboard/tests/unit/address.test.ts
++++ b/dashboard/tests/unit/address.test.ts
+@@ -3,12 +3,16 @@ import { dirname, join } from 'node:path';
+ import { fileURLToPath } from 'node:url';
+ import { describe, expect, it } from 'vitest';
+ import {
++  ALL_ITEMS,
+   addressOf,
+   addressParams,
+   formatAddress,
+   isPagePath,
++  itemOf,
++  ITEMS,
+   legacyParams,
+-  OVERVIEW_TABS,
++  namesNewTab,
++  OVERVIEW_PATHS as ADDRESS_OVERVIEW_PATHS,
+   REVIEW_SECTIONS,
+   reviewListOf,
+   reviewOf,
+@@ -140,7 +144,7 @@ describe('the address (T-429)', () => {
+       expect(isPagePath(path), path).toBe(false);
+     // The route matchers' lists are the dashboard's own
+     expect(PROJECT_TABS).toEqual([...VIEWS]);
+-    expect(OVERVIEW_PATHS).toEqual(OVERVIEW_TABS.filter((tab) => tab !== 'projects'));
++    expect(OVERVIEW_PATHS).toEqual(ADDRESS_OVERVIEW_PATHS.filter((tab) => tab !== 'projects'));
+     const routes = join(dirname(fileURLToPath(import.meta.url)), '../../src/routes');
+     for (const page of [
+       '+page.svelte',
+@@ -149,11 +153,82 @@ describe('the address (T-429)', () => {
+       'projects/[id]/[tab=view]/+page.svelte',
+       '[tab=overview]/+page.svelte',
+       'projects/[id]/reviews/[review]/+page.svelte',
++      'new/+page.svelte',
+     ])
+       expect(existsSync(join(routes, page)), page).toBe(true);
+   });
+ });
+ 
++// The sidebar overhaul's addresses (docs/sidebar-overhaul-design.md §4, ATM-751)
++describe('the sidebar’s items in the address', () => {
++  it.each([
++    // A project's pages: its Overview (also without a tab, or with one it doesn't know), Tasks' three, Code Reviews
++    // (a review's page too), Inbox, Documents, Analysis' two
++    ['/projects/abc', 'overview'],
++    ['/projects/abc/project', 'overview'],
++    ['/projects/abc/nope', 'overview'],
++    ['/projects/abc/kanban', 'tasks'],
++    ['/projects/abc/list?sprint=a', 'tasks'],
++    ['/projects/abc/graph', 'tasks'],
++    ['/projects/abc/reviews', 'reviews'],
++    ['/projects/abc/reviews/CR-7/diffs?file=a.md', 'reviews'],
++    ['/projects/abc/inbox', 'inbox'],
++    ['/projects/abc/documents?doc=docs/x.md', 'documents'],
++    ['/projects/abc/progress', 'analysis'],
++    ['/projects/abc/agents', 'analysis'],
++    // All projects': the cards, the board and its List, every review, progress and agents
++    ['/projects', 'overview'],
++    ['/board', 'tasks'],
++    ['/list', 'tasks'],
++    ['/reviews', 'reviews'],
++    ['/progress', 'analysis'],
++    ['/w/work/agents', 'analysis'],
++    ['/w/work/projects/abc/kanban', 'tasks'],
++  ])('%s is the %s item’s', (address, item) => {
++    expect(itemOf(address)).toBe(item);
++  });
++
++  it('the landing page and the new tab are no item’s; what is open over a page doesn’t change its item', () => {
++    expect(itemOf('/')).toBeNull();
++    expect(itemOf('/w/work')).toBeNull();
++    expect(itemOf('/new')).toBeNull();
++    expect(itemOf('/projects/abc/kanban?task=ATM-1&doc=docs/x.md')).toBe('tasks');
++  });
++
++  it('six items for a project, four for All projects (no Inbox or Documents, CR-135)', () => {
++    expect(ITEMS).toEqual(['overview', 'inbox', 'tasks', 'reviews', 'documents', 'analysis']);
++    expect(ALL_ITEMS).toEqual(['overview', 'tasks', 'reviews', 'analysis']);
++  });
++
++  it('reads and writes All’s List, a project’s Inbox and Documents, and the new tab', () => {
++    expect(params('/list?sprint=a')).toEqual([
++      ['overview', ''],
++      ['view', 'list'],
++      ['sprint', 'a'],
++    ]);
++    expect(formatAddress(addressParams('/w/work/list'))).toBe('/w/work/list');
++    expect(params('/projects/abc/inbox')).toEqual([
++      ['project', 'abc'],
++      ['view', 'inbox'],
++    ]);
++    expect(formatAddress(addressParams('/projects/abc/documents?doc=docs/x.md'))).toBe(
++      '/projects/abc/documents?doc=docs/x.md',
++    );
++    expect(params('/new')).toEqual([['new', '']]);
++    expect(formatAddress(addressParams('/new'))).toBe('/new');
++    expect(formatAddress(addressParams('/w/work/new'))).toBe('/w/work/new');
++    expect(namesNewTab('/new')).toBe(true);
++    expect(namesNewTab('/w/work/new/')).toBe(true);
++    expect(namesNewTab('/projects')).toBe(false);
++    // Only the path names it: `?new` is no page, and nothing under it is one
++    expect(namesNewTab('/?new')).toBe(false);
++    expect(params('/new/x')).toEqual([]);
++    for (const path of ['/list', '/new', '/w/work/new', '/projects/abc/inbox', '/projects/abc/documents'])
++      expect(isPagePath(path), path).toBe(true);
++    for (const path of ['/new/x', '/news', '/list/x']) expect(isPagePath(path), path).toBe(false);
++  });
++});
++
+ describe('the workspace in the address (ADR-003 §5)', () => {
+   it('reads /w/<w> as the workspace, `default` as none, and keeps it through every page', () => {
+     expect(params('/w/work')).toEqual([['workspace', 'work']]);
+@@ -201,10 +276,11 @@ describe('the workspace in the address (ADR-003 §5)', () => {
+ 
+   it('an overview tab it doesn’t know is the project cards', () => {
+     const write = (entries: [string, string][]) => formatAddress(new URLSearchParams(entries));
++    // (All's List is one since ATM-751; the graph, a project's only, isn't)
+     expect(
+       write([
+         ['overview', ''],
+-        ['view', 'list'],
++        ['view', 'graph'],
+       ]),
+     ).toBe('/projects');
+     expect(params('/kanban')).toEqual([]);
+@@ -222,6 +298,7 @@ describe('the workspace in the address (ADR-003 §5)', () => {
+       'projects/[id]/[tab=view]/+page.svelte',
+       '[tab=overview]/+page.svelte',
+       'projects/[id]/reviews/[review]/+page.svelte',
++      'new/+page.svelte',
+     ])
+       expect(existsSync(join(routes, page)), page).toBe(true);
+   });
+diff --git a/dashboard/tests/unit/history-list.test.ts b/dashboard/tests/unit/history-list.test.ts
+index e4f7e1fb..aa285232 100644
+--- a/dashboard/tests/unit/history-list.test.ts
++++ b/dashboard/tests/unit/history-list.test.ts
+@@ -11,7 +11,7 @@ describe('historyItems', () => {
+   it('lists the entries before the one shown, nearest first, with the steps back to each', () => {
+     expect(historyItems({ entries, at: 2 }, -1, name)).toEqual([
+       { address: '/projects/web/list?task=WEB-3', name: 'WEB-3 — Website', steps: 1 },
+-      { address: '/projects/web/kanban', name: 'Kanban — Website', steps: 2 },
++      { address: '/projects/web/kanban', name: 'Board — Website', steps: 2 },
+     ]);
+   });
+ 
+@@ -32,7 +32,7 @@ describe('historyItems', () => {
+ 
+ describe('entryName', () => {
+   it.each([
+-    ['/projects/web/graph', 'Graph — Website'],
++    ['/projects/web/graph', 'Dependencies — Website'],
+     ['/projects/web?doc=docs/x.md', 'Document — Website'],
+     ['/projects/other/list', 'List — other'],
+     ['/projects', 'Projects'],
+diff --git a/dashboard/tests/unit/places.test.ts b/dashboard/tests/unit/places.test.ts
+index ca3c21dd..ac0fa388 100644
+--- a/dashboard/tests/unit/places.test.ts
++++ b/dashboard/tests/unit/places.test.ts
+@@ -5,16 +5,19 @@ import { placeName } from '../../src/lib/places';
+ 
+ describe('placeName', () => {
+   it.each([
+-    ['/projects/abc', 'Kanban'],
+-    ['/projects/abc/kanban', 'Kanban'],
++    // A project without a tab is on its Overview, the Project tab (ATM-751); the Kanban is the Board, the graph
++    // Dependencies
++    ['/projects/abc', 'Project'],
++    ['/projects/abc/kanban', 'Board'],
+     ['/projects/abc/list', 'List'],
+-    ['/projects/abc/graph', 'Graph'],
++    ['/projects/abc/graph', 'Dependencies'],
+     ['/projects/abc/progress', 'Progress'],
+     ['/projects/abc/agents', 'Agents'],
+     ['/projects/abc/project', 'Project'],
+     ['/projects/abc/reviews', 'Reviews'],
+     ['/projects', 'Projects'],
+     ['/board', 'Omniboard'],
++    ['/list', 'List'],
+     ['/reviews', 'All reviews'],
+     ['/progress', 'Progress'],
+     ['/agents', 'Agents'],
+diff --git a/dashboard/tests/unit/state.test.ts b/dashboard/tests/unit/state.test.ts
+index da9a33a8..da0fc15e 100644
+--- a/dashboard/tests/unit/state.test.ts
++++ b/dashboard/tests/unit/state.test.ts
+@@ -601,13 +601,13 @@ describe('DashboardState saved view', () => {
+     return s;
+   }
+ 
+-  it('brings back every selection on the next visit', async () => {
++  it('brings back every selection on the next visit; the tab is the address’s, the Overview without one (ATM-751)', async () => {
+     const first = await changeEverything();
+     history.replaceState(null, '', '/');
+     const next = new DashboardState();
+     await next.load();
+-    expect(next.currentView()).toEqual(first.currentView());
+-    expect(next.tab).toBe('agents');
++    expect({ ...next.currentView(), tab: 'agents' }).toEqual(first.currentView());
++    expect(next.tab).toBe('project');
+     expect([...next.filters.type]).toEqual(['feature']);
+   });
+ 
+@@ -625,12 +625,12 @@ describe('DashboardState saved view', () => {
+     s.resetView();
+     expect(s.query).toBe('');
+     expect(s.filters.type.size).toBe(0);
+-    expect(s.tab).toBe('kanban');
++    expect(s.tab).toBe('project');
+     expect([s.kanbanShowAllDone, s.agentsWindow, s.graphView, s.graphFiltered]).toEqual([false, null, null, 'hide']);
+     history.replaceState(null, '', '/');
+     const next = new DashboardState();
+     await next.load();
+-    expect(next.tab).toBe('kanban');
++    expect(next.tab).toBe('project');
+   });
+ });
+ 
+diff --git a/dashboard/tests/unit/tabs.test.ts b/dashboard/tests/unit/tabs.test.ts
+index 87006bfb..54689daa 100644
+--- a/dashboard/tests/unit/tabs.test.ts
++++ b/dashboard/tests/unit/tabs.test.ts
+@@ -10,12 +10,12 @@ describe('viewOf', () => {
+     expect(namesView('/projects/p1')).toBe(false);
+   });
+ 
+-  it('falls back to the Kanban (T-251)', () => {
+-    expect(DEFAULT_VIEW).toBe('kanban');
+-    expect(viewOf('')).toBe('kanban');
+-    expect(viewOf('/')).toBe('kanban');
+-    expect(viewOf('/projects/p1')).toBe('kanban');
+-    expect(viewOf('/projects/p1/nope')).toBe('kanban');
++  it('falls back to the Overview, the Project tab (ATM-751: no longer the Kanban, T-251)', () => {
++    expect(DEFAULT_VIEW).toBe('project');
++    expect(viewOf('')).toBe('project');
++    expect(viewOf('/')).toBe('project');
++    expect(viewOf('/projects/p1')).toBe('project');
++    expect(viewOf('/projects/p1/nope')).toBe('project');
+     expect(viewOf('/projects/p1/graph')).toBe('graph');
+   });
+ });
+diff --git a/dashboard/tests/unit/view-store.test.ts b/dashboard/tests/unit/view-store.test.ts
+index 60dd446f..5bb298fe 100644
+--- a/dashboard/tests/unit/view-store.test.ts
++++ b/dashboard/tests/unit/view-store.test.ts
+@@ -129,7 +129,7 @@ describe('reading and writing', () => {
+ 
+   it('projects are kept apart', () => {
+     writeView(key, { ...defaultView(), tab: 'progress' });
+-    expect(readView(projectKey({ id: 'p2' })).tab).toBe('kanban');
++    expect(readView(projectKey({ id: 'p2' })).tab).toBe('project');
+   });
+ 
+   it('nothing stored, or junk, gives the defaults', () => {
+@@ -164,7 +164,7 @@ describe('reading and writing', () => {
+     writeView(key, { ...defaultView(), tab: 'graph' });
+     clearView(key);
+     expect(localStorage.getItem(key)).toBeNull();
+-    expect(readView(key).tab).toBe('kanban');
++    expect(readView(key).tab).toBe('project');
+   });
+ 
+   it('the old per-browser "group by phase" choice seeds projects that have no saved view yet', () => {
+diff --git a/docs/multi-project-api.md b/docs/multi-project-api.md
+index 203f773e..2681a531 100644
+--- a/docs/multi-project-api.md
++++ b/docs/multi-project-api.md
+@@ -306,8 +306,9 @@ text the page reads, never a file it looks up.
+ | Path | The page shows |
+ |---|---|
+ | `/` | the landing page: the overview with two or more projects, the project with one (whose address it then takes) |
+-| `/projects` | the overview's project cards; `/board`, `/progress`, `/agents` and `/reviews` (every project's reviews, with a project picker; ATM-575) its other tabs |
+-| `/projects/<id>` | a project, on its saved tab; `/projects/<id>/<tab>` on a tab (`kanban`, `list`, `graph`, `progress`, `agents`, `project`, `reviews`). The Reviews list's filter and search in the query (ATM-697): `?q=&status=waiting,live&author=&reviewer=&tasks=&branch=` |
++| `/projects` | the overview's project cards; `/board`, `/progress`, `/agents` and `/reviews` (every project's reviews, with a project picker; ATM-575) its other tabs; `/list` every project's tasks as a list (the sidebar's Tasks item, ATM-751; its page is ATM-752's) |
++| `/projects/<id>` | a project on its Overview (the `project` tab; until ATM-751 its saved tab); `/projects/<id>/<tab>` on a tab (`kanban`, `list`, `graph`, `progress`, `agents`, `project`, `reviews`, and the sidebar's `inbox` and `documents`, ATM-751). The Reviews list's filter and search in the query (ATM-697): `?q=&status=waiting,live&author=&reviewer=&tasks=&branch=` |
++| `/new` | the app's new tab: a chooser of scope and item (docs/sidebar-overhaul-design.md §3, ATM-755) |
+ | `/projects/<id>/reviews/<CR>` | a review's page (ATM-574; its reference letters, digits, `-` and `.`, at most 64) on its Overview, `…/<CR>/diffs` and `…/<CR>/comments` its other sub-tabs (ATM-697), with `?round=&against=&file=` the view and the file gone to and `?comment=c12` a comment in view (never a `#` anchor: the app's `atm://` links carry none), titled by the project's key, the reference and the title. A click opens it in place; ⌘ or Ctrl, or a middle click, in a new tab (ATM-698). In the browser it is a page of its own, without the dashboard's title bar and view tabs; in the app it is in a tab, under the window's title bar and its tabs (ATM-574) |
+ | `/w/<w>`, `/w/<w>/…` | any of the above in workspace `<w>` (§2.8, T-457): `/w/<w>` its landing page. Without `/w/<w>`, `default`'s; `/` itself opens the workspace opened last |
+ 
+diff --git a/tests/scripts/serve.test.mjs b/tests/scripts/serve.test.mjs
+index 0e67c9b8..2efa8620 100644
+--- a/tests/scripts/serve.test.mjs
++++ b/tests/scripts/serve.test.mjs
+@@ -1545,9 +1545,15 @@ describe('serve', () => {
+       '/projects/any-id/',
+       '/board',
+       '/progress',
++      // The sidebar overhaul's (ATM-751): All's List, the app's new tab, a project's Inbox and Documents
++      '/list',
++      '/new',
++      '/projects/abcd1234/inbox',
++      '/projects/abcd1234/documents',
+       // In a workspace (ADR-003 §5, T-457)
+       '/w/work',
+       '/w/work/board',
++      '/w/work/new',
+       '/w/work/projects/abcd1234/list',
+     ];
+     for (const p of [...pages, '/agents?task=T-1', '/projects/abcd1234/kanban?doc=docs/x.md:L3&about']) {

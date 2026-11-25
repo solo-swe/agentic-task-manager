@@ -49,21 +49,34 @@ describe('fetchFile', () => {
       ],
     ];
     for (const [since, headers] of cases) {
-      const { fetchFn, calls } = answering(200, 'x');
+      const { fetchFn, calls } = answering(200, '{}');
       await fetchFile('/a', fetchFn, since);
       expect(calls[0], JSON.stringify(since)).toEqual(['/a', { cache: 'no-store', headers }]);
     }
   });
 
-  it('a 200 is its text, with the validators it came with, and none it didn’t', async () => {
-    const both = answering(200, 'body', { ETag: '"v2"', 'Last-Modified': 'Thu, 02 Jan 2026 00:00:00 GMT' });
+  it('a 200 is its JSON parsed, with the validators it came with, and none it didn’t', async () => {
+    const both = answering(200, '{"a": [1]}', { ETag: '"v2"', 'Last-Modified': 'Thu, 02 Jan 2026 00:00:00 GMT' });
     expect(await fetchFile('/a', both.fetchFn)).toEqual({
       unchanged: false,
-      text: 'body',
+      data: { a: [1] },
       validators: { etag: '"v2"', lastModified: 'Thu, 02 Jan 2026 00:00:00 GMT' },
     });
-    const none = answering(200, '');
-    expect(await fetchFile('/a', none.fetchFn)).toEqual({ unchanged: false, text: '', validators: {} });
+    const none = answering(200, 'null');
+    expect(await fetchFile('/a', none.fetchFn)).toEqual({ unchanged: false, data: null, validators: {} });
+  });
+
+  it('a 200 that isn’t JSON rejects (empty too)', async () => {
+    for (const body of ['', 'body', '{'])
+      await expect(fetchFile('/a', answering(200, body).fetchFn), body).rejects.toThrow();
+  });
+
+  it('hands the parsed answer through as the response’s json() gives it, the same object (ATM-769)', async () => {
+    const answer = { tasks: [{ id: 'T-1' }] };
+    const fetchFn = (async () =>
+      ({ ok: true, status: 200, headers: new Headers(), json: async () => answer }) as unknown as Response) as Fetch;
+    const file = await fetchFile('/a', fetchFn);
+    expect(file.unchanged ? null : file.data).toBe(answer);
   });
 
   it('a 304 after asking is unchanged; without having asked, an error', async () => {
@@ -72,19 +85,19 @@ describe('fetchFile', () => {
   });
 
   it('a 404 is `missing` when given (even empty), else an error; any other error is its status', async () => {
-    expect(await fetchFile('/a', answering(404).fetchFn, undefined, '[]')).toEqual({
+    expect(await fetchFile('/a', answering(404).fetchFn, undefined, [])).toEqual({
       unchanged: false,
-      text: '[]',
+      data: [],
       validators: {},
     });
-    expect(await fetchFile('/a', answering(404).fetchFn, undefined, '')).toEqual({
+    expect(await fetchFile('/a', answering(404).fetchFn, undefined, null)).toEqual({
       unchanged: false,
-      text: '',
+      data: null,
       validators: {},
     });
     await expect(fetchFile('/a', answering(404).fetchFn)).rejects.toThrow('HTTP 404');
     for (const status of [400, 403, 413, 500, 503])
-      await expect(fetchFile('/a', answering(status).fetchFn, undefined, '[]'), String(status)).rejects.toThrow(
+      await expect(fetchFile('/a', answering(status).fetchFn, undefined, []), String(status)).rejects.toThrow(
         `HTTP ${status}`,
       );
   });
@@ -98,7 +111,7 @@ describe('fetchFile', () => {
 
   it('fetchProjectFile asks for the project’s file in the current workspace', async () => {
     const { fetchFn, calls } = answering(200, '{}');
-    await fetchProjectFile('a b', 'claims.json', fetchFn, { etag: '"c"' }, '{}');
+    await fetchProjectFile('a b', 'claims.json', fetchFn, { etag: '"c"' }, {});
     expect(calls[0]).toEqual(['/p/a%20b/claims.json', { cache: 'no-store', headers: { 'If-None-Match': '"c"' } }]);
     setApiWorkspace('w');
     await fetchProjectFile('p1', 'worktrees.json', fetchFn);

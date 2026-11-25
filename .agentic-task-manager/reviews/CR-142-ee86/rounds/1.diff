@@ -1,0 +1,2162 @@
+diff --git a/crates/atm-common/schema/inbox.schema.json b/crates/atm-common/schema/inbox.schema.json
+new file mode 100644
+index 00000000..42e33c22
+--- /dev/null
++++ b/crates/atm-common/schema/inbox.schema.json
+@@ -0,0 +1,40 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "$id": "inbox.schema.json",
++  "title": "Inbox",
++  "description": "A project's inbox, as .agentic-task-manager/inbox.json and inbox-archive.json keep it (docs/inbox-design.md §2, ATM-759): the user's raw input, each item created, then discarded with a reason or injected into the tasks made from it.",
++  "type": "object",
++  "required": ["items"],
++  "properties": {
++    "version": { "type": "integer", "minimum": 1, "description": "The file's format: 1" },
++    "next": { "type": "integer", "minimum": 1, "description": "The next item's number: a number is never given twice" },
++    "items": { "type": "array", "items": { "$ref": "#/$defs/InboxItem" } }
++  },
++  "$defs": {
++    "InboxItem": {
++      "type": "object",
++      "required": ["id", "text", "state"],
++      "properties": {
++        "id": { "type": "string", "pattern": "^IN-[1-9][0-9]*$", "description": "IN-<n>, per project" },
++        "text": { "type": "string", "description": "Markdown, as task text renders; at most 20,000 characters" },
++        "state": { "enum": ["created", "discarded", "injected"] },
++        "reason": { "type": "string", "description": "Discarded only: why, at most 500 characters" },
++        "tasks": {
++          "type": "array",
++          "items": { "type": "string" },
++          "description": "Injected only: the keys of the tasks made from it, at least one; each task's from names the item back"
++        },
++        "created_at": { "type": "string", "description": "ISO 8601" },
++        "created_by": { "type": "string", "description": "Who added it: a person (an agent can't)" },
++        "updated_at": { "type": "string", "description": "ISO 8601, the item's last change" },
++        "updated_by": { "type": "string", "description": "Who changed it last (an edit or a restore)" },
++        "decided_at": { "type": "string", "description": "ISO 8601, when it was discarded or injected" },
++        "decided_by": { "type": "string", "description": "Who discarded or injected it" },
++        "renumbered_from": {
++          "type": "string",
++          "description": "The number a merge took from it, when both branches gave it to different items: theirs moved to the next free one"
++        }
++      }
++    }
++  }
++}
+diff --git a/crates/atm-common/schema/task.schema.json b/crates/atm-common/schema/task.schema.json
+index 27d7f1a2..33f9b6ef 100644
+--- a/crates/atm-common/schema/task.schema.json
++++ b/crates/atm-common/schema/task.schema.json
+@@ -119,7 +119,12 @@
+       "type": "string",
+       "description": "How a finished task ended, when it isn't the default: wont_do, duplicate, obsolete or done (SR-2.8)"
+     },
+-    "duplicate_of": { "type": "string", "description": "The task this one duplicates (with the duplicate resolution)" }
++    "duplicate_of": { "type": "string", "description": "The task this one duplicates (with the duplicate resolution)" },
++    "from": {
++      "type": "array",
++      "items": { "type": "string", "pattern": "^IN-[1-9][0-9]*$" },
++      "description": "The inbox items this task was made from (docs/inbox-design.md §2, ATM-759): IN-<n>, each linking back to it"
++    }
+   },
+   "$defs": {
+     "Note": {
+diff --git a/crates/atm-common/src/inbox.rs b/crates/atm-common/src/inbox.rs
+new file mode 100644
+index 00000000..4cd5bd78
+--- /dev/null
++++ b/crates/atm-common/src/inbox.rs
+@@ -0,0 +1,280 @@
++//! The inbox's data (docs/inbox-design.md §2, ATM-759): a project's raw input, `IN-<n>` items in
++//! `.agentic-task-manager/inbox.json`, each `created`, `discarded` (with a reason) or `injected` (with the tasks made
++//! from it). What no store or rule needs: the files' names, the shape of an ID, the limits, the states. The rules
++//! (who may move an item, from which state) are atm-lib's `inbox`; the files, atm-db's.
++
++use serde_json::{Value, json};
++
++use crate::{Error, Result};
++
++/// The inbox's file, in the task folder.
++pub const INBOX_FILE: &str = "inbox.json";
++/// Its archive: the decided items moved out of it (docs/inbox-design.md §4).
++pub const INBOX_ARCHIVE_FILE: &str = "inbox-archive.json";
++/// The file format's version.
++pub const INBOX_VERSION: u64 = 1;
++/// An item's text, at most (characters).
++pub const MAX_TEXT: usize = 20_000;
++/// A discard's reason, at most (characters), as a note is.
++pub const MAX_REASON: usize = 500;
++/// An item's ID prefix: `IN-12`.
++const PREFIX: &str = "IN-";
++
++/// Where an item is (docs/inbox-design.md §3).
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum InboxState {
++    /// Waiting to be looked at.
++    Created,
++    /// Not to be done, with a reason.
++    Discarded,
++    /// Turned into tasks, which it links: final.
++    Injected,
++}
++
++impl InboxState {
++    /// Its name in the file and the commands.
++    #[must_use]
++    pub fn as_str(self) -> &'static str {
++        match self {
++            Self::Created => "created",
++            Self::Discarded => "discarded",
++            Self::Injected => "injected",
++        }
++    }
++
++    /// The state named `name`, or none.
++    #[must_use]
++    pub fn parse(name: &str) -> Option<Self> {
++        match name {
++            "created" => Some(Self::Created),
++            "discarded" => Some(Self::Discarded),
++            "injected" => Some(Self::Injected),
++            _ => None,
++        }
++    }
++
++    /// Whether it is decided (discarded or injected): only decided items are archived.
++    #[must_use]
++    pub fn decided(self) -> bool {
++        self != Self::Created
++    }
++}
++
++/// An item's state, read from it; an unknown one is none.
++#[must_use]
++pub fn state_of(item: &Value) -> Option<InboxState> {
++    item.get("state")
++        .and_then(Value::as_str)
++        .and_then(InboxState::parse)
++}
++
++/// The ID of item number `n`: `IN-12`.
++#[must_use]
++pub fn item_id(n: u64) -> String {
++    format!("{PREFIX}{n}")
++}
++
++/// The number an item ID names (`IN-12`, `in-12`), or none for anything else (`IN-0`, `IN-x`, `T-12`).
++#[must_use]
++pub fn item_number(id: &str) -> Option<u64> {
++    let rest = id
++        .get(..PREFIX.len())?
++        .eq_ignore_ascii_case(PREFIX)
++        .then(|| &id[PREFIX.len()..])?;
++    if rest.is_empty() || !rest.bytes().all(|b| b.is_ascii_digit()) || rest.starts_with('0') {
++        return None;
++    }
++    rest.parse().ok()
++}
++
++/// An inbox with nothing in it, as a file that isn't there reads.
++#[must_use]
++pub fn empty_inbox() -> Value {
++    json!({"version": INBOX_VERSION, "next": 1, "items": []})
++}
++
++/// The inbox document `value` is, or why not: an object with an `items` list, each item an object with an `IN-<n>`
++/// `id` and a known `state`, no ID twice, and a `version` atm knows (or none, the first).
++///
++/// # Errors
++/// `Invalid`, naming what is wrong.
++pub fn check_inbox(value: &Value) -> Result<()> {
++    let bad = |what: &str| Err(Error::Invalid(format!("the inbox: {what}")));
++    let Some(doc) = value.as_object() else {
++        return bad("not an object");
++    };
++    if let Some(version) = doc.get("version")
++        && version.as_u64() != Some(INBOX_VERSION)
++    {
++        return bad(&format!("version {version}, which this atm doesn't know"));
++    }
++    let Some(items) = doc.get("items").and_then(Value::as_array) else {
++        return bad("no list of items");
++    };
++    let mut seen = std::collections::HashSet::new();
++    for item in items {
++        let Some(id) = item.get("id").and_then(Value::as_str) else {
++            return bad("an item without an ID");
++        };
++        if item_number(id).is_none() {
++            return bad(&format!("{id:?} is no item ID (IN-<n>)"));
++        }
++        if !seen.insert(id.to_ascii_uppercase()) {
++            return bad(&format!("{id} twice"));
++        }
++        if state_of(item).is_none() {
++            return bad(&format!(
++                "{id}'s state isn't created, discarded or injected"
++            ));
++        }
++    }
++    Ok(())
++}
++
++/// The next free number: the file's `next`, or past every item's (an inbox merged or edited by hand).
++#[must_use]
++pub fn next_number(doc: &Value) -> u64 {
++    let stored = doc.get("next").and_then(Value::as_u64).unwrap_or(1);
++    let past = doc
++        .get("items")
++        .and_then(Value::as_array)
++        .into_iter()
++        .flatten()
++        .filter_map(|i| i.get("id").and_then(Value::as_str).and_then(item_number))
++        .max()
++        .map_or(1, |n| n + 1);
++    stored.max(past).max(1)
++}
++
++/// An item's text, trimmed, or why it can't be one: empty, or longer than [`MAX_TEXT`] characters.
++///
++/// # Errors
++/// `Invalid`.
++pub fn checked_text(text: &str) -> Result<String> {
++    let text = text.trim();
++    if text.is_empty() {
++        return Err(Error::Invalid("an inbox item needs some text".into()));
++    }
++    let length = text.chars().count();
++    if length > MAX_TEXT {
++        return Err(Error::Invalid(format!(
++            "an inbox item's text is at most {MAX_TEXT} characters ({length} given)"
++        )));
++    }
++    Ok(text.to_string())
++}
++
++/// A discard's reason, trimmed, or why it can't be one: empty, or longer than [`MAX_REASON`] characters.
++///
++/// # Errors
++/// `Invalid`.
++pub fn checked_reason(reason: &str) -> Result<String> {
++    let reason = reason.trim();
++    if reason.is_empty() {
++        return Err(Error::Invalid("a discard needs a reason".into()));
++    }
++    let length = reason.chars().count();
++    if length > MAX_REASON {
++        return Err(Error::Invalid(format!(
++            "a discard's reason is at most {MAX_REASON} characters ({length} given)"
++        )));
++    }
++    Ok(reason.to_string())
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn an_item_id_is_in_and_a_number_from_one_in_any_case() {
++        assert_eq!(item_id(12), "IN-12");
++        for (id, n) in [("IN-12", Some(12)), ("in-3", Some(3)), ("In-1", Some(1))] {
++            assert_eq!(item_number(id), n, "{id}");
++        }
++        for id in [
++            "IN-0", "IN-012", "IN-", "IN-x", "IN-1a", "T-12", "IN12", "", "I", "IN--1", "ÍN-1",
++        ] {
++            assert_eq!(item_number(id), None, "{id}");
++        }
++    }
++
++    #[test]
++    fn states_by_name_and_which_are_decided() {
++        for state in [
++            InboxState::Created,
++            InboxState::Discarded,
++            InboxState::Injected,
++        ] {
++            assert_eq!(InboxState::parse(state.as_str()), Some(state));
++        }
++        assert_eq!(InboxState::parse("done"), None);
++        assert!(!InboxState::Created.decided());
++        assert!(InboxState::Discarded.decided() && InboxState::Injected.decided());
++        assert_eq!(
++            state_of(&json!({"state": "injected"})),
++            Some(InboxState::Injected)
++        );
++        assert_eq!(state_of(&json!({"state": "x"})), None);
++        assert_eq!(state_of(&json!({})), None);
++    }
++
++    #[test]
++    fn an_inbox_document_is_checked() {
++        assert!(check_inbox(&empty_inbox()).is_ok());
++        assert!(check_inbox(&json!({"items": [{"id": "IN-1", "state": "created"}]})).is_ok());
++        for (doc, says) in [
++            (json!([]), "not an object"),
++            (json!({"version": 2, "items": []}), "version 2"),
++            (json!({"next": 1}), "no list of items"),
++            (json!({"items": [{"state": "created"}]}), "without an ID"),
++            (
++                json!({"items": [{"id": "T-1", "state": "created"}]}),
++                "no item ID",
++            ),
++            (
++                json!({"items": [{"id": "IN-1", "state": "created"}, {"id": "in-1", "state": "created"}]}),
++                "twice",
++            ),
++            (json!({"items": [{"id": "IN-1", "state": "done"}]}), "state"),
++        ] {
++            let error = check_inbox(&doc).unwrap_err().to_string();
++            assert!(error.contains(says), "{doc}: {error}");
++        }
++    }
++
++    #[test]
++    fn the_next_number_is_past_every_item_and_the_files_own() {
++        assert_eq!(next_number(&empty_inbox()), 1);
++        assert_eq!(
++            next_number(&json!({"next": 7, "items": [{"id": "IN-3"}]})),
++            7
++        );
++        assert_eq!(
++            next_number(&json!({"next": 2, "items": [{"id": "IN-9"}]})),
++            10
++        );
++        assert_eq!(next_number(&json!({"items": []})), 1);
++        assert_eq!(next_number(&json!({"next": 0})), 1);
++    }
++
++    #[test]
++    fn text_and_reason_are_trimmed_not_empty_and_within_their_limits() {
++        assert_eq!(checked_text("  an idea \n").unwrap(), "an idea");
++        assert!(checked_text(" \n ").is_err());
++        assert!(
++            checked_text(&"é".repeat(MAX_TEXT)).is_ok(),
++            "the limit counts characters"
++        );
++        assert!(
++            checked_text(&"x".repeat(MAX_TEXT + 1))
++                .unwrap_err()
++                .to_string()
++                .contains("at most 20000")
++        );
++        assert_eq!(checked_reason(" a duplicate ").unwrap(), "a duplicate");
++        assert!(checked_reason("").is_err());
++        assert!(checked_reason(&"x".repeat(MAX_REASON)).is_ok());
++        assert!(checked_reason(&"x".repeat(MAX_REASON + 1)).is_err());
++    }
++}
+diff --git a/crates/atm-common/src/lib.rs b/crates/atm-common/src/lib.rs
+index 5824fe6d..ca3a5882 100644
+--- a/crates/atm-common/src/lib.rs
++++ b/crates/atm-common/src/lib.rs
+@@ -10,6 +10,7 @@ pub mod edits;
+ pub mod error;
+ pub mod home;
+ pub mod ids;
++pub mod inbox;
+ pub mod keys;
+ pub mod pathtext;
+ pub mod py;
+diff --git a/crates/atm-db/src/interface.rs b/crates/atm-db/src/interface.rs
+index c8ab351a..b76ba880 100644
+--- a/crates/atm-db/src/interface.rs
++++ b/crates/atm-db/src/interface.rs
+@@ -57,6 +57,16 @@ pub trait Store {
+     /// The task data's sizes in bytes: (`tasks.json`, the archive).
+     fn sizes(&self) -> (u64, u64);
+ 
++    /// The inbox document (`{version, next, items}`, ATM-759), or its archive's with `archived`, as stored now: an
++    /// empty one when there is none. A change reads and writes it through [`Working::inbox`] instead.
++    ///
++    /// # Errors
++    /// When it exists but can't be read.
++    fn inbox(&self, archived: bool) -> Result<Value> {
++        let _ = archived;
++        Ok(atm_common::inbox::empty_inbox())
++    }
++
+     /// Run `change` on the task data under the store's isolation, and write what it changed; nothing when it fails.
+     /// The store's snapshot is read again afterwards.
+     ///
+diff --git a/crates/atm-db/src/jsongit.rs b/crates/atm-db/src/jsongit.rs
+index 4806dc6c..a426c7f6 100644
+--- a/crates/atm-db/src/jsongit.rs
++++ b/crates/atm-db/src/jsongit.rs
+@@ -3,6 +3,7 @@
+ 
+ pub mod claims;
+ pub mod files;
++pub mod inbox_merge;
+ // atm-fs's, shared with the review store (ATM-563)
+ pub use atm_fs::lock;
+ pub mod logo;
+@@ -122,6 +123,37 @@ impl JsonGitStore {
+         write_text_atomic(&file, &(to_json(archive) + "\n"))
+             .map_err(|e| Error::failed(format!("{}: {e}", file.shown())))
+     }
++
++    /// The inbox and its archive, those that changed (ATM-759): the archive first when items move into it, so a
++    /// crash between the two writes leaves an item in both, never in neither; the inbox first otherwise. Once there
++    /// is an inbox, atm's merge driver merges it item by item.
++    fn write_inbox(&self, work: &Working) -> Result<()> {
++        let write = |file: std::path::PathBuf, document: &Value| {
++            write_text_atomic(&file, &(to_json(document) + "\n"))
++                .map_err(|e| Error::failed(format!("{}: {e}", file.shown())))
++        };
++        let (inbox, archive) = (work.changed_inbox(), work.changed_inbox_archive());
++        if inbox.is_none() && archive.is_none() {
++            return Ok(());
++        }
++        if work.inbox_archive_first() {
++            if let Some(archive) = archive {
++                write(self.paths.inbox_archive(), archive)?;
++            }
++            if let Some(inbox) = inbox {
++                write(self.paths.inbox(), inbox)?;
++            }
++        } else {
++            if let Some(inbox) = inbox {
++                write(self.paths.inbox(), inbox)?;
++            }
++            if let Some(archive) = archive {
++                write(self.paths.inbox_archive(), archive)?;
++            }
++        }
++        setup::ensure_inbox_merge(&self.paths)?;
++        Ok(())
++    }
+ }
+ 
+ impl JsonGitStore {
+@@ -142,6 +174,7 @@ impl JsonGitStore {
+             branch: checked_out_branch(&root),
+         };
+         let paths = self.paths.clone();
++        let (inbox, inbox_archive) = (self.paths.inbox(), self.paths.inbox_archive());
+         // Strictly (ATM-674, R9): a store that can't be read would be written back empty, its claims lost
+         let mut work = Working::new(
+             document,
+@@ -149,6 +182,10 @@ impl JsonGitStore {
+             here,
+             size,
+             Box::new(move || archive_document(&paths)),
++        )
++        .with_inbox(
++            Box::new(move || files::inbox_document(&inbox)),
++            Box::new(move || files::inbox_document(&inbox_archive)),
+         );
+         change(&mut work)?;
+         let archive = work.changed_archive().cloned();
+@@ -165,6 +202,7 @@ impl JsonGitStore {
+                 self.write_archive(archive)?;
+             }
+         }
++        self.write_inbox(&work)?;
+         if work.store_changed() {
+             write_store(&self.paths, &work.claims_store)?;
+         }
+@@ -225,6 +263,14 @@ impl Store for JsonGitStore {
+         self.apply(change)
+     }
+ 
++    fn inbox(&self, archived: bool) -> Result<Value> {
++        files::inbox_document(&if archived {
++            self.paths.inbox_archive()
++        } else {
++            self.paths.inbox()
++        })
++    }
++
+     fn exists(&self) -> bool {
+         self.paths.tasks.is_file()
+     }
+@@ -506,6 +552,88 @@ mod tests {
+         assert!(store.get_archived_task("T-1").unwrap().is_some());
+     }
+ 
++    /// ATM-759: the inbox is read only when a change asks for it and written only when it changed; an item moved into
++    /// its archive is written there first; a store reads either back
++    #[test]
++    fn the_inbox_and_its_archive_are_written_when_a_change_changed_them() {
++        use serde_json::json;
++        let (_dir, mut store) = project_with("{\"tasks\": []}");
++        store
++            .change(&mut |work| {
++                work.tasks().push(json!({"id": "T-1"}));
++                Ok(())
++            })
++            .unwrap();
++        assert!(
++            !store.paths().inbox().exists(),
++            "a change that didn't touch it writes none"
++        );
++        assert_eq!(
++            store.inbox(false).unwrap(),
++            atm_common::inbox::empty_inbox()
++        );
++        store
++            .change(&mut |work| {
++                let inbox = work.inbox()?;
++                inbox["items"] = json!([{"id": "IN-1", "state": "discarded", "text": "x"}]);
++                inbox["next"] = json!(2);
++                Ok(())
++            })
++            .unwrap();
++        assert_eq!(store.inbox(false).unwrap()["items"][0]["id"], "IN-1");
++        // Moved into the archive: in it, and out of the inbox
++        store
++            .change(&mut |work| {
++                let item = work.inbox()?["items"]
++                    .as_array_mut()
++                    .expect("a list")
++                    .remove(0);
++                work.moving_into_inbox_archive();
++                work.inbox_archive()?["items"]
++                    .as_array_mut()
++                    .expect("a list")
++                    .push(item);
++                Ok(())
++            })
++            .unwrap();
++        assert_eq!(store.inbox(false).unwrap()["items"], json!([]));
++        assert_eq!(store.inbox(true).unwrap()["items"][0]["id"], "IN-1");
++        assert!(store.paths().inbox_archive().is_file());
++    }
++
++    #[test]
++    fn an_inbox_that_isnt_one_is_refused_and_a_change_that_asks_for_it_writes_nothing() {
++        let (_dir, mut store) = project_with("{\"tasks\": []}");
++        std::fs::write(
++            store.paths().inbox(),
++            "{\"items\": [{\"id\": \"T-1\", \"state\": \"created\"}]}",
++        )
++        .unwrap();
++        assert!(
++            store
++                .inbox(false)
++                .unwrap_err()
++                .to_string()
++                .contains("no item ID")
++        );
++        let error = store
++            .change(&mut |work| {
++                work.tasks().push(serde_json::json!({"id": "T-9"}));
++                work.inbox().map(|_| ())
++            })
++            .unwrap_err();
++        assert!(error.to_string().contains("inbox.json"), "{error}");
++        assert!(store.get_task("T-9").unwrap().is_none(), "nothing written");
++        std::fs::write(store.paths().inbox(), "not json").unwrap();
++        assert!(
++            store
++                .inbox(false)
++                .unwrap_err()
++                .to_string()
++                .contains("not valid JSON")
++        );
++    }
++
+     /// T-555: the store watches its own files: a change in its task file and in its claims store (in git's folder,
+     /// shared by the worktrees) is told, and nothing once the subscription is dropped
+     #[test]
+diff --git a/crates/atm-db/src/jsongit/files.rs b/crates/atm-db/src/jsongit/files.rs
+index e4f7de11..be9d7918 100644
+--- a/crates/atm-db/src/jsongit/files.rs
++++ b/crates/atm-db/src/jsongit/files.rs
+@@ -291,6 +291,23 @@ pub fn archive_document(paths: &Paths) -> Result<Value> {
+         })
+ }
+ 
++/// An inbox document (`inbox.json` or its archive, ATM-759) as stored, or an empty one when there is none. Read
++/// through no symlink (the task folder's check refuses one, `paths::check_task_folder`), and checked
++/// (`atm_common::inbox::check_inbox`), so a change never writes back a file it couldn't read.
++///
++/// # Errors
++/// When the file exists but isn't JSON or isn't an inbox.
++pub fn inbox_document(path: &std::path::Path) -> Result<Value> {
++    if !path.is_file() {
++        return Ok(atm_common::inbox::empty_inbox());
++    }
++    let document = read_json(path)
++        .ok_or_else(|| Error::failed(format!("{} is not valid JSON", path.shown())))?;
++    atm_common::inbox::check_inbox(&document)
++        .map_err(|e| Error::failed(format!("{}: {e}", path.shown())))?;
++    Ok(document)
++}
++
+ /// The last task with this ID in a list of tasks (a later entry wins, as a dict of them by ID has it).
+ #[must_use]
+ pub fn last_with_id<'a>(tasks: &'a [Task], id: &str) -> Option<&'a Task> {
+diff --git a/crates/atm-db/src/jsongit/inbox_merge.rs b/crates/atm-db/src/jsongit/inbox_merge.rs
+new file mode 100644
+index 00000000..0ffc039f
+--- /dev/null
++++ b/crates/atm-db/src/jsongit/inbox_merge.rs
+@@ -0,0 +1,263 @@
++//! Merging the inbox (docs/inbox-design.md §8, ATM-759): `inbox.json` or its archive, three versions git hands atm's
++//! merge driver, merged item by item instead of line by line.
++//!
++//! - An item both branches have is one item when it was made once (the same `created_at` and `created_by`): the
++//!   version further on wins (injected is final; else the one changed last, `updated_at`, ours on a tie), and two
++//!   injections keep every task they link.
++//! - An item one branch dropped (archived it, or unarchived it from the archive) and the other left as the base had it
++//!   stays dropped; one the other branch changed meanwhile is kept.
++//! - The same number given to two different items (each branch added `IN-12`): ours keeps it, theirs takes the next
++//!   free one and keeps the old number as `renumbered_from`, so the user can tell (a task made from it on that branch
++//!   still names the old number). As the tasks' renumbering, it is no conflict: the merge goes on.
++//! - `next` is past every item kept.
++
++use atm_common::inbox::{INBOX_VERSION, InboxState, item_id, item_number, next_number, state_of};
++use serde_json::{Map, Value, json};
++
++fn items(doc: &Value) -> Vec<Map<String, Value>> {
++    doc.get("items")
++        .and_then(Value::as_array)
++        .into_iter()
++        .flatten()
++        .filter_map(Value::as_object)
++        .cloned()
++        .collect()
++}
++
++fn id(item: &Map<String, Value>) -> String {
++    item.get("id")
++        .and_then(Value::as_str)
++        .unwrap_or_default()
++        .to_ascii_uppercase()
++}
++
++fn find<'a>(list: &'a [Map<String, Value>], key: &str) -> Option<&'a Map<String, Value>> {
++    list.iter().find(|i| id(i) == key)
++}
++
++/// Whether two items with one number are one item: made at the same time by the same person
++fn same_item(a: &Map<String, Value>, b: &Map<String, Value>) -> bool {
++    a.get("created_at") == b.get("created_at") && a.get("created_by") == b.get("created_by")
++}
++
++fn text(item: &Map<String, Value>, key: &str) -> String {
++    item.get(key)
++        .and_then(Value::as_str)
++        .unwrap_or_default()
++        .to_string()
++}
++
++/// One item as both branches changed it
++fn combined(ours: &Map<String, Value>, theirs: &Map<String, Value>) -> Map<String, Value> {
++    if ours == theirs {
++        return ours.clone();
++    }
++    let injected =
++        |i: &Map<String, Value>| state_of(&Value::Object(i.clone())) == Some(InboxState::Injected);
++    match (injected(ours), injected(theirs)) {
++        (true, true) => {
++            let mut merged = if text(theirs, "decided_at") > text(ours, "decided_at") {
++                theirs.clone()
++            } else {
++                ours.clone()
++            };
++            let mut tasks: Vec<Value> = Vec::new();
++            for task in [ours, theirs].iter().flat_map(|i| {
++                i.get("tasks")
++                    .and_then(Value::as_array)
++                    .cloned()
++                    .unwrap_or_default()
++            }) {
++                if !tasks.contains(&task) {
++                    tasks.push(task);
++                }
++            }
++            merged.insert("tasks".into(), Value::Array(tasks));
++            merged
++        }
++        (true, false) => ours.clone(),
++        (false, true) => theirs.clone(),
++        (false, false) => {
++            if text(theirs, "updated_at") > text(ours, "updated_at") {
++                theirs.clone()
++            } else {
++                ours.clone()
++            }
++        }
++    }
++}
++
++/// The three versions of an inbox document merged item by item, and what the merge decided that the user may want to
++/// know (a number given again), in words: none of it a conflict.
++#[must_use]
++pub fn merge_inbox(base: &Value, ours: &Value, theirs: &Value) -> (Value, Vec<String>) {
++    let (base_items, our_items, their_items) = (items(base), items(ours), items(theirs));
++    let mut merged: Vec<Map<String, Value>> = Vec::new();
++    let mut moved: Vec<Map<String, Value>> = Vec::new();
++    let mut notes = Vec::new();
++    for item in &our_items {
++        let key = id(item);
++        match find(&their_items, &key) {
++            Some(their) if same_item(item, their) => merged.push(combined(item, their)),
++            Some(their) => {
++                merged.push(item.clone());
++                moved.push(their.clone());
++            }
++            // Dropped on theirs: stays dropped unless ours changed it meanwhile
++            None => {
++                if find(&base_items, &key) != Some(item) {
++                    merged.push(item.clone());
++                }
++            }
++        }
++    }
++    for item in &their_items {
++        let key = id(item);
++        if find(&our_items, &key).is_some() {
++            continue;
++        }
++        if find(&base_items, &key) != Some(item) {
++            merged.push(item.clone());
++        }
++    }
++    // The numbers given again: each its next free one, past everything both branches and the base hold
++    let mut next = [base, ours, theirs]
++        .iter()
++        .map(|d| next_number(d))
++        .max()
++        .unwrap_or(1);
++    for mut item in moved {
++        let old = text(&item, "id");
++        let new = item_id(next);
++        next += 1;
++        notes.push(format!(
++            "{old} was added on both branches: theirs is now {new}"
++        ));
++        item.insert("renumbered_from".into(), Value::String(old));
++        item.insert("id".into(), Value::String(new));
++        merged.push(item);
++    }
++    merged.sort_by_key(|i| item_number(&id(i)).unwrap_or(u64::MAX));
++    let mut doc = json!({"version": INBOX_VERSION, "items": merged});
++    doc["next"] = json!(next_number(&doc).max(next));
++    (doc, notes)
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn item(id: &str, state: &str, updated: &str) -> Value {
++        json!({
++            "id": id, "text": format!("{id} text"), "state": state,
++            "created_at": "2026-11-24T09:00:00Z", "created_by": "Hakan", "updated_at": updated,
++        })
++    }
++    fn doc(items: &[Value]) -> Value {
++        json!({"version": 1, "next": 1, "items": items})
++    }
++    fn ids(doc: &Value) -> Vec<String> {
++        items(doc).iter().map(|i| text(i, "id")).collect()
++    }
++
++    #[test]
++    fn items_added_on_either_branch_are_both_kept_and_next_is_past_them() {
++        let base = doc(&[item("IN-1", "created", "a")]);
++        let ours = doc(&[item("IN-1", "created", "a"), item("IN-2", "created", "a")]);
++        let theirs = doc(&[item("IN-1", "created", "a")]);
++        let (merged, notes) = merge_inbox(&base, &ours, &theirs);
++        assert_eq!(ids(&merged), ["IN-1", "IN-2"]);
++        assert_eq!(merged["next"], 3);
++        assert_eq!(notes, Vec::<String>::new());
++    }
++
++    #[test]
++    fn one_number_for_two_items_ours_keeps_it_and_theirs_takes_the_next_free_one() {
++        let base = doc(&[]);
++        let ours = doc(&[item("IN-1", "created", "a")]);
++        let mut other = item("IN-1", "created", "a");
++        other["created_by"] = json!("Ana");
++        let theirs = doc(&[other]);
++        let (merged, notes) = merge_inbox(&base, &ours, &theirs);
++        assert_eq!(ids(&merged), ["IN-1", "IN-2"]);
++        assert_eq!(merged["items"][1]["created_by"], "Ana");
++        assert_eq!(merged["items"][1]["renumbered_from"], "IN-1");
++        assert!(
++            merged["items"][0].get("renumbered_from").is_none(),
++            "ours kept its number"
++        );
++        assert_eq!(merged["next"], 3);
++        assert_eq!(
++            notes,
++            ["IN-1 was added on both branches: theirs is now IN-2"]
++        );
++    }
++
++    #[test]
++    fn one_item_changed_on_both_the_later_change_wins_and_an_injection_is_final() {
++        let base = doc(&[item("IN-1", "created", "a")]);
++        let (merged, _) = merge_inbox(
++            &base,
++            &doc(&[item("IN-1", "discarded", "b")]),
++            &doc(&[item("IN-1", "created", "c")]),
++        );
++        assert_eq!(merged["items"][0]["state"], "created", "changed later");
++        let mut injected = item("IN-1", "injected", "a");
++        injected["tasks"] = json!(["ATM-1"]);
++        let (merged, _) = merge_inbox(
++            &base,
++            &doc(&[item("IN-1", "discarded", "z")]),
++            &doc(&[injected]),
++        );
++        assert_eq!(
++            merged["items"][0]["state"], "injected",
++            "final, whatever came later"
++        );
++    }
++
++    #[test]
++    fn injected_on_both_keeps_every_task_it_was_made_into() {
++        let mut ours = item("IN-1", "injected", "a");
++        ours["tasks"] = json!(["ATM-1", "ATM-2"]);
++        ours["decided_at"] = json!("2026-11-24T10:00:00Z");
++        let mut theirs = item("IN-1", "injected", "a");
++        theirs["tasks"] = json!(["ATM-3", "ATM-1"]);
++        theirs["decided_at"] = json!("2026-11-24T11:00:00Z");
++        let (merged, _) = merge_inbox(&doc(&[]), &doc(&[ours]), &doc(&[theirs]));
++        assert_eq!(
++            merged["items"][0]["tasks"],
++            json!(["ATM-1", "ATM-2", "ATM-3"])
++        );
++        assert_eq!(merged["items"][0]["decided_at"], "2026-11-24T11:00:00Z");
++    }
++
++    #[test]
++    fn an_item_dropped_on_one_branch_stays_dropped_unless_the_other_changed_it() {
++        let base = doc(&[
++            item("IN-1", "discarded", "a"),
++            item("IN-2", "discarded", "a"),
++        ]);
++        // Theirs archived both; ours restored IN-2 meanwhile
++        let ours = doc(&[item("IN-1", "discarded", "a"), item("IN-2", "created", "b")]);
++        let theirs = doc(&[]);
++        let (merged, _) = merge_inbox(&base, &ours, &theirs);
++        assert_eq!(ids(&merged), ["IN-2"]);
++        // The other way around
++        let (merged, _) = merge_inbox(&base, &theirs, &ours);
++        assert_eq!(ids(&merged), ["IN-2"]);
++    }
++
++    #[test]
++    fn the_same_change_on_both_is_one_change_and_ids_compare_in_any_case() {
++        let base = doc(&[item("IN-1", "created", "a")]);
++        let mut lower = item("in-1", "discarded", "b");
++        lower["id"] = json!("in-1");
++        let (merged, notes) = merge_inbox(
++            &base,
++            &doc(&[item("IN-1", "discarded", "b")]),
++            &doc(&[lower]),
++        );
++        assert_eq!(merged["items"].as_array().unwrap().len(), 1);
++        assert_eq!(notes, Vec::<String>::new());
++    }
++}
+diff --git a/crates/atm-db/src/jsongit/paths.rs b/crates/atm-db/src/jsongit/paths.rs
+index 31395514..08abee05 100644
+--- a/crates/atm-db/src/jsongit/paths.rs
++++ b/crates/atm-db/src/jsongit/paths.rs
+@@ -6,12 +6,20 @@ use std::fs;
+ use atm_common::Shown;
+ use std::path::{Path, PathBuf};
+ 
++use atm_common::inbox::{INBOX_ARCHIVE_FILE, INBOX_FILE};
+ use atm_common::{ARCHIVE_FILE, Error, Result, TASK_DIR, TASKS_FILE};
+ 
+ use crate::git::where_in_git;
+ 
+ /// The files atm reads and writes in the task folder; a repository can commit any of them as a symlink.
+-const FOLDER_FILES: [&str; 4] = [TASKS_FILE, ARCHIVE_FILE, ".gitignore", ".gitattributes"];
++const FOLDER_FILES: [&str; 6] = [
++    TASKS_FILE,
++    ARCHIVE_FILE,
++    INBOX_FILE,
++    INBOX_ARCHIVE_FILE,
++    ".gitignore",
++    ".gitattributes",
++];
+ 
+ /// Where a project's task files are.
+ #[derive(Debug, Clone, PartialEq, Eq)]
+@@ -30,6 +38,18 @@ impl Paths {
+     pub fn archive(&self) -> PathBuf {
+         self.dir.join(ARCHIVE_FILE)
+     }
++
++    /// The inbox, `<dir>/inbox.json` (ATM-759).
++    #[must_use]
++    pub fn inbox(&self) -> PathBuf {
++        self.dir.join(INBOX_FILE)
++    }
++
++    /// The inbox's archive, `<dir>/inbox-archive.json`.
++    #[must_use]
++    pub fn inbox_archive(&self) -> PathBuf {
++        self.dir.join(INBOX_ARCHIVE_FILE)
++    }
+ }
+ 
+ fn is_symlink(path: &Path) -> bool {
+@@ -270,5 +290,20 @@ mod tests {
+                 .to_string()
+                 .ends_with("is a symlink; atm reads and writes only regular files there")
+         );
++
++        // The inbox and its archive too (ATM-759, I6)
++        for name in [INBOX_FILE, INBOX_ARCHIVE_FILE] {
++            let one = TestDir::new();
++            let dir = one.path().join(TASK_DIR);
++            fs::create_dir(&dir).unwrap();
++            symlink(elsewhere.path().join("x"), dir.join(name)).unwrap();
++            assert!(
++                check_task_folder(one.path(), &dir)
++                    .unwrap_err()
++                    .to_string()
++                    .contains(name),
++                "{name}"
++            );
++        }
+     }
+ }
+diff --git a/crates/atm-db/src/jsongit/setup.rs b/crates/atm-db/src/jsongit/setup.rs
+index 1338f9f3..704559a9 100644
+--- a/crates/atm-db/src/jsongit/setup.rs
++++ b/crates/atm-db/src/jsongit/setup.rs
+@@ -22,6 +22,8 @@ const REVIEW_ATTRIBUTES_LINES: [&str; 2] = [
+     "reviews/*/review.md merge=atm",
+     "reviews/*/comments.md merge=atm",
+ ];
++/// The inbox and its archive (docs/inbox-design.md §8, ATM-759), merged item by item.
++const INBOX_ATTRIBUTES_LINES: [&str; 2] = ["inbox.json merge=atm", "inbox-archive.json merge=atm"];
+ 
+ /// Whether `folder` is in a git repository: the one way atm asks.
+ #[must_use]
+@@ -162,6 +164,15 @@ pub fn ensure_review_merge(paths: &Paths) -> Result<bool> {
+     ensure_lines(paths, &REVIEW_ATTRIBUTES_LINES)
+ }
+ 
++/// In git: the inbox and its archive merge item by item (ATM-759). Added when the project's inbox is first written,
++/// so projects without one see no change. Returns whether `.gitattributes` changed (staged).
++///
++/// # Errors
++/// When `.gitattributes` can't be read or written.
++pub fn ensure_inbox_merge(paths: &Paths) -> Result<bool> {
++    ensure_lines(paths, &INBOX_ATTRIBUTES_LINES)
++}
++
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+diff --git a/crates/atm-db/src/memory.rs b/crates/atm-db/src/memory.rs
+index 2bbd5f01..29a77449 100644
+--- a/crates/atm-db/src/memory.rs
++++ b/crates/atm-db/src/memory.rs
+@@ -19,6 +19,9 @@ pub struct MemoryStore {
+     vocabulary: Vocabulary,
+     listeners: Listeners,
+     here: Here,
++    /// The inbox and its archive (ATM-759)
++    inbox: Value,
++    inbox_archive: Value,
+ }
+ 
+ /// Who is told of a memory store's changes: each live subscription's callback, by a number of its own. A clone of the
+@@ -97,9 +100,19 @@ impl MemoryStore {
+                 worktree: None,
+                 branch: None,
+             },
++            inbox: atm_common::inbox::empty_inbox(),
++            inbox_archive: atm_common::inbox::empty_inbox(),
+         })
+     }
+ 
++    /// The same store with this inbox and inbox archive (ATM-759).
++    #[must_use]
++    pub fn with_inbox(mut self, inbox: Value, archive: Value) -> Self {
++        self.inbox = inbox;
++        self.inbox_archive = archive;
++        self
++    }
++
+     /// The same store, as the working copy in this folder, on this branch: so a test can play one worktree of a clone
+     /// whose claims store (`with_claims`) another worktree wrote (T-202). Without it, the store is in no working copy.
+     #[must_use]
+@@ -181,19 +194,38 @@ impl Store for MemoryStore {
+         (0, 0)
+     }
+ 
++    fn inbox(&self, archived: bool) -> Result<Value> {
++        Ok(if archived {
++            self.inbox_archive.clone()
++        } else {
++            self.inbox.clone()
++        })
++    }
++
+     fn change(&mut self, change: &mut dyn FnMut(&mut Working) -> Result<()>) -> Result<()> {
+         let archive = json!({"meta": {}, "tasks": self.archive});
++        let (inbox, inbox_archive) = (self.inbox.clone(), self.inbox_archive.clone());
+         let mut work = Working::new(
+             self.document.clone(),
+             self.claims_store.clone(),
+             self.here.clone(),
+             0,
+             Box::new(move || Ok(archive.clone())),
++        )
++        .with_inbox(
++            Box::new(move || Ok(inbox.clone())),
++            Box::new(move || Ok(inbox_archive.clone())),
+         );
+         change(&mut work)?;
+         if let Some(archive) = work.changed_archive() {
+             self.archive = objects(&archive["tasks"]);
+         }
++        if let Some(inbox) = work.changed_inbox() {
++            self.inbox = inbox.clone();
++        }
++        if let Some(archive) = work.changed_inbox_archive() {
++            self.inbox_archive = archive.clone();
++        }
+         self.vocabulary = Vocabulary::of_document(&work.document)?;
+         self.document = std::mem::take(&mut work.document);
+         self.claims_store = std::mem::take(&mut work.claims_store);
+diff --git a/crates/atm-db/src/working.rs b/crates/atm-db/src/working.rs
+index 4f97094b..c119ff43 100644
+--- a/crates/atm-db/src/working.rs
++++ b/crates/atm-db/src/working.rs
+@@ -28,6 +28,50 @@ pub struct Working {
+     before_store: Map<String, Value>,
+     archive_first: bool,
+     deferred: Option<Error>,
++    /// The inbox and its archive (docs/inbox-design.md, ATM-759), each read on first use
++    inbox: Lazy,
++    inbox_archive: Lazy,
++    inbox_archive_first: bool,
++}
++
++/// A document a change reads only if it asks for it, and the store writes only if it changed.
++struct Lazy {
++    load: Box<dyn Fn() -> Result<Value>>,
++    value: Option<Value>,
++    before: Option<Value>,
++}
++
++impl Lazy {
++    fn new(load: Box<dyn Fn() -> Result<Value>>) -> Self {
++        Self {
++            load,
++            value: None,
++            before: None,
++        }
++    }
++
++    fn get(&mut self) -> Result<&mut Value> {
++        if self.value.is_none() {
++            let value = (self.load)()?;
++            self.before = Some(value.clone());
++            self.value = Some(value);
++        }
++        Ok(self
++            .value
++            .as_mut()
++            .expect("the document was read just above"))
++    }
++
++    fn changed(&self) -> Option<&Value> {
++        self.value
++            .as_ref()
++            .filter(|v| Some(*v) != self.before.as_ref())
++    }
++}
++
++/// An empty inbox, for a store that has none (the memory store, until it is given one)
++fn no_inbox() -> Box<dyn Fn() -> Result<Value>> {
++    Box::new(|| Ok(atm_common::inbox::empty_inbox()))
+ }
+ 
+ impl Working {
+@@ -53,9 +97,64 @@ impl Working {
+             before_store,
+             archive_first: false,
+             deferred: None,
++            inbox: Lazy::new(no_inbox()),
++            inbox_archive: Lazy::new(no_inbox()),
++            inbox_archive_first: false,
+         }
+     }
+ 
++    /// The same, reading the inbox and its archive with `inbox` and `archive` (only when the change asks for them).
++    #[must_use]
++    pub fn with_inbox(
++        mut self,
++        inbox: Box<dyn Fn() -> Result<Value>>,
++        archive: Box<dyn Fn() -> Result<Value>>,
++    ) -> Self {
++        self.inbox = Lazy::new(inbox);
++        self.inbox_archive = Lazy::new(archive);
++        self
++    }
++
++    /// The inbox document (`{version, next, items}`), to read and change in place; read on first use.
++    ///
++    /// # Errors
++    /// When the inbox exists but can't be read.
++    pub fn inbox(&mut self) -> Result<&mut Value> {
++        self.inbox.get()
++    }
++
++    /// The inbox's archive, the same way.
++    ///
++    /// # Errors
++    /// When it exists but can't be read.
++    pub fn inbox_archive(&mut self) -> Result<&mut Value> {
++        self.inbox_archive.get()
++    }
++
++    /// This change moves items into the inbox's archive: it is written first, so a crash between the two writes
++    /// leaves an item in both, never in neither (as the tasks' archive, DM-5.2).
++    pub fn moving_into_inbox_archive(&mut self) {
++        self.inbox_archive_first = true;
++    }
++
++    /// Whether the inbox's archive goes first.
++    #[must_use]
++    pub fn inbox_archive_first(&self) -> bool {
++        self.inbox_archive_first
++    }
++
++    /// The inbox, when it was asked for and changed: the store writes it then, and only then.
++    #[must_use]
++    pub fn changed_inbox(&self) -> Option<&Value> {
++        self.inbox.changed()
++    }
++
++    /// The inbox's archive, the same way.
++    #[must_use]
++    pub fn changed_inbox_archive(&self) -> Option<&Value> {
++        self.inbox_archive.changed()
++    }
++
+     /// The working tasks, to read and change in place.
+     ///
+     /// # Panics
+@@ -179,6 +278,37 @@ mod tests {
+         assert!(w.changed_archive().is_some() && w.archive_first());
+     }
+ 
++    #[test]
++    fn the_inbox_and_its_archive_are_read_only_when_asked_and_written_only_when_changed() {
++        let reads = std::rc::Rc::new(std::cell::Cell::new(0));
++        let counted = std::rc::Rc::clone(&reads);
++        let mut w = working().with_inbox(
++            Box::new(move || {
++                counted.set(counted.get() + 1);
++                Ok(json!({"version": 1, "next": 2, "items": [{"id": "IN-1", "state": "created"}]}))
++            }),
++            Box::new(|| Err(Error::failed("unreadable"))),
++        );
++        assert!(w.changed_inbox().is_none() && w.changed_inbox_archive().is_none());
++        assert_eq!(reads.get(), 0, "nothing read until asked");
++        w.inbox().unwrap();
++        w.inbox().unwrap();
++        assert_eq!(reads.get(), 1, "read once");
++        assert!(w.changed_inbox().is_none(), "read, not changed");
++        w.inbox().unwrap()["next"] = json!(3);
++        assert_eq!(w.changed_inbox().unwrap()["next"], 3);
++        assert!(
++            w.inbox_archive().is_err(),
++            "an archive that can't be read is an error"
++        );
++        assert!(!w.inbox_archive_first());
++        w.moving_into_inbox_archive();
++        assert!(w.inbox_archive_first());
++        // Without one given, an empty inbox
++        let mut plain = working();
++        assert_eq!(plain.inbox().unwrap()["items"], json!([]));
++    }
++
+     #[test]
+     fn tasks_are_changed_in_place_and_errors_wait_for_the_write() {
+         let mut w = working();
+diff --git a/crates/atm-lib/src/inbox.rs b/crates/atm-lib/src/inbox.rs
+new file mode 100644
+index 00000000..9a5dd1f0
+--- /dev/null
++++ b/crates/atm-lib/src/inbox.rs
+@@ -0,0 +1,406 @@
++//! The inbox's rules (docs/inbox-design.md §3–§4, ATM-759): a project's raw input, `IN-<n>` items, each created by a
++//! person, then discarded with a reason or injected into the tasks made from it. Who may move an item, from which
++//! state, and what each move records; the front ends (`atm inbox`, the REST routes, the app's commands) only ask.
++//!
++//! | Move | Who | From |
++//! |---|---|---|
++//! | add | a person (an agent is refused) | — |
++//! | edit | a person | created |
++//! | discard (a reason) | anyone (an agent on the user's word: the triage skill) | created |
++//! | inject (tasks that exist) | anyone | created; final |
++//! | restore | a person | discarded |
++//!
++//! Each move runs in one change of the store, under its lock: an injection records the item's tasks and each task's
++//! `from` together.
++
++use atm_common::archive::recent_since;
++use atm_common::edits::is_agent;
++use atm_common::inbox::{
++    InboxState, checked_reason, checked_text, item_id, item_number, next_number, state_of,
++};
++use atm_common::time::{now_iso, parse_iso};
++use atm_common::{Error, Result};
++use atm_db::working::Working;
++use serde_json::{Map, Value, json};
++
++use crate::project::Project;
++
++/// Which items a listing gives.
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum Listing {
++    /// The open ones (created): the default.
++    Open,
++    /// Those in one state.
++    In(InboxState),
++    /// All of them.
++    All,
++}
++
++/// An inbox's items as one listing gives them, newest first, and how many there are in each state (of the whole
++/// inbox, or archive, whatever the listing).
++#[derive(Debug, Clone, PartialEq)]
++pub struct Listed {
++    pub items: Vec<Value>,
++    pub created: usize,
++    pub discarded: usize,
++    pub injected: usize,
++}
++
++fn items(doc: &Value) -> Vec<Value> {
++    doc.get("items")
++        .and_then(Value::as_array)
++        .cloned()
++        .unwrap_or_default()
++}
++
++/// A document's items, to change: made a list first when they aren't one
++fn items_mut(doc: &mut Value) -> &mut Vec<Value> {
++    if !doc["items"].is_array() {
++        doc["items"] = json!([]);
++    }
++    doc["items"].as_array_mut().expect("made a list just above")
++}
++
++fn number_of(item: &Value) -> u64 {
++    item.get("id")
++        .and_then(Value::as_str)
++        .and_then(item_number)
++        .unwrap_or(0)
++}
++
++/// The project's inbox (or its archive, `archived`) as `which` lists it.
++///
++/// # Errors
++/// When the inbox can't be read.
++pub fn list(project: &Project, which: Listing, archived: bool) -> Result<Listed> {
++    let mut all = items(&project.store().inbox(archived)?);
++    all.sort_by_key(|i| std::cmp::Reverse(number_of(i)));
++    let count = |state| all.iter().filter(|i| state_of(i) == Some(state)).count();
++    let (created, discarded, injected) = (
++        count(InboxState::Created),
++        count(InboxState::Discarded),
++        count(InboxState::Injected),
++    );
++    let items = all
++        .into_iter()
++        .filter(|i| match which {
++            Listing::All => true,
++            Listing::Open => state_of(i) == Some(InboxState::Created),
++            Listing::In(state) => state_of(i) == Some(state),
++        })
++        .collect();
++    Ok(Listed {
++        items,
++        created,
++        discarded,
++        injected,
++    })
++}
++
++/// The item `id` names (`IN-3`, any case), in the inbox or else its archive.
++///
++/// # Errors
++/// `Invalid` for no item ID, `NotFound` for no such item; an inbox that can't be read.
++pub fn show(project: &Project, id: &str) -> Result<Value> {
++    let number = parsed(id)?;
++    for archived in [false, true] {
++        if let Some(item) = items(&project.store().inbox(archived)?)
++            .into_iter()
++            .find(|i| number_of(i) == number)
++        {
++            return Ok(item);
++        }
++    }
++    Err(no_item(number))
++}
++
++fn parsed(id: &str) -> Result<u64> {
++    item_number(id.trim())
++        .ok_or_else(|| Error::Invalid(format!("{id:?} is no inbox item (IN-<n>)")))
++}
++
++fn no_item(number: u64) -> Error {
++    Error::NotFound(format!("no inbox item {}", item_id(number)))
++}
++
++/// Who is acting, refused if it is an agent, for the moves that are a person's
++fn person(project: &Project, doing: &str) -> Result<String> {
++    let actor = project.actor();
++    if is_agent(actor) {
++        return Err(Error::Refused(format!(
++            "only a person {doing} (the inbox is the user's input; {} is an agent)",
++            actor.unwrap_or_default()
++        )));
++    }
++    Ok(actor.unwrap_or("someone").to_string())
++}
++
++fn actor(project: &Project) -> String {
++    project.actor().unwrap_or("someone").to_string()
++}
++
++/// The item numbered `number` in the change's inbox, in state `from` (one of them), to change in place
++fn item_in<'w>(
++    work: &'w mut Working,
++    number: u64,
++    from: &[InboxState],
++    doing: &str,
++) -> Result<&'w mut Value> {
++    let inbox = work.inbox()?;
++    let item = inbox
++        .get_mut("items")
++        .and_then(Value::as_array_mut)
++        .into_iter()
++        .flatten()
++        .find(|i| number_of(i) == number)
++        .ok_or_else(|| no_item(number))?;
++    let state = state_of(item);
++    if !state.is_some_and(|s| from.contains(&s)) {
++        let is = state.map_or("of no known state", InboxState::as_str);
++        return Err(Error::Refused(format!(
++            "{} is {is}: only a{} {} item can be {doing}",
++            item_id(number),
++            if from[0] == InboxState::Created {
++                "n"
++            } else {
++                ""
++            },
++            from.iter()
++                .map(|s| s.as_str())
++                .collect::<Vec<_>>()
++                .join(" or "),
++        )));
++    }
++    Ok(item)
++}
++
++/// Add an item with `text` to the inbox, as the person acting.
++///
++/// # Errors
++/// `Refused` for an agent; `Invalid` text; the store's.
++pub fn add(project: &mut Project, text: &str) -> Result<Value> {
++    let by = person(project, "adds to the inbox")?;
++    let text = checked_text(text)?;
++    project.change(|work| {
++        // Past every item ever numbered, the archived ones too: a number is never given twice
++        let past_archive = next_number(work.inbox_archive()?);
++        let inbox = work.inbox()?;
++        let number = next_number(inbox).max(past_archive);
++        let now = now_iso();
++        let item = json!({
++            "id": item_id(number), "text": text, "state": InboxState::Created.as_str(),
++            "created_at": now, "created_by": by, "updated_at": now,
++        });
++        inbox["version"] = json!(atm_common::inbox::INBOX_VERSION);
++        inbox["next"] = json!(number + 1);
++        items_mut(inbox).push(item.clone());
++        Ok(item)
++    })
++}
++
++/// Change an open item's text, as the person acting.
++///
++/// # Errors
++/// `Refused` for an agent or an item no longer open; `Invalid` text or ID; `NotFound`; the store's.
++pub fn edit(project: &mut Project, id: &str, text: &str) -> Result<Value> {
++    let number = parsed(id)?;
++    let by = person(project, "edits an inbox item")?;
++    let text = checked_text(text)?;
++    project.change(|work| {
++        let item = item_in(work, number, &[InboxState::Created], "edited")?;
++        item["text"] = json!(text);
++        item["updated_at"] = json!(now_iso());
++        item["updated_by"] = json!(by);
++        Ok(item.clone())
++    })
++}
++
++/// Discard an open item, saying why.
++///
++/// # Errors
++/// `Refused` for an item no longer open; `Invalid` reason or ID; `NotFound`; the store's.
++pub fn discard(project: &mut Project, id: &str, reason: &str) -> Result<Value> {
++    let number = parsed(id)?;
++    let reason = checked_reason(reason)?;
++    let by = actor(project);
++    project.change(|work| {
++        let item = item_in(work, number, &[InboxState::Created], "discarded")?;
++        let now = now_iso();
++        item["state"] = json!(InboxState::Discarded.as_str());
++        item["reason"] = json!(reason);
++        item["decided_at"] = json!(now);
++        item["decided_by"] = json!(by);
++        item["updated_at"] = json!(now);
++        Ok(item.clone())
++    })
++}
++
++/// Bring a discarded item back to open, as the person acting: its reason and decision go.
++///
++/// # Errors
++/// `Refused` for an agent or an item that isn't discarded; `Invalid` ID; `NotFound`; the store's.
++pub fn restore(project: &mut Project, id: &str) -> Result<Value> {
++    let number = parsed(id)?;
++    let by = person(project, "restores an inbox item")?;
++    project.change(|work| {
++        let item = item_in(work, number, &[InboxState::Discarded], "restored")?;
++        if let Some(fields) = item.as_object_mut() {
++            for key in ["reason", "decided_at", "decided_by"] {
++                fields.shift_remove(key);
++            }
++        }
++        item["state"] = json!(InboxState::Created.as_str());
++        item["updated_at"] = json!(now_iso());
++        item["updated_by"] = json!(by);
++        Ok(item.clone())
++    })
++}
++
++/// Record that an open item became `tasks` (at least one, each a working task of this project): the item injected
++/// with their keys, and each task's `from` naming the item. Final.
++///
++/// # Errors
++/// `Invalid` with no task; `NotFound` for a task that isn't a working one; `Refused` for an item no longer open; the
++/// store's.
++pub fn inject(project: &mut Project, id: &str, tasks: &[String]) -> Result<Value> {
++    let number = parsed(id)?;
++    if tasks.is_empty() {
++        return Err(Error::Invalid(format!(
++            "an injection names the tasks {} became (--task, at least one)",
++            item_id(number)
++        )));
++    }
++    let mut ids: Vec<String> = Vec::new();
++    for reference in tasks {
++        let task = project.working_task(reference)?;
++        if !ids.contains(&task) {
++            ids.push(task);
++        }
++    }
++    let keys: Vec<String> = ids
++        .iter()
++        .map(|id| {
++            project
++                .store()
++                .get_task(id)
++                .ok()
++                .flatten()
++                .map_or_else(|| id.clone(), |t| project.task_key(t))
++        })
++        .collect();
++    let by = actor(project);
++    let item_name = item_id(number);
++    project.change(|work| {
++        // The item first: a refusal (not open) changes no task
++        let item = item_in(work, number, &[InboxState::Created], "injected")?;
++        let now = now_iso();
++        item["state"] = json!(InboxState::Injected.as_str());
++        item["tasks"] = json!(keys);
++        item["decided_at"] = json!(now);
++        item["decided_by"] = json!(by);
++        item["updated_at"] = json!(now);
++        let item = item.clone();
++        for task in work.tasks().iter_mut().filter_map(Value::as_object_mut) {
++            if task
++                .get("id")
++                .and_then(Value::as_str)
++                .is_some_and(|t| ids.iter().any(|i| i == t))
++            {
++                add_from(task, &item_name);
++            }
++        }
++        Ok(item)
++    })
++}
++
++fn add_from(task: &mut Map<String, Value>, item: &str) {
++    let from = task.entry("from").or_insert_with(|| json!([]));
++    if !from.is_array() {
++        *from = json!([]);
++    }
++    let list = from.as_array_mut().expect("made a list just above");
++    if !list.iter().any(|v| v.as_str() == Some(item)) {
++        list.push(json!(item));
++    }
++}
++
++/// Move the decided items (discarded or injected) decided more than `keep_days` ago (`meta.archive.keep_days`
++/// without it, as `atm db archive` keeps finished tasks) into the inbox's archive; open items stay. The IDs moved.
++///
++/// # Errors
++/// The store's.
++pub fn archive(project: &mut Project, keep_days: Option<f64>) -> Result<Vec<String>> {
++    let before = recent_since(project.store().document()?, keep_days);
++    project.change(|work| {
++        let inbox = work.inbox()?;
++        let (moving, staying): (Vec<Value>, Vec<Value>) = items(inbox).into_iter().partition(|i| {
++            state_of(i).is_some_and(InboxState::decided)
++                && i.get("decided_at")
++                    .and_then(Value::as_str)
++                    .and_then(parse_iso)
++                    .is_some_and(|at| at <= before)
++        });
++        if moving.is_empty() {
++            return Ok(Vec::new());
++        }
++        inbox["items"] = Value::Array(staying);
++        let moved: Vec<String> = moving
++            .iter()
++            .filter_map(|i| i.get("id").and_then(Value::as_str).map(String::from))
++            .collect();
++        work.moving_into_inbox_archive();
++        let archive = work.inbox_archive()?;
++        archive["version"] = json!(atm_common::inbox::INBOX_VERSION);
++        items_mut(archive).extend(moving);
++        Ok(moved)
++    })
++}
++
++/// Bring archived items back into the inbox, as they were. The IDs brought back.
++///
++/// # Errors
++/// `Invalid` for no item ID; `NotFound` for one the archive doesn't hold; the store's.
++pub fn unarchive(project: &mut Project, ids: &[String]) -> Result<Vec<String>> {
++    let numbers: Vec<u64> = ids.iter().map(|id| parsed(id)).collect::<Result<_>>()?;
++    project.change(|work| {
++        let archive = work.inbox_archive()?;
++        let (back, staying): (Vec<Value>, Vec<Value>) = items(archive)
++            .into_iter()
++            .partition(|i| numbers.contains(&number_of(i)));
++        if let Some(missing) = numbers
++            .iter()
++            .find(|n| !back.iter().any(|i| number_of(i) == **n))
++        {
++            return Err(Error::NotFound(format!(
++                "no archived inbox item {}",
++                item_id(*missing)
++            )));
++        }
++        // The numbers given so far, the archive's included, before the items move
++        let past_archive = next_number(archive);
++        archive["items"] = Value::Array(staying);
++        let names = back
++            .iter()
++            .filter_map(|i| i.get("id").and_then(Value::as_str).map(String::from))
++            .collect();
++        let inbox = work.inbox()?;
++        items_mut(inbox).extend(back);
++        let next = next_number(inbox).max(past_archive);
++        inbox["next"] = json!(next);
++        Ok(names)
++    })
++}
++
++/// How many items wait in the inbox (created): the status line's and the dashboard's badge.
++///
++/// # Errors
++/// When the inbox can't be read.
++pub fn open_count(project: &Project) -> Result<usize> {
++    Ok(items(&project.store().inbox(false)?)
++        .iter()
++        .filter(|i| state_of(i) == Some(InboxState::Created))
++        .count())
++}
++
++#[cfg(test)]
++mod tests;
+diff --git a/crates/atm-lib/src/inbox/tests.rs b/crates/atm-lib/src/inbox/tests.rs
+new file mode 100644
+index 00000000..b9b0c07a
+--- /dev/null
++++ b/crates/atm-lib/src/inbox/tests.rs
+@@ -0,0 +1,415 @@
++use atm_common::Task;
++use atm_db::MemoryStore;
++use serde_json::{Value, json};
++
++use super::*;
++
++const PERSON: &str = "Hakan Serce";
++const AGENT: &str = "claude:ab12";
++
++fn task(v: Value) -> Task {
++    match v {
++        Value::Object(m) => m,
++        other => panic!("not a task: {other}"),
++    }
++}
++
++/// A project of two tasks, its inbox `inbox` (and archive), worked on by `actor`
++fn project_with(inbox: Value, archive: Value, actor: &str) -> Project {
++    let store = MemoryStore::new(
++        vec![
++            task(json!({"id": "T-1", "name": "One"})),
++            task(json!({"id": "T-2", "name": "Two"})),
++        ],
++        vec![task(json!({"id": "T-0", "name": "Old", "status": "done"}))],
++        &serde_json::Map::new(),
++    )
++    .unwrap()
++    .with_inbox(inbox, archive);
++    Project::new(Box::new(store)).with_actor(Some(actor.to_string()))
++}
++
++fn empty(actor: &str) -> Project {
++    project_with(
++        atm_common::inbox::empty_inbox(),
++        atm_common::inbox::empty_inbox(),
++        actor,
++    )
++}
++
++/// The same project, now worked on by `actor`
++fn as_actor(project: Project, actor: &str) -> Project {
++    project.with_actor(Some(actor.to_string()))
++}
++
++fn item(id: &str, state: &str, decided_at: Option<&str>) -> Value {
++    let mut item = json!({
++        "id": id, "text": format!("{id} text"), "state": state,
++        "created_at": "2026-11-24T09:00:00Z", "created_by": PERSON, "updated_at": "2026-11-24T09:00:00Z",
++    });
++    if let Some(at) = decided_at {
++        item["decided_at"] = json!(at);
++        item["decided_by"] = json!(PERSON);
++    }
++    item
++}
++
++fn inbox(items: &[Value]) -> Value {
++    json!({"version": 1, "next": items.len() + 1, "items": items})
++}
++
++fn ids(listed: &Listed) -> Vec<String> {
++    listed
++        .items
++        .iter()
++        .map(|i| i["id"].as_str().unwrap().to_string())
++        .collect()
++}
++
++// Adding
++
++#[test]
++fn a_person_adds_an_item_numbered_after_the_last_open_with_who_and_when() {
++    let mut p = empty(PERSON);
++    let first = add(&mut p, "  An idea\nwith a second line  ").unwrap();
++    assert_eq!(first["id"], "IN-1");
++    assert_eq!(first["text"], "An idea\nwith a second line");
++    assert_eq!(first["state"], "created");
++    assert_eq!(first["created_by"], PERSON);
++    assert!(first["created_at"].is_string() && first["updated_at"] == first["created_at"]);
++    assert_eq!(add(&mut p, "Another").unwrap()["id"], "IN-2");
++    let stored = p.store().inbox(false).unwrap();
++    assert_eq!(stored["next"], 3);
++    assert_eq!(stored["version"], 1);
++}
++
++#[test]
++fn an_agent_can_t_add_to_the_inbox() {
++    let mut p = empty(AGENT);
++    let error = add(&mut p, "From an agent").unwrap_err();
++    assert!(matches!(error, Error::Refused(_)), "{error}");
++    assert!(error.to_string().contains(AGENT));
++    assert_eq!(
++        p.store().inbox(false).unwrap()["items"],
++        json!([]),
++        "nothing added"
++    );
++}
++
++#[test]
++fn an_item_s_text_is_not_empty_and_within_its_limit() {
++    let mut p = empty(PERSON);
++    assert!(matches!(add(&mut p, "  \n "), Err(Error::Invalid(_))));
++    assert!(matches!(
++        add(&mut p, &"x".repeat(20_001)),
++        Err(Error::Invalid(_))
++    ));
++    assert!(add(&mut p, &"x".repeat(20_000)).is_ok());
++}
++
++#[test]
++fn numbers_are_never_reused_and_follow_the_highest_ever_given() {
++    // An archived IN-7 keeps its number: `next` past it
++    let mut p = project_with(
++        json!({"version": 1, "next": 8, "items": [item("IN-2", "created", None)]}),
++        inbox(&[item("IN-7", "discarded", Some("2020-01-01T00:00:00Z"))]),
++        PERSON,
++    );
++    assert_eq!(add(&mut p, "after").unwrap()["id"], "IN-8");
++}
++
++// Editing, discarding, restoring
++
++#[test]
++fn a_person_edits_an_open_item_and_no_one_edits_a_decided_one() {
++    let mut p = project_with(
++        inbox(&[
++            item("IN-1", "created", None),
++            item("IN-2", "discarded", Some("2026-11-24T10:00:00Z")),
++        ]),
++        atm_common::inbox::empty_inbox(),
++        PERSON,
++    );
++    let edited = edit(&mut p, "in-1", "Better words").unwrap();
++    assert_eq!(edited["text"], "Better words");
++    assert_eq!(edited["updated_by"], PERSON);
++    assert_ne!(edited["updated_at"], "2026-11-24T09:00:00Z");
++    let refused = edit(&mut p, "IN-2", "x").unwrap_err();
++    assert!(
++        matches!(&refused, Error::Refused(m) if m.contains("IN-2 is discarded")),
++        "{refused}"
++    );
++    let mut agent = as_actor(p, AGENT);
++    assert!(matches!(
++        edit(&mut agent, "IN-1", "x"),
++        Err(Error::Refused(_))
++    ));
++}
++
++#[test]
++fn a_discard_needs_a_reason_and_an_open_item_by_anyone() {
++    let mut p = project_with(
++        inbox(&[item("IN-1", "created", None), item("IN-2", "created", None)]),
++        atm_common::inbox::empty_inbox(),
++        AGENT,
++    );
++    assert!(matches!(
++        discard(&mut p, "IN-1", " "),
++        Err(Error::Invalid(_))
++    ));
++    let discarded = discard(&mut p, "IN-1", "  A duplicate of ATM-12  ").unwrap();
++    assert_eq!(discarded["state"], "discarded");
++    assert_eq!(discarded["reason"], "A duplicate of ATM-12");
++    assert_eq!(
++        discarded["decided_by"], AGENT,
++        "an agent, on the user's word in the triage"
++    );
++    assert!(discarded["decided_at"].is_string());
++    let again = discard(&mut p, "IN-1", "again").unwrap_err();
++    assert!(matches!(again, Error::Refused(_)));
++}
++
++#[test]
++fn a_person_restores_a_discarded_item_which_forgets_its_reason() {
++    let mut p = project_with(
++        inbox(&[item("IN-1", "created", None)]),
++        atm_common::inbox::empty_inbox(),
++        PERSON,
++    );
++    discard(&mut p, "IN-1", "not now").unwrap();
++    let mut agent = as_actor(p, AGENT);
++    assert!(matches!(
++        restore(&mut agent, "IN-1"),
++        Err(Error::Refused(_))
++    ));
++    let mut p = as_actor(agent, PERSON);
++    let back = restore(&mut p, "IN-1").unwrap();
++    assert_eq!(back["state"], "created");
++    for gone in ["reason", "decided_at", "decided_by"] {
++        assert!(back.get(gone).is_none(), "{gone}");
++    }
++    // Only a discarded item comes back
++    let refused = restore(&mut p, "IN-1").unwrap_err();
++    assert!(
++        matches!(&refused, Error::Refused(m) if m.contains("only a discarded item")),
++        "{refused}"
++    );
++}
++
++// Injecting
++
++#[test]
++fn an_injection_links_the_item_and_its_tasks_both_ways_and_is_final() {
++    let mut p = project_with(
++        inbox(&[item("IN-1", "created", None)]),
++        atm_common::inbox::empty_inbox(),
++        AGENT,
++    );
++    let injected = inject(&mut p, "IN-1", &["T-2".into(), "T-1".into(), "T-2".into()]).unwrap();
++    assert_eq!(injected["state"], "injected");
++    assert_eq!(
++        injected["tasks"],
++        json!(["T-2", "T-1"]),
++        "each once, as named"
++    );
++    assert_eq!(injected["decided_by"], AGENT);
++    for id in ["T-1", "T-2"] {
++        assert_eq!(
++            p.store().get_task(id).unwrap().unwrap()["from"],
++            json!(["IN-1"]),
++            "{id}"
++        );
++    }
++    // Final: no other move
++    for refused in [
++        discard(&mut p, "IN-1", "x").unwrap_err(),
++        inject(&mut p, "IN-1", &["T-1".into()]).unwrap_err(),
++    ] {
++        assert!(matches!(refused, Error::Refused(_)));
++    }
++    let mut person = as_actor(p, PERSON);
++    assert!(matches!(
++        restore(&mut person, "IN-1"),
++        Err(Error::Refused(_))
++    ));
++    assert!(matches!(
++        edit(&mut person, "IN-1", "x"),
++        Err(Error::Refused(_))
++    ));
++}
++
++#[test]
++fn a_task_made_from_two_items_names_both() {
++    let mut p = project_with(
++        inbox(&[item("IN-1", "created", None), item("IN-2", "created", None)]),
++        atm_common::inbox::empty_inbox(),
++        PERSON,
++    );
++    inject(&mut p, "IN-1", &["T-1".into()]).unwrap();
++    inject(&mut p, "IN-2", &["T-1".into()]).unwrap();
++    assert_eq!(
++        p.store().get_task("T-1").unwrap().unwrap()["from"],
++        json!(["IN-1", "IN-2"])
++    );
++}
++
++#[test]
++fn an_injection_names_working_tasks_that_exist_and_at_least_one() {
++    let mut p = project_with(
++        inbox(&[item("IN-1", "created", None)]),
++        atm_common::inbox::empty_inbox(),
++        PERSON,
++    );
++    assert!(matches!(
++        inject(&mut p, "IN-1", &[]),
++        Err(Error::Invalid(_))
++    ));
++    assert!(
++        inject(&mut p, "IN-1", &["T-9".into()]).is_err(),
++        "no such task"
++    );
++    let archived = inject(&mut p, "IN-1", &["T-0".into()]).unwrap_err();
++    assert!(archived.to_string().contains("archive"), "{archived}");
++    // Nothing changed by the refusals
++    assert_eq!(show(&p, "IN-1").unwrap()["state"], "created");
++    assert!(
++        p.store()
++            .get_task("T-1")
++            .unwrap()
++            .unwrap()
++            .get("from")
++            .is_none()
++    );
++}
++
++// Reading
++
++#[test]
++fn a_listing_gives_the_open_items_by_default_newest_first_with_the_counts_by_state() {
++    let p = project_with(
++        inbox(&[
++            item("IN-1", "created", None),
++            item("IN-2", "discarded", Some("2026-11-24T10:00:00Z")),
++            item("IN-3", "created", None),
++            item("IN-4", "injected", Some("2026-11-24T10:00:00Z")),
++        ]),
++        inbox(&[item("IN-9", "discarded", Some("2020-01-01T00:00:00Z"))]),
++        PERSON,
++    );
++    let open = list(&p, Listing::Open, false).unwrap();
++    assert_eq!(ids(&open), ["IN-3", "IN-1"]);
++    assert_eq!((open.created, open.discarded, open.injected), (2, 1, 1));
++    assert_eq!(
++        ids(&list(&p, Listing::In(InboxState::Discarded), false).unwrap()),
++        ["IN-2"]
++    );
++    assert_eq!(
++        ids(&list(&p, Listing::All, false).unwrap()),
++        ["IN-4", "IN-3", "IN-2", "IN-1"]
++    );
++    assert_eq!(ids(&list(&p, Listing::All, true).unwrap()), ["IN-9"]);
++    assert_eq!(open_count(&p).unwrap(), 2);
++}
++
++#[test]
++fn an_item_is_shown_from_the_inbox_or_else_its_archive() {
++    let p = project_with(
++        inbox(&[item("IN-1", "created", None)]),
++        inbox(&[item("IN-9", "discarded", Some("2020-01-01T00:00:00Z"))]),
++        PERSON,
++    );
++    assert_eq!(show(&p, "IN-1").unwrap()["state"], "created");
++    assert_eq!(show(&p, "in-9").unwrap()["state"], "discarded");
++    assert!(matches!(show(&p, "IN-5"), Err(Error::NotFound(_))));
++    for bad in ["IN-0", "T-1", "", "IN-x"] {
++        assert!(matches!(show(&p, bad), Err(Error::Invalid(_))), "{bad:?}");
++    }
++}
++
++// Archiving
++
++#[test]
++fn archiving_moves_decided_items_older_than_the_days_kept_never_open_ones() {
++    let mut p = project_with(
++        inbox(&[
++            item("IN-1", "created", None),
++            item("IN-2", "discarded", Some("2020-01-01T00:00:00Z")),
++            item("IN-3", "injected", Some("2020-01-02T00:00:00Z")),
++            item("IN-4", "discarded", Some(&now_iso())),
++        ]),
++        atm_common::inbox::empty_inbox(),
++        PERSON,
++    );
++    assert_eq!(archive(&mut p, Some(7.0)).unwrap(), ["IN-2", "IN-3"]);
++    assert_eq!(
++        ids(&list(&p, Listing::All, false).unwrap()),
++        ["IN-4", "IN-1"]
++    );
++    assert_eq!(
++        ids(&list(&p, Listing::All, true).unwrap()),
++        ["IN-3", "IN-2"]
++    );
++    // Nothing left to move: nothing changes
++    assert_eq!(archive(&mut p, Some(7.0)).unwrap(), Vec::<String>::new());
++    // With no days kept, the recent decided one goes too; the open one never
++    assert_eq!(archive(&mut p, Some(0.0)).unwrap(), ["IN-4"]);
++    assert_eq!(ids(&list(&p, Listing::All, false).unwrap()), ["IN-1"]);
++}
++
++#[test]
++fn unarchiving_brings_items_back_as_they_were_and_refuses_one_the_archive_doesn_t_hold() {
++    let mut p = project_with(
++        atm_common::inbox::empty_inbox(),
++        inbox(&[
++            item("IN-2", "discarded", Some("2020-01-01T00:00:00Z")),
++            item("IN-3", "injected", Some("2020-01-01T00:00:00Z")),
++        ]),
++        PERSON,
++    );
++    assert!(matches!(
++        unarchive(&mut p, &["IN-2".into(), "IN-5".into()]),
++        Err(Error::NotFound(_))
++    ));
++    assert_eq!(
++        ids(&list(&p, Listing::All, true).unwrap()),
++        ["IN-3", "IN-2"],
++        "nothing moved"
++    );
++    assert_eq!(unarchive(&mut p, &["in-2".into()]).unwrap(), ["IN-2"]);
++    assert_eq!(show(&p, "IN-2").unwrap()["state"], "discarded");
++    assert_eq!(ids(&list(&p, Listing::All, false).unwrap()), ["IN-2"]);
++    // Past IN-3, still in the archive
++    assert_eq!(p.store().inbox(false).unwrap()["next"], 4);
++    // The next item is numbered past both
++    assert_eq!(add(&mut p, "new").unwrap()["id"], "IN-4");
++}
++
++#[test]
++fn a_new_item_never_takes_an_archived_item_s_number_whatever_the_inbox_s_next_says() {
++    // An inbox whose `next` fell behind (edited by hand, or a merge): IN-1 to IN-3 are in the archive
++    let mut p = project_with(
++        json!({"version": 1, "next": 1, "items": []}),
++        inbox(&[
++            item("IN-1", "discarded", Some("2020-01-01T00:00:00Z")),
++            item("IN-3", "injected", Some("2020-01-01T00:00:00Z")),
++        ]),
++        PERSON,
++    );
++    assert_eq!(add(&mut p, "new").unwrap()["id"], "IN-4");
++}
++
++#[test]
++fn an_unknown_item_is_named_whatever_the_move() {
++    let mut p = empty(PERSON);
++    for error in [
++        edit(&mut p, "IN-4", "x").unwrap_err(),
++        discard(&mut p, "IN-4", "x").unwrap_err(),
++        restore(&mut p, "IN-4").unwrap_err(),
++        inject(&mut p, "IN-4", &["T-1".into()]).unwrap_err(),
++    ] {
++        assert!(
++            matches!(&error, Error::NotFound(m) if m == "no inbox item IN-4"),
++            "{error}"
++        );
++    }
++}
+diff --git a/crates/atm-lib/src/lib.rs b/crates/atm-lib/src/lib.rs
+index 0a9c0232..38f4318d 100644
+--- a/crates/atm-lib/src/lib.rs
++++ b/crates/atm-lib/src/lib.rs
+@@ -15,6 +15,7 @@ pub mod components;
+ pub use atm_docs as documents;
+ pub mod edit;
+ pub mod foreign;
++pub mod inbox;
+ pub mod leases;
+ pub mod lifecycle;
+ mod lookup;
+diff --git a/crates/atm-lib/src/maintenance.rs b/crates/atm-lib/src/maintenance.rs
+index 8978df5f..649d2388 100644
+--- a/crates/atm-lib/src/maintenance.rs
++++ b/crates/atm-lib/src/maintenance.rs
+@@ -209,6 +209,26 @@ pub fn merge_versions(
+     path: Option<&str>,
+ ) -> Result<Vec<String>> {
+     let name = path.map(|p| p.rsplit('/').next().unwrap_or(p));
++    // The inbox and its archive, item by item (ATM-759)
++    if matches!(
++        name,
++        Some(atm_common::inbox::INBOX_FILE | atm_common::inbox::INBOX_ARCHIVE_FILE)
++    ) {
++        let read = |p: &Path| -> Result<serde_json::Value> {
++            let text = std::fs::read_to_string(p).unwrap_or_default();
++            if text.trim().is_empty() {
++                return Ok(atm_common::inbox::empty_inbox());
++            }
++            serde_json::from_str(&text)
++                .map_err(|e| atm_common::Error::failed(format!("{}: {e}", p.display())))
++        };
++        // A number given on both branches is renumbered, not a conflict: the item says so (`renumbered_from`)
++        let (merged, _renumbered) =
++            atm_db::jsongit::inbox_merge::merge_inbox(&read(base)?, &read(ours)?, &read(theirs)?);
++        atm_common::home::write_text_atomic(ours, &(atm_common::py::to_json(&merged) + "\n"))
++            .map_err(|e| atm_common::Error::failed(format!("{}: {e}", ours.display())))?;
++        return Ok(Vec::new());
++    }
+     if !matches!(name, Some("comments.md" | "review.md")) {
+         // A number clash moves the task that isn't on the base branch (ADR-009), read from git
+         let on_base = tasks_on_base_branch(ours);
+diff --git a/docs/security-architecture.md b/docs/security-architecture.md
+index af0defb3..c0d00ec8 100644
+--- a/docs/security-architecture.md
++++ b/docs/security-architecture.md
+@@ -67,10 +67,10 @@ with the task that adds it.
+ | #   | Invariant                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Enforced by                                                                                                                      |
+ | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+ | I5  | **atm never runs a shell**: processes get argument lists (`Command::new` with a program, never `sh`, `bash`, `cmd` or PowerShell); Rust evaluates no code                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `dashboard/tests/unit/security-invariants.test.ts` (a static check)                                                              |
+-| I6  | **atm never reads or writes through a symlink** in the task folder, nor a task folder outside the project; its code reviews too (`reviews/`, a review's folder and files: ATM-563)                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `tests/scripts/symlinks.test.mjs`; atm-review's `folder.rs` tests                                                                |
++| I6  | **atm never reads or writes through a symlink** in the task folder, nor a task folder outside the project; its code reviews too (`reviews/`, a review's folder and files: ATM-563), and the inbox (`inbox.json`, `inbox-archive.json`: ATM-759)                                                                                                                                                                                                                                                                                                                                                                                                                                       | `tests/scripts/symlinks.test.mjs`; atm-review's `folder.rs` tests; atm-db's `a_symlinked_task_folder_or_file_is_refused` |
+ | I7  | **A `--file` names one file**: git runs with literal pathspecs; whole-tree pathspecs are refused                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `tests/scripts/git.test.mjs`                                                                                                     |
+ | I8  | **Strings from `tasks.json` that reach a shell are shell-safe**: task IDs and `meta.workflow.base` are checked on load; so are status, type and priority IDs (letters, digits, `.`, `_`, `-`) and sprint names (letters, digits, spaces and `._-&,:()/+#`, never `$`, a backtick, `;`, `\|`, quotes or a newline), which agents paste into commands; a sprint can't be named `backlog`, `new`, `active` or `next` (ATM-665)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `tests/scripts/scenarios/security.json`                                                                                          |
+-| I9  | **The merge driver's command comes from the clone's own git config**, never from the repository; the path git gives it (`%P`, 0.40.0) only picks the merge by its file name (`tasks.json`, a review's `comments.md` or `review.md`) and is never opened                                                                                                                                                                                                                                                                                                                                                                                                     | review (`crates/atm-db/src/jsongit/merge.rs`, `setup.rs`, `crates/atm-lib/src/maintenance.rs`, `crates/atm-review/src/merge.rs`) |
++| I9  | **The merge driver's command comes from the clone's own git config**, never from the repository; the path git gives it (`%P`, 0.40.0) only picks the merge by its file name (`tasks.json`, a review's `comments.md` or `review.md`, the inbox's `inbox.json` or `inbox-archive.json`, ATM-759) and is never opened                                                                                                                                                                                                                                                                                                                                                                                                     | review (`crates/atm-db/src/jsongit/merge.rs`, `setup.rs`, `crates/atm-lib/src/maintenance.rs`, `crates/atm-review/src/merge.rs`) |
+ | I30 | **Task text can't drive the terminal**: everything the CLI prints for people goes through `output::for_people` (the crate's own `println!`, `print!`, `eprintln!`, `eprint!` shadow std's; it also shows tasks named by UUID by their key, ATM-557), whose `output::clean` drops every control character but the line end and the tab, so an escape sequence in task text (a clipboard write, a title, a link, a screen clear, a cursor move) prints as plain text; with styling on, SGR sequences of atm's own styles (colour, bold, dim, underline; never hidden or blinking text) stay. `--json` prints exactly (JSON escapes control characters itself) | `tests/scripts/output.test.mjs` "task text can’t drive the terminal"                                                             |
+ | I31 | **A comment's text can't forge another comment** (ATM-658): in `comments.md`, a comment's body line that has the shape of a comment's first line (`- **author** · at · cN`, at any indent, with or without its box) is written with a `\` mark after its indent and read back without it, so it stays the body's and never reads as a reply, a comment or a resolved box by whoever it names (the review watch tells agents such lines as a person's word). Body lines are always indented, so none is a heading. A comment's path, which the chain's heading carries, has no control character and is one of its round's files (a renamed file's old path too), in `rules::comment`, for the CLI, the REST routes and the app alike | atm-review's `a_body_with_comment_and_heading_shaped_lines_round_trips_as_one_comments_body`, `an_older_files_body_lines_with_marks_read_as_they_were` and `a_comment_is_on_one_of_its_rounds_files_whose_path_has_no_control_character` |
+ | I32 | **No revision reaches git as an option** (ATM-659): every atm-vcs method that hands git a revision takes a `Rev`, which is a full object ID or a name that doesn't start with `-` and has no control character or space; the commands put `--end-of-options` before it too. A review's round (`rounds/<n>.json`, committed and merged, so anyone who can push writes it) is read only when its commits are full object IDs (`RoundKind::check`); a round that isn't is refused, its review named as unreadable with the reason (`atm review show`, `atm doctor`), before git sees it | atm-vcs's `rev.rs` tests; atm-review's `a_rounds_commits_are_full_object_ids_or_it_is_refused`; `tests/scripts/reviews/wrong-uses.test.mjs` "a round whose commit is no full ID…" |
+diff --git a/tests/scripts/merge.test.mjs b/tests/scripts/merge.test.mjs
+index 234a21f1..4d21190c 100644
+--- a/tests/scripts/merge.test.mjs
++++ b/tests/scripts/merge.test.mjs
+@@ -655,4 +655,77 @@ describe('merge-driver command', () => {
+       removeDir(dir);
+     }
+   });
++
++  // ATM-759: the inbox and its archive merge item by item, by the path git names (%P)
++  const inboxItem = (id, by, state = 'created', more = {}) => ({
++    id,
++    text: `${id} by ${by}`,
++    state,
++    created_at: '2026-11-24T09:00:00Z',
++    created_by: by,
++    updated_at: '2026-11-24T09:00:00Z',
++    ...more,
++  });
++  const inboxOf = (...items) => JSON.stringify({ version: 1, next: items.length + 1, items });
++
++  test('the inbox merges item by item: both branches’ items kept, a number given twice renumbered on theirs', () => {
++    for (const name of ['inbox.json', 'inbox-archive.json']) {
++      const { dir, paths } = files(
++        inboxOf(inboxItem('IN-1', 'Hakan')),
++        inboxOf(
++          inboxItem('IN-1', 'Hakan', 'discarded', { reason: 'no', updated_at: '2026-11-24T10:00:00Z' }),
++          inboxItem('IN-2', 'Hakan'),
++        ),
++        inboxOf(inboxItem('IN-1', 'Hakan'), inboxItem('IN-2', 'Ana')),
++      );
++      try {
++        const r = runAtm(['db', 'merge-driver', ...paths, `.agentic-task-manager/${name}`], dir);
++        assert.equal(r.code, 0, r.stderr);
++        const merged = JSON.parse(fs.readFileSync(paths[1], 'utf8'));
++        assert.deepEqual(
++          merged.items.map((i) => [i.id, i.created_by, i.state]),
++          [
++            ['IN-1', 'Hakan', 'discarded'],
++            ['IN-2', 'Hakan', 'created'],
++            ['IN-3', 'Ana', 'created'],
++          ],
++          name,
++        );
++        // No conflict: the item renumbered keeps its old number to say so
++        assert.equal(merged.items[2].renumbered_from, 'IN-2');
++        assert.equal(merged.next, 4);
++      } finally {
++        removeDir(dir);
++      }
++    }
++  });
++
++  test('a real merge of two branches that each added to the inbox keeps every item', () => {
++    withRepo((root) => {
++      const inboxFile = path.join(root, '.agentic-task-manager/inbox.json');
++      const attributes = path.join(root, '.agentic-task-manager/.gitattributes');
++      // As atm leaves them once the inbox is written (setup's ensure_inbox_merge)
++      fs.appendFileSync(attributes, 'inbox.json merge=atm\ninbox-archive.json merge=atm\n');
++      fs.writeFileSync(inboxFile, inboxOf(inboxItem('IN-1', 'Hakan')));
++      git(['add', '-A'], root);
++      git(['commit', '-q', '-m', 'inbox'], root);
++      git(['switch', '-q', '-c', 'other'], root);
++      fs.writeFileSync(inboxFile, inboxOf(inboxItem('IN-1', 'Hakan'), inboxItem('IN-2', 'Ana')));
++      git(['commit', '-q', '-am', 'other'], root);
++      git(['switch', '-q', 'main'], root);
++      fs.writeFileSync(inboxFile, inboxOf(inboxItem('IN-1', 'Hakan'), inboxItem('IN-2', 'Hakan')));
++      git(['commit', '-q', '-am', 'main'], root);
++      const r = spawnSync('git', ['merge', '--no-edit', 'other'], { cwd: root, encoding: 'utf8' });
++      assert.equal(r.status, 0, r.stdout + r.stderr);
++      const merged = JSON.parse(fs.readFileSync(inboxFile, 'utf8'));
++      assert.deepEqual(
++        merged.items.map((i) => [i.id, i.created_by]),
++        [
++          ['IN-1', 'Hakan'],
++          ['IN-2', 'Hakan'],
++          ['IN-3', 'Ana'],
++        ],
++      );
++    });
++  });
+ });

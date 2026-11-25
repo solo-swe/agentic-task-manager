@@ -152,11 +152,13 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('ReviewPage: the top bar', () => {
-  it('names the project, the reference and the title; the status, needs-you, and a link back to the reviews', async () => {
+  it('names its task, the reference and the title; the status, needs-you, and a link back to the reviews', async () => {
     const onback = vi.fn();
     const { container } = show(data(), { backHref: '/projects/p1/reviews', onback });
     const top = within(container.querySelector('.review-top') as HTMLElement);
-    expect(top.getByRole('heading').textContent?.replace(/\s+/g, ' ').trim()).toBe('ATM CR-7 Trim the names');
+    // The task's key names the project: the project's isn't said again
+    expect(top.getByRole('heading').textContent?.replace(/\s+/g, ' ').trim()).toBe('[ATM-1] CR-7 Trim the names');
+    expect(container.querySelector('.review-top .review-project')).toBeNull();
     expect(top.getByText('Waiting for review')).toBeTruthy();
     expect(top.getByText('Needs you')).toBeTruthy();
     const back = top.getByRole('link', { name: 'Reviews' });
@@ -166,8 +168,37 @@ describe('ReviewPage: the top bar', () => {
     expect(onback).toHaveBeenCalledOnce();
   });
 
-  it('without a project name, a needs-you mark or a way back: the reference and title alone', () => {
-    show(data({ needs_you: false }), { project: null });
+  it('its task in the heading is a link: a click opens it as the facts’ link does, ⌘-click in a tab of its own', async () => {
+    const open = vi.fn();
+    const { container } = show(data(), { tasks: { known: () => true, open } });
+    const link = within(container.querySelector('.review-title') as HTMLElement).getByRole('link', { name: 'ATM-1' });
+    expect(link.getAttribute('href')).toBe('/projects/p1/list?task=ATM-1');
+    await fireEvent.click(link);
+    expect(open).toHaveBeenLastCalledWith('ATM-1', false);
+    await fireEvent.click(link, { metaKey: true });
+    expect(open).toHaveBeenLastCalledWith('ATM-1', true);
+  });
+
+  it('several tasks: one bracket, each a link; a review of no task names its project instead', () => {
+    const page = data();
+    page.review = { ...page.review, tasks: ['ATM-1', 'ATM-2'] };
+    const { container, unmount } = show(page);
+    const title = container.querySelector('.review-title') as HTMLElement;
+    expect(title.textContent?.replace(/\s+/g, ' ').trim()).toBe('[ATM-1, ATM-2] CR-7 Trim the names');
+    expect([...title.querySelectorAll('a')].map((a) => a.textContent)).toEqual(['ATM-1', 'ATM-2']);
+    unmount();
+    const none = data();
+    none.review = { ...none.review, tasks: [] };
+    show(none);
+    expect(screen.getByRole('heading', { level: 1 }).textContent?.replace(/\s+/g, ' ').trim()).toBe(
+      'ATM CR-7 Trim the names',
+    );
+  });
+
+  it('without tasks, a project name, a needs-you mark or a way back: the reference and title alone', () => {
+    const page = data({ needs_you: false });
+    page.review = { ...page.review, tasks: [] };
+    show(page, { project: null });
     expect(screen.getByRole('heading', { level: 1 }).textContent?.replace(/\s+/g, ' ').trim()).toBe(
       'CR-7 Trim the names',
     );
@@ -218,7 +249,11 @@ describe('ReviewPage: Overview', () => {
       ['Changes', '3 files +3 −3'],
       ['Comments', '1 open · 1 resolved'],
     ]);
-    expect(screen.getByRole('link', { name: 'ATM-1' }).getAttribute('href')).toBe('/projects/p1/list?task=ATM-1');
+    expect(
+      within(container.querySelector('.review-facts') as HTMLElement)
+        .getByRole('link', { name: 'ATM-1' })
+        .getAttribute('href'),
+    ).toBe('/projects/p1/list?task=ATM-1');
     // The facts first, then the description beside the conversation
     const overview = container.querySelector('.review-overview') as HTMLElement;
     expect(overview.firstElementChild).toHaveClass('review-facts');

@@ -289,6 +289,61 @@ fn project_by_id(id: &str) -> Option<Other> {
     Some(other)
 }
 
+/// How a project is named to another: its key, else its `meta.id`.
+fn name_of(snapshot: &Snapshot) -> String {
+    snapshot
+        .key()
+        .map(String::from)
+        .or_else(|| snapshot.meta_id.clone())
+        .unwrap_or_default()
+}
+
+/// The folder of the registered project (but the one at `except`) that `name` names: its key in any case, or its
+/// `meta.id` (ATM-772: `atm inbox add --project`). Only the user's registered projects, as ADR-007 §7 finds another
+/// project's task.
+///
+/// # Errors
+/// `NotFound` for none, naming the registered ones; `Invalid` when its key names several (name one by its ID).
+pub fn registered_project(name: &str, except: Option<&Path>) -> Result<PathBuf> {
+    let name = name.trim();
+    let others = registered(except);
+    let found: Vec<&Other> = others
+        .iter()
+        .filter(|o| {
+            o.snapshot
+                .key()
+                .is_some_and(|k| k.eq_ignore_ascii_case(name))
+                || o.snapshot.meta_id.as_deref() == Some(name)
+        })
+        .collect();
+    match found.as_slice() {
+        [one] => Ok(one.folder.clone()),
+        [] => {
+            let mut names: Vec<String> = others.iter().map(|o| name_of(&o.snapshot)).collect();
+            names.retain(|n| !n.is_empty());
+            names.sort();
+            Err(Error::NotFound(format!(
+                "no registered project {name:?}{}",
+                if names.is_empty() {
+                    " (no other project is registered: atm workspace add-project registers one)"
+                        .to_string()
+                } else {
+                    format!(" (registered: {})", names.join(", "))
+                }
+            )))
+        }
+        several => Err(Error::Invalid(format!(
+            "{name:?} is the key of {} registered projects: name one by its ID ({})",
+            several.len(),
+            several
+                .iter()
+                .filter_map(|o| o.snapshot.meta_id.clone())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ))),
+    }
+}
+
 /// The registered projects (but the one at `except`) whose key (`meta.key`) is `key`, in any case.
 #[must_use]
 pub fn projects_with_key(key: &str, except: Option<&Path>) -> Vec<Project> {

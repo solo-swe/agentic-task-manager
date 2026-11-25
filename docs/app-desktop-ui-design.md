@@ -213,26 +213,22 @@ changes:
 
 ## 4. The side panel
 
-**A collapsible sidebar** listing the workspace's projects, in place of the project selector:
+**Replaced by [the sidebar overhaul](sidebar-overhaul-design.md)** (ATM-728, built in the sprint *Sidebar overhaul*):
+the sidebar is a **scope** (All projects or one project) and its **items** (Overview, Inbox, Tasks, Code Reviews,
+Documents, Analysis), each opening a new tab; the title bar's project chooser and the page's item tabs are gone in the
+app; hidden, it is a rail of the items' icons that shows the whole sidebar on a hover (ATM-771); + opens a chooser of
+scope and item (`/new`). That design has the details; what follows here still holds:
 
-- at the very top, **search** (⌘F, Edit ▸ Find): the open project's tasks, as the search does now; on the overview,
-  every project's (the app's `search` command);
-- then the workspace (a menu, `WorkspaceSelector`'s content);
-- then **Overview**, and each project: its logo, name, the active sprint's progress as a thin bar, and the needs-you
-  count as a badge;
-- the open project marked; a click opens it in this tab, ⌘-click in a new one (§3);
-- missing projects (a folder without a task file) dimmed, as the overview shows them.
-
-It is a Svelte component (`shell/Sidebar.svelte`), shown only in the app, from what the page already loads
-(`dashboard.projects`, the overview's summaries). View ▸ Show Sidebar (⌃⌘S, Ctrl+B) and the sidebar button toggle it,
-and dragging its edge resizes it; both are kept in the page's preferences (`lib/prefs.ts`). The browser keeps its
-selectors. **The window is split as Notion's** (Hakan, T-535): the sidebar is a column of the window's full height, its
-top strip the title bar's height, with macOS's traffic lights over it and the sidebar button after them; the strip
-drags the window as the title bar does. The title bar with the tabs is only over the area right of it, so the tabs
-start at the sidebar's edge and move with that area. Closed, the title bar takes the window's width and has the
-button. (T-529 slid the tabs over a full-width bar instead; it lagged and didn't line up.)
-
-macOS's translucent sidebar (vibrancy) needs a transparent window and has no equal on the others; it is not proposed.
+- It is a Svelte component (`shell/Sidebar.svelte`), shown only in the app, from what the page already loads
+  (`dashboard.projects`, the summaries). View ▸ Show Sidebar (⌃⌘S, Ctrl+B) and the sidebar button toggle it, and
+  dragging its edge resizes it; both are kept in the page's preferences (`lib/prefs.ts`).
+- **The window is split as Notion's** (Hakan, T-535): the sidebar is a column of the window's full height, its top
+  strip the title bar's height, with macOS's traffic lights over it and the sidebar button after them; the strip drags
+  the window as the title bar does. The title bar with the tabs is only over the area right of it, so the tabs start
+  at the sidebar's edge and move with that area. (T-529 slid the tabs over a full-width bar instead; it lagged and
+  didn't line up.)
+- macOS's translucent sidebar (vibrancy) needs a transparent window and has no equal on the others; it is not
+  proposed.
 
 ## 5. The status bar
 

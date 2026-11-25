@@ -1,0 +1,22 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "c93cfefabe74d800909dcb651400e76b5b5a8696",
+    "head": "6507b824e076c24e7d827e814241535b46a78581"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/lib/state.svelte.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/app.spec.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:33cba067",
+  "at": "2026-11-24T23:11:57Z"
+}

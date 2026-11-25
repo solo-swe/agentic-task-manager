@@ -1,4 +1,5 @@
 import { browserFetch, inApp } from './api/http';
+import { keepProjects, keptProjects } from './kept-projects';
 import {
   checkAppUpdate,
   installAppUpdate,
@@ -84,7 +85,7 @@ import { latest, type Ticket } from './latest';
 import type { ListGroupBy } from './list-groups';
 import { loadProjectSources, type ProjectSource } from './overview-data';
 import { scopeOf } from './scope';
-import { sprintParamOf, withSprintParam } from './sprint-param';
+import { sprintParamOf, statusListAddress, withSprintParam } from './sprint-param';
 import type { Release } from './releases';
 import { NO_SPRINTS, type SprintModel } from './sprints';
 import { DEFAULT_VOCABULARY, type Vocabulary } from './vocab';
@@ -297,6 +298,10 @@ export class DashboardState {
     );
   }
 
+  /** The page's address as the last navigation left it, for what a page reads from its query (the Inbox's filter,
+   * ATM-762): the router's, kept here so a component needn't read the router itself */
+  address = $state(typeof location === 'undefined' ? '/' : currentAddress());
+
   filters = $state.raw<Filters>(emptyFilters());
   /** Keyword search over ID, name, description and type; part of the saved view */
   query = $state('');
@@ -499,11 +504,18 @@ export class DashboardState {
     setTimeout(() => (this.reloading = false), RELOAD_SPIN_MS);
   }
 
-  /** The timer's reload: skipped while a load is still out (ATM-675), so slow answers don't pile up */
+  /** The timer's reload: never piled on a load still out (ATM-675), so slow answers don't pile up; but not lost either
+   * (ATM-781): the tick is kept, and done once the loads are over, unless a load started after it brought the page up
+   * to date. At most one waits, whatever the ticks */
   poll() {
-    if (this.#loads.busy) return;
+    if (this.#loads.busy) {
+      this.#pollMissed = true;
+      return;
+    }
     void this.reload();
   }
+  /** A tick came while a load was out, and no load has started since */
+  #pollMissed = false;
 
   /** Re-fetch the project list and decide the page from the URL; returns the project to load, or null for a page
    * without one (the overview, how to add a project, an unknown project); undefined when a newer load was asked for
@@ -524,7 +536,30 @@ export class DashboardState {
     if (!result.unchanged) {
       this.#projectsValidators = result.validators;
       this.projects = result.projects;
+      if (inApp) keepProjects(workspace, result.listed, result.validators);
     }
+    return this.showRoute();
+  }
+
+  /** The page decided from the projects the page knows, before the fresh list (ATM-776, ATM-777): those listed already
+   * (a switch to another project's tab, a reload), else at the app's first load those kept at its last start, its tag
+   * asked with the fresh list so an unchanged one costs atm nothing. The project to load at once, before the fresh
+   * list; null for a page without one; undefined when the page knows no projects of this workspace yet */
+  private showKnownProjects(): string | null | undefined {
+    const workspace = workspaceOf(currentAddress());
+    if (workspace !== apiWorkspace()) return undefined;
+    if (this.projectsLoaded) return this.workspace === workspace ? this.showRoute() : undefined;
+    if (!inApp) return undefined;
+    const kept = keptProjects(workspace);
+    if (!kept) return undefined;
+    this.workspace = workspace;
+    this.projects = kept.projects;
+    this.#projectsValidators = kept.validators;
+    return this.showRoute();
+  }
+
+  /** The page the address names, with the projects listed now: the project to load, or null for a page without one */
+  private showRoute(): string | null {
     this.projectsLoaded = true;
     this.route = routeFor(this.projects, currentAddress());
     if (this.route.page !== 'project') {
@@ -655,6 +690,7 @@ export class DashboardState {
    * the task, and the page when it names another one. */
   onNavigate() {
     let address = currentAddress();
+    this.address = address;
     // An older address's dialog flag (?about): its dialog opens, and the address is the page's without it
     const named = dialogOf(address);
     if (named) {
@@ -792,10 +828,17 @@ export class DashboardState {
 
   private async fetchAndApply() {
     const ticket = this.#loads.ask();
+    // A tick missed before this load started: this load asks for everything it would have
+    this.#pollMissed = false;
     try {
       await this.fetchAndApplyFor(ticket);
     } finally {
       ticket.done();
+      // The loads over, and a tick missed meanwhile: done now, once (ATM-781)
+      if (this.#pollMissed && !this.#loads.busy) {
+        this.#pollMissed = false;
+        void this.reload();
+      }
     }
   }
 
@@ -804,6 +847,15 @@ export class DashboardState {
     // The first load waits, as `/` may go to another workspace; a poll doesn't
     if (this.projectsLoaded) void this.refreshWorkspaces();
     else await this.refreshWorkspaces();
+    if (!ticket.current()) return;
+    // From the projects the page knows (listed already, or kept at the app's last start: ATM-776, ATM-777), the page at
+    // once, and its project's data first, shown as soon as it is in; the fresh list after it, not before (waiting on it
+    // first, a switch to another project's tab showed the last project's board; asked together, they slowed each other
+    // down). A list out of date (a project gone) only means it wasn't shown early: the path below loads it, and says why
+    // it can't
+    const early = this.showKnownProjects();
+    const shownEarly = early ? await this.loadProjectData(early, ticket).catch(() => false) : false;
+    if (shownEarly) this.showProjectData();
     if (!ticket.current()) return;
     const project = await this.refreshProjects(ticket);
     // A newer load was asked for meanwhile: its answers are the page's
@@ -817,8 +869,15 @@ export class DashboardState {
       if (ticket.current()) this.loadedAt = Date.now();
       return;
     }
+    // The kept list's project, when the fresh list names the same page: shown already
+    if (shownEarly && project === early) return;
     // Another project by now, or a newer load: that load shows it
     if (!(await this.loadProjectData(project, ticket))) return;
+    this.showProjectData();
+  }
+
+  /** The project's data is in: its page shown, with its saved view the first time */
+  private showProjectData() {
     const first = !this.loaded;
     if (first) this.restoreView();
     if (this.#pendingNeedsYou) {
@@ -1010,6 +1069,15 @@ export class DashboardState {
     this.filters = { ...this.filters, sprint: new Set(values) };
   }
 
+  /** The List of the project's tasks in `status`, in every sprint, as the Overview counts them (its status counts'
+   * links, ATM-756): the other filters and the search cleared, in place */
+  showStatus(status: string) {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- a fresh set, never changed
+    this.filters = { ...emptyFilters(), status: new Set([status]) };
+    this.query = '';
+    navigate(statusListAddress(currentAddress()));
+  }
+
   /** The other filters and the search cleared, the sprints kept (the scope bar's "filtered ✕") */
   clearNarrowing() {
     this.filters = { ...emptyFilters(), sprint: this.filters.sprint };
@@ -1017,8 +1085,10 @@ export class DashboardState {
   }
 
   /** The address of task `task`'s details over this page (ATM-698): a card's and a row's link, for Copy Link and a new
-   * tab; reads the page's tab so a card's link follows it */
+   * tab; reads the page's address and tab so a card's link follows them (a Sprint filter written after the card was
+   * drawn, ATM-776) */
   taskAddress(task: Task): string {
+    void this.address;
     void this.tab;
     void this.projectId;
     return withTask(currentAddress(), taskLabel(task));
@@ -1162,14 +1232,12 @@ export class DashboardState {
     this.applyView(defaultView(), true);
   }
 
-  /** After the first load: bring back this project's view. A tab in the address wins over the saved tab. */
+  /** After the first load: bring back this project's view: its filters, sorts and each tab's settings. The tab is the
+   * address's: one without a tab is the project's Overview (ATM-751), not the tab seen last */
   private restoreView() {
     // The server's project id is meta.id (or stands in for it), so views saved before 0.15.0 are found again
     this.viewKey = projectKey(this.projectId ? { id: this.projectId } : this.meta);
-    this.applyView(
-      sanitizeView(readView(this.viewKey), this.tasks, this.vocab, this.sprints),
-      !namesView(currentAddress()),
-    );
+    this.applyView(sanitizeView(readView(this.viewKey), this.tasks, this.vocab, this.sprints), false);
     // A ?sprint= in the link wins over the saved Sprint filter (T-323)
     const linked = sprintParamOf(currentAddress(), this.sprints);
     if (linked) this.setSprintScope(linked);

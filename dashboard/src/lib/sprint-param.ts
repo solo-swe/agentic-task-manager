@@ -4,6 +4,7 @@
 import { ACTIVE, BACKLOG } from './filters';
 import { addressParams, formatAddress } from './address';
 import type { SprintModel } from './sprints';
+import { projectPage } from './tabs';
 
 const ALL = 'all';
 
@@ -38,4 +39,16 @@ export function withSprintParam(address: string, values: Iterable<string> | null
   params.delete('sprint');
   if (values !== null) for (const value of sprintParamValues(values)) params.append('sprint', value);
   return formatAddress(params);
+}
+
+/** The Board of the project `address` shows, on one sprint (its ID, ACTIVE or BACKLOG): a sprint's link on the
+ * project's Overview (ATM-756, docs/sidebar-overhaul-design.md §2.4) */
+export function sprintBoardAddress(address: string, sprint: string): string {
+  return withSprintParam(projectPage(address, 'kanban'), [sprint]);
+}
+
+/** The List of the project `address` shows, over every sprint: where a status count on its Overview opens (ATM-756),
+ * the status chosen in the Filters */
+export function statusListAddress(address: string): string {
+  return withSprintParam(projectPage(address, 'list'), []);
 }

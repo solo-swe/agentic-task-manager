@@ -1,27 +1,39 @@
 // The dashboard's address (T-429): the page in the path, what is open over it in the query.
 //
 //   /                          the landing page (the overview with two or more projects, the project with one)
-//   /projects                  the overview's project cards; /board, /progress, /agents its other tabs
-//   /projects/<id>[/<tab>]     a project, on a tab (kanban, list, graph, progress, agents, project)
+//   /projects                  the overview's project cards; /board, /list, /progress, /agents, /reviews its other tabs
+//   /projects/<id>[/<tab>]     a project, on a tab (kanban, list, graph, progress, agents, project, reviews, inbox,
+//                              documents); without one, its Overview (the `project` tab, docs/sidebar-overhaul-design.md)
+//   /new                       the app's new tab: a chooser of scope and item (ATM-755)
 //   ?sprint=…&task=T-1&doc=docs/x.md:L40&about    the Sprint filter, a task's details, a document, a dialog
 //   /w/<w>/…                   any of these in workspace <w> (ADR-003 §5); without it, `default` (every link so far)
+//
+// Each page belongs to one of the sidebar's items (docs/sidebar-overhaul-design.md §4, ATM-751): `itemOf`.
 //
 // The page's state is read and written as parameters with the names the hash used before (`project`, `overview`,
 // `view`, then the query's own), so the helpers that change one (tabs.ts, dialogs.ts, …) don't need to know which
 // part of the address it lives in. An old link (`#project=x&view=list`) has the same parameters in its hash: it is
 // read as such, and the page replaces it with its new address. The route files under `src/routes/` are these paths.
 
-/** The All projects page's tabs (T-259): the project cards, the board of every project's tasks, every project's
- * progress (T-329) or agents (T-333) */
-export const OVERVIEW_TABS = ['projects', 'board', 'progress', 'agents', 'reviews'] as const;
+/** The All projects page's tabs (T-259): the project cards, the board of every project's tasks and their list
+ * (ATM-752), every project's progress (T-329) or agents (T-333), and all reviews (ATM-575) */
+export const OVERVIEW_TABS = ['projects', 'board', 'list', 'progress', 'agents', 'reviews'] as const;
 export type OverviewTab = (typeof OVERVIEW_TABS)[number];
 
 export function isOverviewTab(value: unknown): value is OverviewTab {
   return OVERVIEW_TABS.includes(value as OverviewTab);
 }
 
+/** The All projects page's paths: its tabs */
+export const OVERVIEW_PATHS = OVERVIEW_TABS;
+type OverviewPath = (typeof OVERVIEW_PATHS)[number];
+const isOverviewPath = (value: unknown): value is OverviewPath => OVERVIEW_PATHS.includes(value as OverviewPath);
+
+/** The app's new tab (ATM-755): `/new`, the chooser of scope and item */
+const NEW_TAB = 'new';
+
 /** Parameters in the path, not the query */
-const PATH_KEYS = ['workspace', 'project', 'overview', 'view', 'review', 'section'];
+const PATH_KEYS = ['workspace', 'project', 'overview', 'view', 'review', 'section', NEW_TAB];
 /** The project tab a review's page is under: /projects/<id>/reviews/<CR> (ATM-574) */
 const REVIEWS = 'reviews';
 /** A review page's sub-tabs (ATM-697): the Overview at the review's own path, the others after it (…/<CR>/diffs) */
@@ -76,9 +88,11 @@ export function addressParams(address: string): URLSearchParams {
       params.set('view', REVIEWS);
       params.set('review', rest[0]);
       if (rest[1]) params.set('section', rest[1]);
-    } else if (segments.length === 1 && isOverviewTab(first)) {
+    } else if (segments.length === 1 && isOverviewPath(first)) {
       params.set('overview', '');
       params.set('view', first);
+    } else if (segments.length === 1 && first === NEW_TAB) {
+      params.set(NEW_TAB, '');
     }
   }
   for (const [key, value] of new URLSearchParams(query)) {
@@ -109,8 +123,10 @@ export function formatAddress(params: URLSearchParams): string {
       (isSection(section) && section !== 'overview' ? `/${section}` : '');
     pathView = true;
   } else if (params.has('overview')) {
-    path = `${prefix}/` + (view && isOverviewTab(view) ? view : PROJECTS);
+    path = `${prefix}/` + (view && isOverviewPath(view) ? view : PROJECTS);
     pathView = true;
+  } else if (params.has(NEW_TAB)) {
+    path = `${prefix}/${NEW_TAB}`;
   }
   const parts = [...params]
     .filter(
@@ -119,6 +135,7 @@ export function formatAddress(params: URLSearchParams): string {
           key === 'workspace' ||
           key === 'project' ||
           key === 'overview' ||
+          key === NEW_TAB ||
           (key === 'view' && pathView) ||
           // A review is a path's alone, on the reviews tab, and so is its sub-tab
           key === 'review' ||
@@ -135,10 +152,47 @@ export function formatAddress(params: URLSearchParams): string {
 
 /** The dashboard's page paths, as `src/routes/` has them and `atm serve` answers them (atm-api's pages.rs):
  * `/`, `/projects`, `/projects/<id>`, `/projects/<id>/<tab>`, `/projects/<id>/reviews/<CR>` (and its sub-tabs,
- * `…/<CR>/diffs` and `…/<CR>/comments`, ATM-697), `/board`, `/progress`, `/agents`, `/reviews` (ATM-575), each also
- * under `/w/<w>` (and `/w/<w>` itself) */
+ * `…/<CR>/diffs` and `…/<CR>/comments`, ATM-697), `/board`, `/list`, `/progress`, `/agents`, `/reviews` (ATM-575),
+ * `/new` (ATM-751), each also under `/w/<w>` (and `/w/<w>` itself) */
 export const PAGE_PATH =
-  /^(?:\/w\/[^/]+)?(?:\/(?:projects(?:\/[^/]+(?:\/[a-z]+|\/reviews\/[A-Za-z0-9.-]{1,64}(?:\/(?:diffs|comments))?)?)?|board|progress|agents|reviews)?\/?)?$/;
+  /^(?:\/w\/[^/]+)?(?:\/(?:projects(?:\/[^/]+(?:\/[a-z]+|\/reviews\/[A-Za-z0-9.-]{1,64}(?:\/(?:diffs|comments))?)?)?|board|list|progress|agents|reviews|new)?\/?)?$/;
+
+/** The sidebar's items (docs/sidebar-overhaul-design.md §1, ATM-751): each page belongs to one */
+export const ITEMS = ['overview', 'inbox', 'tasks', 'reviews', 'documents', 'analysis'] as const;
+export type Item = (typeof ITEMS)[number];
+/** All projects' items: no Inbox or Documents (Hakan, CR-135) */
+export const ALL_ITEMS: readonly Item[] = ['overview', 'tasks', 'reviews', 'analysis'];
+
+/** A view's item: a project's tabs and All's, which share their names but the cards (`projects`) and the board */
+const ITEM_OF: Record<string, Item> = {
+  project: 'overview',
+  projects: 'overview',
+  inbox: 'inbox',
+  kanban: 'tasks',
+  board: 'tasks',
+  list: 'tasks',
+  graph: 'tasks',
+  reviews: 'reviews',
+  documents: 'documents',
+  progress: 'analysis',
+  agents: 'analysis',
+};
+
+/** The item the page `address` shows belongs to: a project's or All's page, by its view (a project without one, or one
+ * it doesn't know, is on its Overview); none for the landing page (which shows All's or the one project's Overview, as
+ * the projects listed decide: routes.ts `routeFor`) and the new tab */
+export function itemOf(address: string): Item | null {
+  const params = addressParams(address);
+  const view = params.get('view') ?? '';
+  if (params.has('project')) return ITEM_OF[view] ?? 'overview';
+  if (params.has('overview')) return ITEM_OF[view] ?? 'overview';
+  return null;
+}
+
+/** Whether `address` is the app's new tab (`/new`) */
+export function namesNewTab(address: string): boolean {
+  return addressParams(address).has(NEW_TAB);
+}
 
 /** The review a review's page shows (/projects/<id>/reviews/<CR>), its sub-tab (the path's end, ATM-697), and the view
  * of it its query names: the round, the round against, the file, the comment in view (`?comment=c12`, never a `#`
@@ -234,6 +288,54 @@ export function withReviewList(address: string, query: ReviewListAddress): strin
     const value = field === 'status' ? query.status.join(',') : query[field];
     if (value) params.set(key, value);
   }
+  return formatAddress(params);
+}
+
+/** The Inbox page's filter (docs/inbox-design.md §6, ATM-762): which items, and whether of the archive */
+export interface InboxListAddress {
+  state: 'created' | 'discarded' | 'injected' | 'all';
+  archived: boolean;
+}
+const INBOX_STATES: readonly InboxListAddress['state'][] = ['created', 'discarded', 'injected', 'all'];
+
+/** The Inbox page's filter `address` names (`?state=all&archived=1`): the open items, not archived, by default; a
+ * state that isn't one is the default */
+export function inboxListOf(address: string): InboxListAddress {
+  const params = addressParams(address);
+  const state = params.get('state') as InboxListAddress['state'] | null;
+  return {
+    state: state && INBOX_STATES.includes(state) ? state : 'created',
+    archived: ['1', 'true'].includes(params.get('archived') ?? ''),
+  };
+}
+
+/** `address` (the Inbox page's) listing by `list`: the defaults left out */
+export function withInboxList(address: string, list: InboxListAddress): string {
+  const params = addressParams(address);
+  params.delete('state');
+  params.delete('archived');
+  if (list.state !== 'created') params.set('state', list.state);
+  if (list.archived) params.set('archived', '1');
+  return formatAddress(params);
+}
+
+/** All reviews' project filter (ATM-757, docs/sidebar-overhaul-design.md §2.5): the projects `?projects=atm,compmd`
+ * names, those among `known` in its order; none (every project) when it names none of them */
+export function reviewProjectsOf(address: string, known: readonly string[]): string[] {
+  const named = new Set(
+    (addressParams(address).get('projects') ?? '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean),
+  );
+  return known.filter((id) => named.has(id));
+}
+
+/** `address` (All reviews') narrowed to `projects`; none is every project, and no parameter */
+export function withReviewProjects(address: string, projects: readonly string[]): string {
+  const params = addressParams(address);
+  params.delete('projects');
+  if (projects.length) params.set('projects', projects.join(','));
   return formatAddress(params);
 }
 

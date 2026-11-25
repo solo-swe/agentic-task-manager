@@ -1,0 +1,203 @@
+diff --git a/dashboard/src/app.css b/dashboard/src/app.css
+index 215c3709..407c7d20 100644
+--- a/dashboard/src/app.css
++++ b/dashboard/src/app.css
+@@ -3626,6 +3626,22 @@ svg.dep-graph text {
+   stroke-width: 3.5;
+   filter: drop-shadow(0 0 9px var(--node-color));
+ }
++/* Zoomed out too far for its text, a node shows two wiggly lines in its place (ATM-735): its key's line in its type's
++   colour, its name's muted; thick enough to see at the zoom the text gives way at (under 50%) */
++.graph-placeholder path {
++  fill: none;
++  stroke-linecap: round;
++  stroke-linejoin: round;
++}
++.graph-placeholder-title {
++  stroke: var(--node-color);
++  stroke-width: 4;
++}
++.graph-placeholder-name {
++  stroke: var(--text-muted);
++  stroke-width: 3;
++  opacity: 0.7;
++}
+ .graph-controls button:hover {
+   background: color-mix(in srgb, var(--text) 10%, transparent);
+ }
+diff --git a/dashboard/src/lib/graph/DepGraph.svelte b/dashboard/src/lib/graph/DepGraph.svelte
+index e7d18493..042d46ae 100644
+--- a/dashboard/src/lib/graph/DepGraph.svelte
++++ b/dashboard/src/lib/graph/DepGraph.svelte
+@@ -1,6 +1,7 @@
+ <script lang="ts">
+   import { untrack } from 'svelte';
+   import { dependencyChain, graphFocus, layoutGraph, NODE_H, NODE_W } from './layout';
++  import { PLACEHOLDER } from './placeholder';
+   import {
+     anyNodeVisible,
+     autoFitView,
+@@ -304,6 +305,12 @@
+             markerWidth="6"
+             markerHeight="4.5"
+             orient="auto"><path d="M0,0 L10,3 L0,6 Z" fill="var(--accent)" /></marker
++          ><!-- A node's text, zoomed out too far to read it: two wiggly lines in its place (ATM-735), drawn once -->
++          <symbol id="graph-placeholder" class="graph-placeholder" overflow="visible"
++            ><path d={PLACEHOLDER.title} class="graph-placeholder-title" /><path
++              d={PLACEHOLDER.name}
++              class="graph-placeholder-name"
++            /></symbol
+           ></defs
+         >
+         {#each layout.edges as edge (edge.from + '>' + edge.to)}
+@@ -355,6 +362,7 @@
+               >
+             {:else}
+               <title>{taskLabel(t)} {t.name}</title>
++              <use href="#graph-placeholder" x={node.x} y={node.y} />
+             {/if}
+           </g>
+         {/each}
+diff --git a/dashboard/src/lib/graph/placeholder.ts b/dashboard/src/lib/graph/placeholder.ts
+new file mode 100644
+index 00000000..2c83a4c0
+--- /dev/null
++++ b/dashboard/src/lib/graph/placeholder.ts
+@@ -0,0 +1,21 @@
++// The lines a graph node shows in place of its text when zoomed out too far to read it (ATM-735): a node still reads as
++// a card with content, not an empty box. Drawn once in the graph's <defs> and placed on each node (<use>), so 500
++// nodes cost no more than their boxes did (ATM-629 left the text out for the time it took).
++import { NODE_H, NODE_W } from './layout';
++
++/** A wiggly line from (`x`, `y`), `width` long: half-waves of `step`, `amplitude` up and down, ending at its length */
++export function wiggle(x: number, y: number, width: number, step = 8, amplitude = 2.5): string {
++  const waves = Math.max(1, Math.round(width / step));
++  const half = width / waves;
++  const r = (n: number) => Math.round(n * 100) / 100;
++  // The first half-wave up, each one after it mirrored (`t`), so the line rolls on evenly
++  return `M${r(x)},${r(y)} q${r(half / 2)},${r(-amplitude * 2)} ${r(half)},0` + ` t${r(half)},0`.repeat(waves - 1);
++}
++
++/** A node's two placeholder lines, from its top left corner: its key line (as wide as a key, its name's start) and
++ * its name's (most of the node), where the two lines of text are when it is labelled */
++export const PLACEHOLDER = {
++  title: wiggle(10, 16, NODE_W * 0.45),
++  name: wiggle(10, 34, NODE_W * 0.75),
++  height: NODE_H,
++} as const;
+diff --git a/dashboard/tests/e2e/graph-zoom.spec.ts b/dashboard/tests/e2e/graph-zoom.spec.ts
+index e2060db3..d75c0de8 100644
+--- a/dashboard/tests/e2e/graph-zoom.spec.ts
++++ b/dashboard/tests/e2e/graph-zoom.spec.ts
+@@ -153,6 +153,35 @@ test.describe('pan and zoom', () => {
+     await expect(minimap(page)).toBeHidden();
+   });
+ 
++  // ATM-735: zoomed out too far for its text, a node shows two wiggly lines in its place, not an empty box
++  test(
++    'zoomed out past reading, each node shows placeholder lines instead of its text',
++    { tag: '@webkit' },
++    async ({ page }) => {
++      const first = page.locator('#dep-graph .graph-node').first();
++      await expect(zoomLabel(page)).toHaveText('60%');
++      await expect(first.locator('text')).toHaveCount(2);
++      await expect(first.locator('use')).toHaveCount(0);
++      await focusGraph(page);
++      await page.keyboard.press('-');
++      await expect(zoomLabel(page)).toHaveText('48%');
++      await expect(first.locator('text')).toHaveCount(0);
++      const lines = first.locator('use');
++      await expect(lines).toHaveCount(1);
++      // Drawn inside its box, as wide as most of it
++      const box = (await first.locator('rect').boundingBox())!;
++      const drawn = (await lines.boundingBox())!;
++      expect(drawn.width).toBeGreaterThan(box.width * 0.5);
++      expect(drawn.x).toBeGreaterThan(box.x);
++      expect(drawn.x + drawn.width).toBeLessThan(box.x + box.width);
++      expect(drawn.y + drawn.height).toBeLessThan(box.y + box.height);
++      // Zoomed back in: its text again
++      await page.keyboard.press('+');
++      await expect(first.locator('text')).toHaveCount(2);
++      await expect(first.locator('use')).toHaveCount(0);
++    },
++  );
++
+   test('keyboard shortcuts when the graph has focus', async ({ page }) => {
+     await focusGraph(page);
+     await page.keyboard.press('+');
+diff --git a/dashboard/tests/e2e/performance.spec.ts b/dashboard/tests/e2e/performance.spec.ts
+index bec45b2f..a3c06029 100644
+--- a/dashboard/tests/e2e/performance.spec.ts
++++ b/dashboard/tests/e2e/performance.spec.ts
+@@ -193,6 +193,8 @@ test.describe('performance with 500 tasks', { tag: '@timed' }, () => {
+     await expect(page.locator('.graph-zoom-level')).toHaveText('10%');
+     await expect(nodes.locator('text')).toHaveCount(0);
+     await expect(nodes.first().locator('title')).not.toBeEmpty();
++    // In their text's place, its placeholder lines (ATM-735), one shared drawing
++    await expect(nodes.locator('use')).toHaveCount(500);
+     await page
+       .locator('.graph-controls button')
+       .and(page.getByTitle(/^Actual size/))
+@@ -200,6 +202,7 @@ test.describe('performance with 500 tasks', { tag: '@timed' }, () => {
+     await expect(page.locator('.graph-zoom-level')).toHaveText('100%');
+     await expect(page.locator('#panel-graph .graph-node[data-labelled]')).toHaveCount(500);
+     await expect(nodes.first().locator('text')).toHaveCount(2);
++    await expect(nodes.locator('use')).toHaveCount(0);
+   });
+ 
+   test('a reload that changes the data, on every tab', async ({ page, tasksServer }) => {
+diff --git a/dashboard/tests/unit/placeholder.test.ts b/dashboard/tests/unit/placeholder.test.ts
+new file mode 100644
+index 00000000..0f025aa4
+--- /dev/null
++++ b/dashboard/tests/unit/placeholder.test.ts
+@@ -0,0 +1,49 @@
++import { describe, expect, it } from 'vitest';
++import { NODE_H, NODE_W } from '../../src/lib/graph/layout';
++import { PLACEHOLDER, wiggle } from '../../src/lib/graph/placeholder';
++
++// A graph node's placeholder lines, zoomed out too far for its text (lib/graph/placeholder.ts, ATM-735)
++
++/** Where a path's half-waves end: its start, then each `q`/`t` step's end added up */
++function ends(d: string): number[] {
++  const [, x0] = /^M([\d.]+),/.exec(d)!;
++  let x = Number(x0);
++  const xs = [x];
++  for (const [, , dx] of d.matchAll(/([qt])(?:[-\d.]+,[-\d.]+ )?([-\d.]+),0/g)) {
++    x += Number(dx);
++    xs.push(Math.round(x * 100) / 100);
++  }
++  return xs;
++}
++
++describe('wiggle', () => {
++  it('rolls in even half-waves from its start to its length', () => {
++    const d = wiggle(10, 16, 64, 8, 2.5);
++    expect(d.startsWith('M10,16 q4,-5 8,0')).toBe(true);
++    const xs = ends(d);
++    expect(xs).toHaveLength(9);
++    expect(xs.at(-1)).toBe(74);
++    // Every half-wave the same length
++    expect(new Set(xs.slice(1).map((x, i) => Math.round((x - xs[i]) * 100) / 100))).toEqual(new Set([8]));
++  });
++
++  it('a length not a whole number of steps is shared out evenly; a short one is one half-wave', () => {
++    expect(ends(wiggle(0, 0, 30, 8)).at(-1)).toBe(30);
++    expect(wiggle(0, 0, 3, 8)).toBe('M0,0 q1.5,-5 3,0');
++  });
++});
++
++describe('the node placeholder', () => {
++  it('two lines inside the node, where its two lines of text are: the key’s shorter', () => {
++    const title = ends(PLACEHOLDER.title);
++    const name = ends(PLACEHOLDER.name);
++    for (const xs of [title, name]) {
++      expect(xs[0]).toBeGreaterThan(0);
++      expect(xs.at(-1)!).toBeLessThan(NODE_W);
++    }
++    expect(title.at(-1)! - title[0]).toBeLessThan(name.at(-1)! - name[0]);
++    const y = (d: string) => Number(/^M[\d.]+,([\d.]+)/.exec(d)![1]);
++    expect(y(PLACEHOLDER.title)).toBeLessThan(y(PLACEHOLDER.name));
++    expect(y(PLACEHOLDER.name)).toBeLessThan(NODE_H);
++  });
++});

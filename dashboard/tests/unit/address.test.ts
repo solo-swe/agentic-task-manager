@@ -3,20 +3,51 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  ALL_ITEMS,
   addressOf,
   addressParams,
   formatAddress,
   isPagePath,
+  itemOf,
+  ITEMS,
   legacyParams,
-  OVERVIEW_TABS,
+  namesNewTab,
+  OVERVIEW_PATHS as ADDRESS_OVERVIEW_PATHS,
   REVIEW_SECTIONS,
   reviewListOf,
   reviewOf,
+  reviewProjectsOf,
   withReview,
   withReviewList,
+  withReviewProjects,
   withWorkspace,
   workspaceOf,
 } from '../../src/lib/address';
+
+// All reviews' project filter in its address (ATM-757, docs/sidebar-overhaul-design.md §2.5)
+describe('the All reviews project filter in the address', () => {
+  const known = ['atm', 'compmd', 'blog'];
+
+  it('reads the projects named, in the workspace’s order; unknown and empty ones are left out', () => {
+    expect(reviewProjectsOf('/reviews', known)).toEqual([]);
+    expect(reviewProjectsOf('/reviews?projects=', known)).toEqual([]);
+    expect(reviewProjectsOf('/reviews?projects=atm', known)).toEqual(['atm']);
+    expect(reviewProjectsOf('/reviews?projects=blog,atm', known)).toEqual(['atm', 'blog']);
+    expect(reviewProjectsOf('/reviews?projects=atm,gone,,%20compmd%20', known)).toEqual(['atm', 'compmd']);
+    // Only unknown ones: every project
+    expect(reviewProjectsOf('/reviews?projects=gone', known)).toEqual([]);
+    expect(reviewProjectsOf('/w/work/reviews?projects=compmd&q=x', known)).toEqual(['compmd']);
+  });
+
+  it('writes them as one parameter, none for every project, keeping the rest of the address', () => {
+    expect(withReviewProjects('/reviews', ['atm', 'compmd'])).toBe('/reviews?projects=atm,compmd');
+    expect(withReviewProjects('/reviews?projects=atm&task=T-1', [])).toBe('/reviews?task=T-1');
+    expect(withReviewProjects('/w/work/reviews', ['blog'])).toBe('/w/work/reviews?projects=blog');
+    // Read back as written
+    const written = withReviewProjects('/reviews', ['compmd', 'blog']);
+    expect(reviewProjectsOf(written, known)).toEqual(['compmd', 'blog']);
+  });
+});
 import { VIEWS } from '../../src/lib/tabs';
 import { OVERVIEW_PATHS, PROJECT_TABS, REVIEW_SECTION_PATHS } from '../../src/params';
 
@@ -140,7 +171,7 @@ describe('the address (T-429)', () => {
       expect(isPagePath(path), path).toBe(false);
     // The route matchers' lists are the dashboard's own
     expect(PROJECT_TABS).toEqual([...VIEWS]);
-    expect(OVERVIEW_PATHS).toEqual(OVERVIEW_TABS.filter((tab) => tab !== 'projects'));
+    expect(OVERVIEW_PATHS).toEqual(ADDRESS_OVERVIEW_PATHS.filter((tab) => tab !== 'projects'));
     const routes = join(dirname(fileURLToPath(import.meta.url)), '../../src/routes');
     for (const page of [
       '+page.svelte',
@@ -149,8 +180,79 @@ describe('the address (T-429)', () => {
       'projects/[id]/[tab=view]/+page.svelte',
       '[tab=overview]/+page.svelte',
       'projects/[id]/reviews/[review]/+page.svelte',
+      'new/+page.svelte',
     ])
       expect(existsSync(join(routes, page)), page).toBe(true);
+  });
+});
+
+// The sidebar overhaul's addresses (docs/sidebar-overhaul-design.md §4, ATM-751)
+describe('the sidebar’s items in the address', () => {
+  it.each([
+    // A project's pages: its Overview (also without a tab, or with one it doesn't know), Tasks' three, Code Reviews
+    // (a review's page too), Inbox, Documents, Analysis' two
+    ['/projects/abc', 'overview'],
+    ['/projects/abc/project', 'overview'],
+    ['/projects/abc/nope', 'overview'],
+    ['/projects/abc/kanban', 'tasks'],
+    ['/projects/abc/list?sprint=a', 'tasks'],
+    ['/projects/abc/graph', 'tasks'],
+    ['/projects/abc/reviews', 'reviews'],
+    ['/projects/abc/reviews/CR-7/diffs?file=a.md', 'reviews'],
+    ['/projects/abc/inbox', 'inbox'],
+    ['/projects/abc/documents?doc=docs/x.md', 'documents'],
+    ['/projects/abc/progress', 'analysis'],
+    ['/projects/abc/agents', 'analysis'],
+    // All projects': the cards, the board and its List, every review, progress and agents
+    ['/projects', 'overview'],
+    ['/board', 'tasks'],
+    ['/list', 'tasks'],
+    ['/reviews', 'reviews'],
+    ['/progress', 'analysis'],
+    ['/w/work/agents', 'analysis'],
+    ['/w/work/projects/abc/kanban', 'tasks'],
+  ])('%s is the %s item’s', (address, item) => {
+    expect(itemOf(address)).toBe(item);
+  });
+
+  it('the landing page and the new tab are no item’s; what is open over a page doesn’t change its item', () => {
+    expect(itemOf('/')).toBeNull();
+    expect(itemOf('/w/work')).toBeNull();
+    expect(itemOf('/new')).toBeNull();
+    expect(itemOf('/projects/abc/kanban?task=ATM-1&doc=docs/x.md')).toBe('tasks');
+  });
+
+  it('six items for a project, four for All projects (no Inbox or Documents, CR-135)', () => {
+    expect(ITEMS).toEqual(['overview', 'inbox', 'tasks', 'reviews', 'documents', 'analysis']);
+    expect(ALL_ITEMS).toEqual(['overview', 'tasks', 'reviews', 'analysis']);
+  });
+
+  it('reads and writes All’s List, a project’s Inbox and Documents, and the new tab', () => {
+    expect(params('/list?sprint=a')).toEqual([
+      ['overview', ''],
+      ['view', 'list'],
+      ['sprint', 'a'],
+    ]);
+    expect(formatAddress(addressParams('/w/work/list'))).toBe('/w/work/list');
+    expect(params('/projects/abc/inbox')).toEqual([
+      ['project', 'abc'],
+      ['view', 'inbox'],
+    ]);
+    expect(formatAddress(addressParams('/projects/abc/documents?doc=docs/x.md'))).toBe(
+      '/projects/abc/documents?doc=docs/x.md',
+    );
+    expect(params('/new')).toEqual([['new', '']]);
+    expect(formatAddress(addressParams('/new'))).toBe('/new');
+    expect(formatAddress(addressParams('/w/work/new'))).toBe('/w/work/new');
+    expect(namesNewTab('/new')).toBe(true);
+    expect(namesNewTab('/w/work/new/')).toBe(true);
+    expect(namesNewTab('/projects')).toBe(false);
+    // Only the path names it: `?new` is no page, and nothing under it is one
+    expect(namesNewTab('/?new')).toBe(false);
+    expect(params('/new/x')).toEqual([]);
+    for (const path of ['/list', '/new', '/w/work/new', '/projects/abc/inbox', '/projects/abc/documents'])
+      expect(isPagePath(path), path).toBe(true);
+    for (const path of ['/new/x', '/news', '/list/x']) expect(isPagePath(path), path).toBe(false);
   });
 });
 
@@ -201,10 +303,11 @@ describe('the workspace in the address (ADR-003 §5)', () => {
 
   it('an overview tab it doesn’t know is the project cards', () => {
     const write = (entries: [string, string][]) => formatAddress(new URLSearchParams(entries));
+    // (All's List is one since ATM-751; the graph, a project's only, isn't)
     expect(
       write([
         ['overview', ''],
-        ['view', 'list'],
+        ['view', 'graph'],
       ]),
     ).toBe('/projects');
     expect(params('/kanban')).toEqual([]);
@@ -222,6 +325,7 @@ describe('the workspace in the address (ADR-003 §5)', () => {
       'projects/[id]/[tab=view]/+page.svelte',
       '[tab=overview]/+page.svelte',
       'projects/[id]/reviews/[review]/+page.svelte',
+      'new/+page.svelte',
     ])
       expect(existsSync(join(routes, page)), page).toBe(true);
   });

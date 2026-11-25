@@ -1,0 +1,18 @@
+diff --git a/dashboard/tests/e2e/performance.spec.ts b/dashboard/tests/e2e/performance.spec.ts
+index d2578f3b..bec45b2f 100644
+--- a/dashboard/tests/e2e/performance.spec.ts
++++ b/dashboard/tests/e2e/performance.spec.ts
+@@ -63,9 +63,10 @@ function sinceStarted(page: Page, done: string) {
+ test.describe('performance in the app: its tabs (T-525)', { tag: '@timed' }, () => {
+   // The large project's Kanban, List and Graph, and a small second project, in the window's tabs (T-514), as the app
+   // brings them back at its start (T-518)
+-  const LARGE = 'Performance Project';
+-  const shown = (title: string, view: string) =>
+-    `document.querySelector('#dashboard-title')?.textContent === ${JSON.stringify(title)} && ${view}`;
++  // The tab's title is its scope and item (ATM-754): the project's name, cut to 16 characters
++  const LARGE = 'Performance Pro…';
++  const shown = (scope: string, view: string) =>
++    `document.querySelector('#dashboard-title')?.textContent?.startsWith(${JSON.stringify(`${scope} - `)}) && ${view}`;
+   const KANBAN = "document.querySelector('#kanban .kanban-card')?.offsetParent";
+   const LIST = "document.querySelector('#panel-list:not([hidden]) .task-card')?.offsetParent";
+   const GRAPH = "document.querySelector('#panel-graph:not([hidden]) #dep-graph .graph-node')";

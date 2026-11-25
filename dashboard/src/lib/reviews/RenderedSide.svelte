@@ -25,11 +25,14 @@
     picking = null,
     label,
     docStyle = null,
+    whole = false,
     chains = [],
     chainBox,
     composer,
     onpick,
   }: {
+    /** The whole document, nothing folded: the final view (ATM-731) */
+    whole?: boolean;
     /** This side's chains with lines (ATM-651): each in a balloon in the margin, beside its text */
     chains?: readonly Chain[];
     /** How a chain shows: the source view's own box, with reply, resolve and edit */
@@ -86,7 +89,13 @@
   const near = $derived.by((): ReadonlySet<number> => {
     return new Set([...changed, ...(selected ? range(selected) : []), ...commented.flatMap(range)]);
   });
-  const parts = $derived(blocks ? renderedParts(blocks, near, doc.lines, opened, CONTEXT) : null);
+  const parts = $derived(
+    !blocks
+      ? null
+      : whole
+        ? [{ type: 'shown' as const, from: 1, to: Math.max(doc.lines, 1) }]
+        : renderedParts(blocks, near, doc.lines, opened, CONTEXT),
+  );
 
   /** Where the page drew the lines, in its coordinates */
   let drawn = $state.raw<DrawnLine[]>([]);

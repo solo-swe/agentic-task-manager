@@ -137,6 +137,49 @@ describe('DiffView: the layout', () => {
     expect(container.querySelector('.diff-view')).toHaveAttribute('data-mode', 'split');
   });
 
+  // ATM-731: the file as it is after the change
+  it('final: every line of the new file, its numbers only, nothing marked or folded; the header chooses it', async () => {
+    const { container } = show({ mode: 'final' });
+    await numbers();
+    expect(container.querySelector('.diff-view')).toHaveAttribute('data-mode', 'final');
+    // The new file's eleven lines, each numbered on the new side alone (the text is CompMD's, not loaded here)
+    const numbered = [...container.querySelectorAll('.diff-line')].map((l) => l.textContent?.trim());
+    expect(numbered).toEqual(Array.from({ length: 11 }, (_, i) => String(i + 1)));
+    for (const marked of ['.diff-removed', '.diff-added', '.diff-changed', '[data-change]'])
+      expect(container.querySelectorAll(marked), marked).toHaveLength(0);
+    expect(screen.queryAllByRole('button', { name: /^Show \d+ unchanged/ })).toHaveLength(0);
+    expect(container.querySelector('.diff-code.both'), 'one number a line').toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Unified' }));
+    expect(container.querySelector('.diff-view')).toHaveAttribute('data-mode', 'unified');
+    await fireEvent.click(screen.getByRole('button', { name: 'Final' }));
+    expect(container.querySelector('.diff-view')).toHaveAttribute('data-mode', 'final');
+  });
+
+  it('final: a chain stays under its line; one on a line the change removed shows after the file', async () => {
+    const { container } = show({
+      mode: 'final',
+      chains: [
+        chain('t1', 'new', [9, 9], 'On eight b'),
+        chain('t2', 'old', [5, 5], 'On five, unchanged'),
+        chain('t3', 'old', [8, 8], 'On eight, removed'),
+      ],
+    });
+    await numbers();
+    const inRuns = [...container.querySelectorAll('.diff-run + .chain, .chain')].filter(
+      (c) => !c.closest('.diff-elsewhere'),
+    );
+    expect(inRuns.map((c) => c.getAttribute('data-chain'))).toEqual(['t2', 't1']);
+    const after = container.querySelector('.diff-elsewhere');
+    expect(after?.querySelector('[data-chain="t3"]')).not.toBeNull();
+  });
+
+  it('final: a file the change deleted says so, with nothing after it', async () => {
+    const { container } = show({ mode: 'final', after: null });
+    await vi.waitFor(() => expect(container.querySelector('.diff-gone')).not.toBeNull());
+    expect(container.querySelector('.diff-gone')).toHaveTextContent('Deleted by this change');
+    expect(container.querySelectorAll('.diff-line')).toHaveLength(0);
+  });
+
   it('marks the first line of each change for the page’s Prev and Next: the new side’s in split, every one in unified', async () => {
     const { container, unmount } = show();
     await numbers();

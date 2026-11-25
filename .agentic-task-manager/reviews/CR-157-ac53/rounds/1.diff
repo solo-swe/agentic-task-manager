@@ -1,0 +1,350 @@
+diff --git a/dashboard/src/lib/insights.ts b/dashboard/src/lib/insights.ts
+index e359e245..0ab83e62 100644
+--- a/dashboard/src/lib/insights.ts
++++ b/dashboard/src/lib/insights.ts
+@@ -265,12 +265,13 @@ export const ongoing = (bucket: ActivityBucket, now: number) => bucket.end > now
+  * current bucket has so far: "Tasks completed per day, all time: 236 · the line is the average of the last 3 days ·
+  * this day so far: 12 · click for details".
+  */
+-export function sparklineTitle(series: ActivitySeries, now: number): string {
++export function sparklineTitle(series: ActivitySeries, now: number, archiveLeftOut = false): string {
+   const unit = series.unitLabel;
+   // "day" → "days", "30 days" → "periods of 30 days"
+   const counted = /^\d/.test(unit);
+   const parts = [
+-    `Tasks completed per ${unit}, all time: ${series.totalCompleted}`,
++    // The pill charts the task files alone (ATM-739): with an archive, it says so
++    `Tasks completed per ${unit}, all time: ${series.totalCompleted}${archiveLeftOut ? ' (archived tasks left out)' : ''}`,
+     `the line is the average of the last 3 ${counted ? `periods of ${unit}` : `${unit}s`}`,
+   ];
+   const last = series.buckets.at(-1);
+diff --git a/dashboard/src/lib/overview/OverviewActivity.svelte b/dashboard/src/lib/overview/OverviewActivity.svelte
+index 646acfd4..9af506d2 100644
+--- a/dashboard/src/lib/overview/OverviewActivity.svelte
++++ b/dashboard/src/lib/overview/OverviewActivity.svelte
+@@ -19,9 +19,13 @@
+   const merged = $derived(mergedTasks(sources));
+   // A colour per project, in the sources' order: the same as the Progress tab's velocity (T-328 review)
+   const colorOf = $derived(new Map(sources.map((s, i) => [s.project.id, phaseColor(i)])));
++  // The pill's: the task files' tasks alone (ATM-739), each project's `live`
++  const liveByProject = $derived(projectTasks(mergedTasks(sources.map((s) => ({ ...s, tasks: s.live ?? s.tasks })))));
+   const source = $derived({
+     ...merged,
+     byProject: projectTasks(merged),
++    liveByProject,
++    archived: sources.some((s) => (s.archived?.length ?? 0) > 0),
+     projects: sources.map((s) => ({ name: s.project.name, color: colorOf.get(s.project.id)! })),
+     of: projectOfWorker,
+   });
+diff --git a/dashboard/src/lib/progress/ActivityWidget.svelte b/dashboard/src/lib/progress/ActivityWidget.svelte
+index 34c8cf30..7827c706 100644
+--- a/dashboard/src/lib/progress/ActivityWidget.svelte
++++ b/dashboard/src/lib/progress/ActivityWidget.svelte
+@@ -31,9 +31,13 @@
+     onopen = undefined,
+   }: {
+     source?: {
++      /** Every project's tasks, the archived ones too (T-355), and by project for the charts */
+       tasks: Task[];
+       claims: ClaimMap;
+       byProject: Task[];
++      /** The pill's: the task files' alone, by project (ATM-739); and whether a project has an archive */
++      liveByProject: Task[];
++      archived: boolean;
+       projects: { name: string; color: string }[];
+       of: (worker: string) => string;
+     };
+@@ -56,8 +60,10 @@
+   );
+ 
+   // Compact: completions per period (bars) with their rolling average (line, same scale). Click: the deep dive.
+-  // Archived completions count too once the archive is loaded (dashboard.history)
+-  const series = $derived(activitySeries(charted, null, dashboard.loadedAt));
++  // The pill charts the task files' completions alone, never the archive's (ATM-739, Hakan): the same chart every
++  // time, whether a view has loaded the archive or not. The deep dive counts the archive too (D-5.2)
++  const series = $derived(activitySeries(source ? source.liveByProject : dashboard.tasks, null, dashboard.loadedAt));
++  const archiveLeftOut = $derived(source ? source.archived : dashboard.archivedCount > 0);
+   let open = $state(false);
+ 
+   // The panel shows the chosen period (saved with the view); the pill always shows all time
+@@ -66,7 +72,7 @@
+   // Each stepped period in its natural bucket: a week per day, a day per hour (PRESET_BUCKET_MS)
+   const detail = $derived(
+     range.preset === 'all'
+-      ? series
++      ? activitySeries(charted, null, dashboard.loadedAt)
+       : // The whole period on the time axis (T-350): what is still to come stays empty
+         activitySeries(
+           charted,
+@@ -143,8 +149,8 @@
+       class="widget-card activity-card"
+       id="activity-card"
+       aria-expanded={open}
+-      title={sparklineTitle(series, dashboard.loadedAt)}
+-      aria-label="Activity: {series.totalCompleted} tasks completed"
++      title={sparklineTitle(series, dashboard.loadedAt, archiveLeftOut)}
++      aria-label="Activity: {series.totalCompleted} tasks completed{archiveLeftOut ? ', archived tasks left out' : ''}"
+       onclick={() => (open = !open)}
+     >
+       <span class="widget-body">
+@@ -194,13 +200,17 @@
+             <InfoTip label="activity">
+               <p>
+                 {#if source}
+-                  Every project shown, together (their archives left out), in a colour each. All times are for the
+-                  chosen period.
++                  Every project shown, together, archived tasks included, in a colour each. All times are for the chosen
++                  period.
+                 {:else}
+                   The whole project, archived tasks included: the search and filters don't apply here. All times are for
+                   the chosen period.
+                 {/if}
+               </p>
++              <p>
++                The pill's chart is the task {source ? 'files’' : 'file’s'} completions, archived tasks left out, so it is
++                the same chart every time.
++              </p>
+               <p>
+                 <strong>Agents working</strong>: at least one agent at work on a task, from its start until it asked for
+                 a review or was done. <strong>Agent time</strong> adds up agents working in parallel.
+diff --git a/dashboard/tests/e2e/helpers.ts b/dashboard/tests/e2e/helpers.ts
+index f5125fa9..098dee05 100644
+--- a/dashboard/tests/e2e/helpers.ts
++++ b/dashboard/tests/e2e/helpers.ts
+@@ -1351,6 +1351,18 @@ export async function follow(page: Page, address: string) {
+   }, address);
+ }
+ 
++/** The Activity pill's bars and line as drawn (ATM-739): each bar's place, size and colour, and the line's path */
++export async function sparkline(page: Page): Promise<string[]> {
++  const svg = page.locator('#activity-card svg.sparkline');
++  await expect(svg).toBeVisible();
++  return svg.evaluate((s) => [
++    ...[...s.querySelectorAll('rect')].map((r) =>
++      ['x', 'y', 'width', 'height', 'fill'].map((a) => r.getAttribute(a)).join(' '),
++    ),
++    s.querySelector('path')?.getAttribute('d') ?? '',
++  ]);
++}
++
+ /** The page's address as the dashboard writes it: its path and query (`/projects/fixture/list?about`) */
+ export function addressOf(page: Page): string {
+   const url = new URL(page.url());
+diff --git a/dashboard/tests/e2e/overview-activity.spec.ts b/dashboard/tests/e2e/overview-activity.spec.ts
+index 53d03f6d..33ff9ea8 100644
+--- a/dashboard/tests/e2e/overview-activity.spec.ts
++++ b/dashboard/tests/e2e/overview-activity.spec.ts
+@@ -1,4 +1,4 @@
+-import { expect, test } from './helpers';
++import { expect, sparkline as bars, test } from './helpers';
+ 
+ // T-328: the title bar's Activity on the Projects Overview, every project's tasks together, by project
+ test.describe('Projects Overview: Activity across projects', () => {
+@@ -24,7 +24,10 @@ test.describe('Projects Overview: Activity across projects', () => {
+     await expect(page.locator('#activity-color-by, #activity-projects')).toHaveCount(0);
+   });
+ 
+-  test('a project’s archived work counts too, as on its own page (T-355)', async ({ page, tasksServer }) => {
++  test('the pill charts the task files, as a project’s does; the panel counts a project’s archived work too (T-355, ATM-739)', async ({
++    page,
++    tasksServer,
++  }) => {
+     // Two more finished tasks, archived, for the first project
+     const archived = (id: string) => ({
+       id,
+@@ -37,7 +40,21 @@ test.describe('Projects Overview: Activity across projects', () => {
+     });
+     tasksServer.archive({ tasks: [archived('A-1'), archived('A-2')] });
+     await page.reload();
+-    await expect(page.locator('#activity-card')).toHaveAttribute('aria-label', 'Activity: 14 tasks completed');
++    const card = page.locator('#activity-card');
++    await expect(card).toHaveAttribute('aria-label', 'Activity: 12 tasks completed, archived tasks left out');
++    await expect(card).toHaveAttribute('title', /all time: 12 \(archived tasks left out\)/);
++    const before = await bars(page);
++    await card.click();
++    await expect(page.locator('#kpi-done .kpi-value')).toHaveText('14');
++    expect(await bars(page)).toEqual(before);
++    await page.keyboard.press('Escape');
++    // Another of its tabs and back: the same bars
++    await page.locator('#item-tasks').click();
++    await expect(page.locator('#all-board')).toBeVisible();
++    await page.locator('#item-overview').click();
++    await expect(page.locator('#projects-grid')).toBeVisible();
++    expect(await bars(page)).toEqual(before);
++    await expect(card).toHaveAttribute('aria-label', 'Activity: 12 tasks completed, archived tasks left out');
+   });
+ 
+   test('its period is its own: a project’s Activity keeps the one it had', async ({ page }) => {
+diff --git a/dashboard/tests/e2e/widgets.spec.ts b/dashboard/tests/e2e/widgets.spec.ts
+index 281dda6a..3a56e519 100644
+--- a/dashboard/tests/e2e/widgets.spec.ts
++++ b/dashboard/tests/e2e/widgets.spec.ts
+@@ -1,5 +1,5 @@
+ import type { Page } from '@playwright/test';
+-import { expect, loadFixture, openDashboard, test } from './helpers';
++import { expect, follow, loadFixture, openDashboard, sparkline, test } from './helpers';
+ 
+ // The top bar: compact Progress and Activity pills between the title and the controls; a click opens the details.
+ // Numbers from fixtures/agents.md: 6 of 8 tasks done, completions between 08:00 and 11:00 UTC.
+@@ -7,6 +7,17 @@ const NOW = new Date('2026-04-01T12:00:00Z');
+ const progressPill = (page: Page) => page.locator('#progress-card');
+ const activityPill = (page: Page) => page.locator('#activity-card');
+ 
++/** A task the archive holds, done on 20 March (before the fixture's completions) */
++const archivedDone = (id: string) => ({
++  id,
++  name: `Archived ${id}`,
++  type: 'feature',
++  status: 'done',
++  started_by: 'claude:alice001',
++  started_at: '2026-03-20T09:00:00Z',
++  completed_at: '2026-03-20T09:30:00Z',
++});
++
+ test.beforeEach(async ({ page, tasksServer }) => {
+   await page.clock.setFixedTime(NOW);
+   await openDashboard(page, tasksServer, 'agents');
+@@ -114,6 +125,35 @@ test.describe('Activity widget', () => {
+     await expect(activityPill(page).locator('svg.sparkline rect.ongoing')).toHaveCount(0);
+   });
+ 
++  // ATM-739 (Hakan): the pill charts tasks.json's completions, never the archive's, so it is the same chart every time
++  test('the same bars after opening the panel (which loads the archive) and after another page and back', async ({
++    page,
++    tasksServer,
++  }) => {
++    tasksServer.archive({ tasks: [archivedDone('A-1'), archivedDone('A-2')] });
++    const data = loadFixture('agents');
++    await openDashboard(page, tasksServer, { ...data, meta: { ...data.meta, archived: 2 } });
++    const left = 'Activity: 6 tasks completed, archived tasks left out';
++    await expect(activityPill(page)).toHaveAccessibleName(left);
++    await expect(activityPill(page)).toHaveAttribute('title', /all time: 6 \(archived tasks left out\)/);
++    const before = await sparkline(page);
++    await activityPill(page).click();
++    // The deep dive counts the archive for all time (D-5.2); the pill doesn't
++    await expect(page.locator('#kpi-done .kpi-value')).toHaveText('8');
++    expect(tasksServer.archiveRequests).toBeGreaterThan(0);
++    expect(await sparkline(page)).toEqual(before);
++    await page.keyboard.press('Escape');
++    expect(await sparkline(page)).toEqual(before);
++    await expect(activityPill(page)).toHaveAccessibleName(left);
++    // The overview, then Back to the project, in the page (the project loaded again): the same bars
++    await follow(page, '/projects');
++    await expect(page.locator('#projects-overview')).toBeVisible();
++    await page.goBack();
++    await expect(page.locator('#projects-overview')).toHaveCount(0);
++    await expect(activityPill(page)).toHaveAccessibleName(left);
++    expect(await sparkline(page)).toEqual(before);
++  });
++
+   test('the sparkline: the current hour, not over yet, lighter and counted "so far" (T-249)', async ({ page }) => {
+     await page.clock.setFixedTime(new Date('2026-04-01T11:30:00Z'));
+     await page.reload();
+diff --git a/dashboard/tests/unit/ActivityWidget.component.test.ts b/dashboard/tests/unit/ActivityWidget.component.test.ts
+new file mode 100644
+index 00000000..548672bb
+--- /dev/null
++++ b/dashboard/tests/unit/ActivityWidget.component.test.ts
+@@ -0,0 +1,86 @@
++import { render } from '@testing-library/svelte';
++import { describe, expect, it } from 'vitest';
++import ActivityWidget from '../../src/lib/progress/ActivityWidget.svelte';
++import { dashboard } from '../../src/lib/state.svelte';
++import type { Task } from '../../src/lib/types';
++import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
++import { loadIntoDashboard } from './components.helpers';
++import { withKinds } from './views';
++
++// The Activity pill (lib/progress/ActivityWidget.svelte, ATM-739): it charts the task file's completions alone, so
++// it is the same chart whether a view has loaded the archive or not; the deep dive counts the archive (D-5.2)
++
++const NOW = Date.parse('2026-04-01T12:00:00Z');
++const done = (id: string, at: string): Task => ({
++  id,
++  name: id,
++  phase: 1,
++  description: '',
++  type: 'feature',
++  status: 'done',
++  started_at: at,
++  completed_at: at.replace(':00:00', ':30:00'),
++});
++const live = [done('T-1', '2026-04-01T08:00:00Z'), done('T-2', '2026-04-01T10:00:00Z')];
++const archived = [done('A-1', '2026-03-20T09:00:00Z'), done('A-2', '2026-03-21T09:00:00Z')];
++
++/** The pill as drawn: its label, its tooltip, each bar and the line */
++function pill(container: HTMLElement) {
++  const card = container.querySelector('#activity-card')!;
++  return {
++    label: card.getAttribute('aria-label'),
++    title: card.getAttribute('title'),
++    marks: [...card.querySelectorAll('rect, path')].map((m) =>
++      ['x', 'y', 'width', 'height', 'd'].map((a) => m.getAttribute(a)).join(' '),
++    ),
++  };
++}
++
++describe('the Activity pill', () => {
++  it('a project’s: the same with the archive loaded or not; it says the archive is left out', () => {
++    loadIntoDashboard({ meta: { archived: 2 }, tasks: live });
++    dashboard.loadedAt = NOW;
++    const without = render(ActivityWidget);
++    const shown = pill(without.container);
++    without.unmount();
++    expect(shown.label).toBe('Activity: 2 tasks completed, archived tasks left out');
++    expect(shown.title).toMatch(/all time: 2 \(archived tasks left out\)/);
++
++    loadIntoDashboard({ meta: { archived: 2 }, tasks: live }, { tasks: archived });
++    dashboard.loadedAt = NOW;
++    expect(dashboard.history).toHaveLength(4);
++    const withArchive = render(ActivityWidget);
++    expect(pill(withArchive.container)).toEqual(shown);
++    withArchive.unmount();
++  });
++
++  it('a project without an archive says nothing of one', () => {
++    loadIntoDashboard({ tasks: live });
++    dashboard.loadedAt = NOW;
++    const { container } = render(ActivityWidget);
++    expect(pill(container).label).toBe('Activity: 2 tasks completed');
++    expect(pill(container).title).not.toContain('archived');
++  });
++
++  it('the overview’s: its task files’ tasks by project, not the archives in its charts', () => {
++    loadIntoDashboard({ tasks: [] });
++    dashboard.loadedAt = NOW;
++    // As atm serves them, with their kinds
++    const byProject = (tasks: Task[]) => withKinds(tasks, DEFAULT_VOCABULARY).map((t) => ({ ...t, type: 'One' }));
++    const source = (archivedToo: boolean) => ({
++      tasks: archivedToo ? [...live, ...archived] : live,
++      claims: new Map(),
++      byProject: byProject(archivedToo ? [...live, ...archived] : live),
++      liveByProject: byProject(live),
++      archived: true,
++      projects: [{ name: 'One', color: 'red' }],
++      of: (w: string) => w,
++    });
++    const one = render(ActivityWidget, { source: source(false) });
++    const shown = pill(one.container);
++    one.unmount();
++    expect(shown.label).toBe('Activity: 2 tasks completed, archived tasks left out');
++    const two = render(ActivityWidget, { source: source(true) });
++    expect(pill(two.container)).toEqual(shown);
++  });
++});
+diff --git a/dashboard/tests/unit/insights.test.ts b/dashboard/tests/unit/insights.test.ts
+index 87cd331b..af30ead5 100644
+--- a/dashboard/tests/unit/insights.test.ts
++++ b/dashboard/tests/unit/insights.test.ts
+@@ -176,6 +176,11 @@ describe('the sparkline tooltip (T-249)', () => {
+     expect(sparklineTitle(s, T0 + 5 * H)).toBe(
+       'Tasks completed per hour, all time: 3 · the line is the average of the last 3 hours · click for details',
+     );
++    // A project with an archive: the pill says it is left out (ATM-739)
++    expect(sparklineTitle(s, T0 + 5 * H, true)).toBe(
++      'Tasks completed per hour, all time: 3 (archived tasks left out) · the line is the average of the last 3 hours · ' +
++        'click for details',
++    );
+     const months = series([worked('a', 0, 1), worked('b', 0, 24 * 365 * 5)])!;
+     expect(sparklineTitle(months, Date.parse('2040-01-01'))).toContain('the average of the last 3 periods of 30 days');
+   });

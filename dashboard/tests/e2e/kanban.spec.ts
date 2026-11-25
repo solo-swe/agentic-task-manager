@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, filterButton, loadFixture, openDashboard, openFilters, test } from './helpers';
+import { expect, filterButton, loadFixture, openDashboard, openFilters, openView, test } from './helpers';
 
 const column = (page: Page, status: string) => page.locator(`.kanban-column[data-status="${status}"]`);
 const cardIds = (page: Page, status: string) =>
@@ -15,7 +15,7 @@ async function openKanban(
 ) {
   // Next up is atm's answer, from the project's summary in api/projects (T-321)
   await openDashboard(page, tasksServer.withAtmSummary(), data);
-  await page.locator('#tab-kanban').click();
+  await openView(page, 'kanban');
   await expect(page.locator('#kanban')).toBeVisible();
 }
 
@@ -124,7 +124,7 @@ test.describe('Kanban board', () => {
 
   test('no Next up without one from atm (a summary without next)', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, 'kanban');
-    await page.locator('#tab-kanban').click();
+    await openView(page, 'kanban');
     await expect(card(page, 'T-028')).toBeVisible();
     await expect(page.locator('.kanban-card.next-up')).toHaveCount(0);
   });

@@ -258,3 +258,51 @@ All within their run-to-run spread but the reload's Progress tab (66–68 ms on 
 
 **Sizes:** CompMD's WebAssembly 2,960,441 → 2,967,257 bytes (+0.2%); `compmd.js` 98,693 → 99,956 bytes; the frames'
 runtime 81,004 → 82,429 bytes; the dashboard's page unchanged (1,084,296 bytes).
+
+## CompMD 0.10.0 (ATM-780)
+
+CompMD 0.10.0 (the spec's drafts 17 and 18) adds to what a document can write (type in a box, image boxes, a
+document's own fonts, gradients, no-code components, the `lang` and `dir` a renderer sets), and nothing a host must
+change: atm builds and its checks pass with no change but the pins. A document's own fonts a host can't serve show the
+fallback, as atm's page policy does (no font source is allowed).
+
+Measured on 0.9.0 and then on 0.10.0, on this Mac, atm 0.43.0 otherwise unchanged, medians of three: the timed e2e
+tests on one worker, the real review (`--project measure`, its two engines side by side, three runs each). The real
+review ran on three workers in both cases, so its numbers compare with each other, not with the section above (one run
+each, in the full e2e runs).
+
+**The timed e2e tests** (Chromium; 0.9.0 → 0.10.0):
+
+| | 0.9.0 | 0.10.0 |
+|---|---|---|
+| A jump to a long review's last file: sheets set / styles read | 0 / 0 | 0 / 0 |
+| The long review: the first file drawn / settled | 38 / 69 ms | 36 / 66 ms |
+| The long review: the slowest frame after it settled | 29 ms | 28 ms |
+| A file far down a large review: total | 90 ms | 74 ms |
+| The + following the pointer: median / slowest frame | 33 / 34 ms | 33 / 35 ms |
+| Tab switches (500 tasks): Kanban / Progress / Agents / Graph / List | 31 / 48 / 64 / 61 / 84 ms | 30 / 48 / 58 / 61 / 86 ms |
+| A reload that changes the data: Graph / Kanban / Progress | 55 / 59 / 57 ms | 54 / 47 / 56 ms |
+
+All within their run-to-run spread.
+
+**The real review** (CompMD's CR-1, 94 files; 0.9.0 → 0.10.0):
+
+| | Chromium | WebKit |
+|---|---|---|
+| Opening: the first file drawn | 400 → 201 ms | 401 → 235 ms |
+| Opening: blocked | 183 → 100 ms | 413 → 217 ms |
+| Opening: busy until | 715 → 366 ms | 794 → 486 ms |
+| Scrolled to the end: the last file drawn | 2,292 → 2,070 ms | 2,081 → 2,080 ms |
+| A jump to the top: blocked | 0 → 0 ms | 199 → 100 ms |
+| A jump to the end: blocked | 0 → 0 ms | 239 → 119 ms |
+| The sides: their time at atm in all (the slowest) | 36.1 → 27.1 s (528 → 305 ms) | 4.8 → 3.3 s (644 → 426 ms) |
+
+A review opens about twice as fast in both engines, the app's WebKit included, and a jump in WebKit blocks half as
+long.
+
+**Sizes:** CompMD's WebAssembly 2,967,257 → 3,058,330 bytes (+3.1%); `compmd.js` 99,956 → 117,611 bytes (+17.7%);
+the dashboard's page 1,165,584 → 1,165,586 bytes.
+
+**A test made to wait for the page (`reviews.spec.ts` `openDiffs`):** 0.10.0 is still drawing a file's code a moment
+after its line numbers show, so a test that measured a line and then pointed at it could point at another (the drag
+over three lines, 3 runs in 5). It waits now for CompMD to say every block of the file is drawn (`data-compmd="ready"`).

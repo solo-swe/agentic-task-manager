@@ -1,0 +1,127 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "0f7c30297198906b3b99b151b011995f80871774",
+    "head": "e6d06b7833562d28af9889fdfedc5b406e17ea5a"
+  },
+  "files": [
+    {
+      "path": "app/src-tauri/build.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/capabilities/main.json",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/src/commands.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/src/commands/inbox.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/src/integration_tests.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/src/lib.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-api/src/lib.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-api/src/routes.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-api/src/routes/inbox.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-api/src/routes/inbox/tests.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-api/src/routes/source.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-api/src/routes/test_support.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/commands/inbox.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-common/schema/api.schema.json",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-db/src/jsongit.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/inbox.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/inbox/tests.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/summary.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/workspaces.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/multi-project-api.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/security-architecture.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/scenarios/inbox.json",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/serve.test.mjs",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:ba530ebb",
+  "at": "2026-11-24T07:02:38Z"
+}

@@ -297,6 +297,8 @@ describe('serve', () => {
       needs_you_reviews: [],
       git: { branch: 'main', pr: null },
       description: null,
+      // No meta.key (ATM-754)
+      key: null,
       last_activity: '2026-03-15T11:00:00Z',
       completions_14d: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
       // The All projects board (T-257): T-7 ready; T-5 waits for a review; T-6 blocked on the user before T-8 on an
@@ -329,6 +331,8 @@ describe('serve', () => {
       board_active_sprint: null,
       // The card's line (T-255): no creation times, no work recorded
       stats: { started: null, tasks: 8, agent_minutes: 0 },
+      // No inbox yet (ATM-761)
+      inbox: { open: 0 },
     });
     assert.deepEqual(
       [byId.eeee5555.summary.percent, byId.eeee5555.summary.recent_sprints, byId.eeee5555.summary.last_activity],
@@ -348,6 +352,12 @@ describe('serve', () => {
     // (the branch HEAD names, as the project card's: the test repository has no commit yet, but HEAD is main, T-385)
     assert.deepEqual(summary.working, [{ task: 'T-7', name: 'T-7', agent: 'claude:test', branch: 'main' }]);
     assert.deepEqual(summary.next, []);
+    // An item noted in the inbox (ATM-761) is a new version too: its count is the Inbox item's badge
+    const before = changed.headers.get('etag');
+    assert.equal(runAtm(['inbox', 'add', 'Later'], root, { ...env, ATM_AGENT: 'Ana' }).code, 0);
+    const noted = await fetch(url, { headers: { 'If-None-Match': before } });
+    assert.equal(noted.status, 200);
+    assert.deepEqual((await noted.json()).projects.find((p) => p.id === 'abcd1234').summary.inbox, { open: 1 });
     atm(['service', 'stop'], root);
   });
 
@@ -850,7 +860,6 @@ describe('serve', () => {
       ['../outside.md', 400],
       ['/etc/passwd', 400],
       ['docs/../docs/x.md', 400],
-      ['', 400],
     ];
     for (const [file, status] of refusals) {
       const r = await get('documents', file);
@@ -858,9 +867,85 @@ describe('serve', () => {
       const answer = await r.json();
       assert.ok(answer.error && !answer.document, file);
     }
+    // No path: for documents the listing (ATM-765, the next test); for files a bad path
+    assert.equal((await get('files', '')).status, 400);
     assert.equal((await fetch(`http://localhost:${port}/api/v1/projects/nope/documents?path=docs/x.md`)).status, 404);
     // Read-only, like every route
     assert.equal((await fetch(`${base}/documents?path=docs/x.md`, { method: 'POST' })).status, 405);
+    atm(['service', 'stop'], root);
+  });
+
+  test("a project's documents' listing (ATM-765): its Markdown files git has, read-only, tagged, refused from other sites", async () => {
+    const atmHome = home();
+    const atm = atmIn(atmHome);
+    const root = project(
+      { meta: { id: 'list0001', project: 'Listing' }, tasks: [] },
+      {
+        'README.md': '# Read me\n',
+        'docs/design.md': '# The design\n\nBody.\n',
+        'docs/notes.markdown': 'No heading here.\n',
+        'src/app.ts': 'export const a = 1;\n',
+        '.gitignore': 'secrets/\n',
+        'secrets/hidden.md': '# Ignored\n',
+      },
+    );
+    git(['add', 'README.md', 'docs/design.md', '.gitignore'], root);
+    git(['commit', '-q', '-m', 'docs'], root);
+    // A folder that is a symlink to outside the project: nothing under it is listed
+    const elsewhere = tempDir('atm-elsewhere-');
+    cleanups.push(() => removeDir(elsewhere));
+    fs.writeFileSync(path.join(elsewhere, 'outside.md'), '# outside');
+    fs.symlinkSync(elsewhere, path.join(root, 'linked'));
+    assert.equal(atm(['workspace', 'add-project'], root).code, 0);
+    const port = ports();
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
+    const v1 = `http://localhost:${port}/api/v1/projects/list0001/documents`;
+    const v2 = `http://localhost:${port}/api/v2/workspaces/default/projects/list0001/documents`;
+
+    // The Markdown files git has, tracked or new; not the ignored one, nor one through the symlink, nor code
+    const first = await fetch(v1);
+    assert.equal(first.status, 200);
+    assert.match(first.headers.get('content-type'), /application\/json/);
+    const listing = await first.json();
+    const shown = Object.fromEntries(listing.documents.map((d) => [d.path, [d.title, d.tracked]]));
+    assert.deepEqual(shown, {
+      'README.md': ['Read me', true],
+      'docs/design.md': ['The design', true],
+      'docs/notes.markdown': [shown['docs/notes.markdown']?.[0] ?? null, false],
+    });
+    assert.deepEqual([listing.submodules, listing.more], [[], 0]);
+    // v2's route is the same listing
+    const fromV2 = await (await fetch(v2)).json();
+    assert.deepEqual(fromV2.documents, listing.documents);
+
+    // Unchanged: a 304; a new document: the listing again
+    const tag = first.headers.get('etag');
+    assert.ok(tag);
+    assert.equal((await fetch(v1, { headers: { 'If-None-Match': tag } })).status, 304);
+    fs.writeFileSync(path.join(root, 'docs/later.md'), '# Later\n');
+    const changed = await fetch(v1, { headers: { 'If-None-Match': tag } });
+    assert.equal(changed.status, 200);
+    assert.ok((await changed.json()).documents.some((d) => d.path === 'docs/later.md'));
+
+    // A query names some, by title or path; one too long is refused
+    const found = await (await fetch(`${v1}?q=design`)).json();
+    assert.deepEqual(
+      found.documents.map((d) => d.path),
+      ['docs/design.md'],
+    );
+    assert.equal((await fetch(`${v1}?q=${'x'.repeat(201)}`)).status, 400);
+
+    // ATM-671's rule: a read another site's page sends is refused; atm's own page's is not
+    for (const [headers, status] of [
+      [{ 'Sec-Fetch-Site': 'cross-site' }, 403],
+      [{ Origin: 'https://evil.example' }, 403],
+      [{ 'Sec-Fetch-Site': 'same-origin' }, 200],
+    ]) {
+      assert.equal((await fetch(v1, { headers })).status, status, JSON.stringify(headers));
+    }
+    // Registered projects only; read-only
+    assert.equal((await fetch(`http://localhost:${port}/api/v1/projects/nope/documents`)).status, 404);
+    assert.equal((await fetch(v1, { method: 'POST' })).status, 405);
     atm(['service', 'stop'], root);
   });
 
@@ -1101,7 +1186,7 @@ describe('serve', () => {
     for (const method of ['POST', 'PUT', 'DELETE'])
       assert.deepEqual(await get('/api/projects', { method }), [
         405,
-        'only GET and HEAD, and POST, PATCH, PUT or DELETE on reviews',
+        'only GET and HEAD, and POST, PATCH, PUT or DELETE on reviews and the inbox',
       ]);
     atm(['service', 'stop'], root);
   });
@@ -1333,6 +1418,91 @@ describe('serve', () => {
     atm(['service', 'stop'], root);
   });
 
+  test('inbox (ATM-761): read with an ETag; changed only from atm’s own page with its session token, as JSON; as the user', async () => {
+    const atmHome = home();
+    const atm = atmIn(atmHome);
+    const root = project({ meta: { id: 'abcd1234', project: 'Serve' }, tasks: [] });
+    const port = ports();
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
+    const origin = `http://localhost:${port}`;
+    const page = await (await fetch(`${origin}/projects/abcd1234/inbox`)).text();
+    const token = /<meta name="atm-session" content="([0-9a-f]{64})">/.exec(page)?.[1];
+    assert.ok(token, 'the page has the session token');
+    const inbox = `${origin}/api/v2/workspaces/default/projects/abcd1234/inbox`;
+    const send = (method, url, body, headers = {}) =>
+      fetch(url, {
+        method,
+        headers: { Origin: origin, 'Content-Type': 'application/json', 'X-Atm-Session': token, ...headers },
+        body: typeof body === 'string' ? body : JSON.stringify(body),
+      });
+    const refused = async (r) => [r.status, (await r.json()).error];
+    const items = () => JSON.parse(atm(['inbox', 'list', '--state', 'all', '--json'], root).stdout).items;
+
+    // Empty at first, with an ETag; v1's route is the default workspace's
+    let r = await fetch(inbox);
+    assert.equal(r.status, 200);
+    assert.deepEqual((await r.json()).items, []);
+    const empty = r.headers.get('etag');
+    assert.ok(empty);
+    assert.equal((await fetch(inbox, { headers: { 'If-None-Match': empty } })).status, 304);
+    assert.equal((await fetch(`${origin}/api/v1/projects/abcd1234/inbox`)).status, 200);
+
+    // Added as the user at the machine: the inbox refuses an agent, whatever agent's environment started the server
+    r = await send('POST', inbox, { text: 'Remember the **sidebar**' });
+    assert.equal(r.status, 201, await r.clone().text());
+    assert.equal((await r.json()).item.id, 'IN-1');
+    assert.equal(items()[0].created_by, git(['config', 'user.name'], root).trim());
+    // The poll sees it
+    assert.equal((await fetch(inbox, { headers: { 'If-None-Match': empty } })).status, 200);
+    r = await send('PATCH', `${inbox}/IN-1`, { text: 'Remember the sidebar' });
+    assert.equal(r.status, 200, await r.clone().text());
+    r = await send('POST', `${inbox}/IN-1/decisions`, { decision: 'discarded', reason: 'Done already' });
+    assert.equal(r.status, 201, await r.clone().text());
+    r = await send('POST', `${inbox}/IN-1/decisions`, { decision: 'restored' });
+    assert.equal(r.status, 201, await r.clone().text());
+    assert.deepEqual(
+      items().map((i) => [i.id, i.text, i.state]),
+      [['IN-1', 'Remember the sidebar', 'created']],
+    );
+
+    // Without the token, with another, from another site, or as a form: refused, nothing written
+    const note = { text: 'Not this one' };
+    assert.deepEqual(await refused(await send('POST', inbox, note, { 'X-Atm-Session': '' })), [
+      403,
+      "no session token, or not this server's",
+    ]);
+    assert.deepEqual(await refused(await send('POST', inbox, note, { 'X-Atm-Session': 'f'.repeat(64) })), [
+      403,
+      "no session token, or not this server's",
+    ]);
+    assert.deepEqual(await refused(await send('POST', inbox, note, { Origin: 'https://evil.example' })), [
+      403,
+      "a change comes from atm's own page",
+    ]);
+    assert.deepEqual(
+      await refused(
+        await fetch(inbox, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: origin, 'X-Atm-Session': token },
+          body: 'text=Not+this+one',
+        }),
+      ),
+      [415, 'the body is JSON'],
+    );
+    // A field a request doesn't take (another author), a list, an injection (an agent's, never the page's), a route
+    // there isn't, a method a resource doesn't take, and v1's path, which takes no change
+    assert.equal((await send('POST', inbox, { text: 'x', created_by: 'claude:x' })).status, 400);
+    assert.equal((await send('POST', inbox, ['x'])).status, 400);
+    assert.equal((await send('POST', `${inbox}/IN-1/decisions`, { decision: 'injected', tasks: ['T-1'] })).status, 400);
+    assert.equal((await send('POST', `${inbox}/IN-1/injections`, {})).status, 404);
+    assert.equal((await send('DELETE', `${inbox}/IN-1`, {})).status, 405);
+    assert.equal((await send('POST', `${origin}/api/v1/projects/abcd1234/inbox`, note)).status, 405);
+    // Too large a body
+    assert.equal((await send('POST', inbox, { text: 'x'.repeat(1_100_000) })).status, 413);
+    assert.equal(items().length, 1, 'nothing refused was written');
+    atm(['service', 'stop'], root);
+  });
+
   test('review reads (ATM-574): the list, a review’s page for each view, a round’s sides; read-only, as the user', async () => {
     const atmHome = home();
     const atm = atmIn(atmHome);
@@ -1545,9 +1715,15 @@ describe('serve', () => {
       '/projects/any-id/',
       '/board',
       '/progress',
+      // The sidebar overhaul's (ATM-751): All's List, the app's new tab, a project's Inbox and Documents
+      '/list',
+      '/new',
+      '/projects/abcd1234/inbox',
+      '/projects/abcd1234/documents',
       // In a workspace (ADR-003 §5, T-457)
       '/w/work',
       '/w/work/board',
+      '/w/work/new',
       '/w/work/projects/abcd1234/list',
     ];
     for (const p of [...pages, '/agents?task=T-1', '/projects/abcd1234/kanban?doc=docs/x.md:L3&about']) {

@@ -1,0 +1,37 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "8b00478d930b3bb72bbb0222f060f605ced7352a",
+    "head": "5d5699a0dcdefc52aea6097939a5b108f3ec6cbf"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/app.css",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/shell/AppTitleBar.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/shell/Sidebar.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/app.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/Sidebar.component.test.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:ba530ebb",
+  "at": "2026-11-24T19:30:28Z"
+}

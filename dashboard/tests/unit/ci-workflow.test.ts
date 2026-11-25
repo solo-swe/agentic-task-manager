@@ -178,10 +178,27 @@ describe('release workflows (I18, I19; T-452)', () => {
     const app = jobsOf(release).find((j) => j.startsWith('app-macos:'))!;
     const steps = stepsOf(app);
     const compile = steps.findIndex((s) => /app:bundle --target universal-apple-darwin --no-bundle/.test(s));
-    const sign = steps.findIndex((s) => /app:bundle --target universal-apple-darwin\n/.test(s));
+    const sign = steps.findIndex((s) => /app:bundle --target universal-apple-darwin 2>&1/.test(s));
     expect(compile).toBeGreaterThan(0);
     expect(steps[compile]).not.toMatch(/env:/);
     expect(sign).toBeGreaterThan(compile);
+  });
+
+  // ATM-749: the first compile of a fresh checkout leaves atm-app dirty once (its generated permissions are newer
+  // than its build script's run), so one pass wasn't enough and the signing step compiled it with the secrets
+  it('the no-secrets step compiles until a pass compiles nothing, and the signing step fails if anything compiles', () => {
+    const app = jobsOf(release).find((j) => j.startsWith('app-macos:'))!;
+    const steps = stepsOf(app);
+    const compile = steps.find((s) => /--no-bundle/.test(s))!;
+    expect(compile).toMatch(/set -o pipefail/);
+    expect(compile).toMatch(/for pass in 1 2 3; do/);
+    expect(compile).toMatch(/--no-bundle 2>&1 \| tee "\$RUNNER_TEMP\/compile\.log"/);
+    expect(compile).toMatch(/grep -q 'Compiling ' "\$RUNNER_TEMP\/compile\.log" \|\| exit 0\n {10}done/);
+    expect(compile).toMatch(/exit 1$/m);
+    const sign = steps.find((s) => /secrets\.TAURI_SIGNING_PRIVATE_KEY/.test(s))!;
+    expect(sign).toMatch(/set -o pipefail/);
+    expect(sign).toMatch(/universal-apple-darwin 2>&1 \| tee "\$RUNNER_TEMP\/bundle\.log"/);
+    expect(sign).toMatch(/if grep -q 'Compiling ' "\$RUNNER_TEMP\/bundle\.log"; then\n(.*\n){0,3} {12}exit 1/);
   });
 });
 

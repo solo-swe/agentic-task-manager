@@ -5,7 +5,8 @@
 //! - [`tasks`]: a project's tasks with what atm derives for them (`…/<w>/projects/<p>/tasks`);
 //! - [`claims`]: its claims and worktrees; [`logo`]: its logo;
 //! - [`documents`]: its files for the document viewer (`documents?path=`, `files?path=`);
-//! - [`reviews`]: its code reviews, the only routes that change anything (POST, PATCH, PUT; ATM-572).
+//! - [`reviews`]: its code reviews (POST, PATCH, PUT; ATM-572) and [`inbox`]: its inbox (ATM-761), the only routes
+//!   that change anything, behind the same checks.
 //!
 //! The v1 routes (`/api/projects`, `/api/search`, `/api/v1/projects/<p>/…`, `/p/<p>/…`) are the same for the `default`
 //! workspace. Each through atm-lib, on a snapshot of the project opened for the request; each read with an `ETag`, so
@@ -14,6 +15,7 @@
 
 mod claims;
 mod documents;
+mod inbox;
 mod logo;
 mod query;
 mod reviews;
@@ -35,6 +37,7 @@ use serde_json::{Value, json};
 
 use super::{send, send_error};
 
+pub use inbox::{is_inbox_path, serve_inbox_change};
 pub use reviews::{is_reviews_path, serve_review_change};
 use source::{AtmLib, Source, WorkspaceSource};
 
@@ -146,6 +149,8 @@ enum ProjectRead<'a> {
     Review(&'a str),
     /// The user's drafts on a review (ATM-612)
     Drafts(&'a str),
+    /// Its inbox's items (ATM-761)
+    Inbox,
 }
 
 impl<'a> ProjectRead<'a> {
@@ -163,6 +168,7 @@ impl<'a> ProjectRead<'a> {
             ["reviews"] => Self::Reviews,
             ["reviews", review] if !review.is_empty() => Self::Review(review),
             ["reviews", review, "drafts"] if !review.is_empty() => Self::Drafts(review),
+            ["inbox"] => Self::Inbox,
             _ => return None,
         })
     }
@@ -192,6 +198,7 @@ fn serve_project_read(
         ProjectRead::Reviews => reviews::get_reviews(project, query),
         ProjectRead::Review(review) => reviews::get_review(project, review, query, request),
         ProjectRead::Drafts(review) => reviews::get_drafts(project, review),
+        ProjectRead::Inbox => inbox::get_inbox(project, query, request),
     }
 }
 
@@ -257,7 +264,8 @@ pub fn serve(projects: &Projects, path: &str, query: &str, request: &HeaderMap) 
             | ProjectRead::Documents
             | ProjectRead::Files
             | ProjectRead::Reviews
-            | ProjectRead::Review(_)),
+            | ProjectRead::Review(_)
+            | ProjectRead::Inbox),
         ) = ProjectRead::named(&route.split('/').collect::<Vec<_>>())
     {
         return serve_project_read(default, id, read, query, request);
@@ -463,6 +471,23 @@ mod tests {
                 tasks("work"),
             ),
             ("/api/v1/projects/p1/tasks", "status=todo", tasks("default")),
+            // The inbox (ATM-761), v2's and v1's
+            (
+                "/api/v2/workspaces/work/projects/p1/inbox",
+                "state=all",
+                vec![
+                    project("work"),
+                    Call::Inbox(atm_lib::inbox::Listing::All, false),
+                ],
+            ),
+            (
+                "/api/v1/projects/p1/inbox",
+                "",
+                vec![
+                    project("default"),
+                    Call::Inbox(atm_lib::inbox::Listing::Open, false),
+                ],
+            ),
             (
                 "/api/v2/workspaces/work/projects/p1/documents",
                 "path=a.md",

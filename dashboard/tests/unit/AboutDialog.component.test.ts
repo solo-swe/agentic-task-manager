@@ -83,6 +83,8 @@ describe('AboutDialog', () => {
   });
 
   it('Project details closes the dialog and opens the Project tab (T-255)', async () => {
+    // From another tab: a project opens on its Project tab, its Overview (ATM-751)
+    dashboard.selectTab('kanban');
     render(AboutDialog);
     dashboard.openDialog('about');
     flushSync();

@@ -1,0 +1,47 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "234440db0e7cdffb90793d596bf67956d9eafc84",
+    "head": "b2413ea98495893ac5b9bdb7cdc4d1e505e55a5c"
+  },
+  "files": [
+    {
+      "path": "crates/atm-docs/src/lib.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-docs/src/listing.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-docs/src/listing/tests.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/workspaces.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-vcs/src/files.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-vcs/src/lib.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-vcs/src/tests/files.rs",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:ba530ebb",
+  "at": "2026-11-24T16:22:00Z"
+}

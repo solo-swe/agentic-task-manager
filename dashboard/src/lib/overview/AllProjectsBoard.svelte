@@ -2,18 +2,11 @@
   // The All projects board (T-259, docs/all-projects-kanban-proposal.md §3): what's happening now, everywhere. Cards
   // like a project's Kanban cards, each with its project's chip; a card opens the task's details over the board
   // (T-411), the chip the project, "+ N more" the project's Kanban. Grouped by project, a lane per project instead of the chips.
-  import {
-    allBoard,
-    allBoardLanes,
-    BOARD_COLUMNS,
-    boardOf,
-    type AllBoardCard,
-    type AllBoardColumn,
-    type BoardMatch,
-  } from '../allboard';
+  import { allBoard, allBoardLanes, type AllBoardCard, type AllBoardColumn } from '../allboard';
+  import { boardSearch } from './board-search.svelte';
   import { shortAgent } from '../claims';
   import { formatAgo } from '../format';
-  import { searchProjects, type ProjectEntry } from '../load';
+  import type { ProjectEntry } from '../load';
   import { dashboard } from '../state.svelte';
   import { kindStyle, priorityStyle, typeStyle } from '../theme';
   import { DEFAULT_VOCABULARY, priorityRank } from '../vocab';
@@ -27,40 +20,11 @@
 
   let { projects }: { projects: ProjectEntry[] } = $props();
 
-  // The search (T-261): the server searches every project's tasks (api/search, their descriptions and notes too,
-  // which the board's cards don't carry), and the board keeps its cards among the results. Asked once per pause in
-  // typing, and again when the board's cards change (not on every poll)
-  const SEARCH_PAUSE_MS = 300;
-  let match = $state<BoardMatch>(null);
+  // The search (T-261, board-search.svelte.ts)
+  const search = boardSearch(() => projects);
+  const match = $derived(search.match);
   // The active sprints' board or the whole one (T-340)
   const scope = $derived(dashboard.boardScope);
-  const boardCards = $derived(
-    projects
-      .flatMap((p) =>
-        BOARD_COLUMNS.flatMap(({ id }) => boardOf(p, scope)?.[id].cards.map((card) => `${p.id}/${card.id}`) ?? []),
-      )
-      .join(' '),
-  );
-  $effect(() => {
-    const query = dashboard.boardQuery.trim();
-    void boardCards;
-    if (!query) {
-      match = null;
-      return;
-    }
-    let current = true;
-    const timer = setTimeout(
-      () =>
-        searchProjects(query)
-          .then((found) => current && (match = found))
-          .catch((e) => console.error('Searching the projects failed:', e)),
-      SEARCH_PAUSE_MS,
-    );
-    return () => {
-      current = false;
-      clearTimeout(timer);
-    };
-  });
 
   // Grouped by project (T-260): a lane per project with something on the board, the most recently active first
   const columns = $derived(dashboard.boardGroupByProject ? [] : allBoard(projects, undefined, match, scope));

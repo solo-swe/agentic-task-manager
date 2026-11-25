@@ -1,4 +1,4 @@
-<!-- CompMD's llms.txt, version 0.9.0 (github.com/comp-markdown/compmd, spec/llms.txt at tag v0.9.0, commit 87032ac311f6; unchanged since v0.8.0, and since v0.4.0 but for one link), as atm ships it: the CompMD version the dashboard renders with. In atm, task text gets no frontmatter of its own (the dashboard adds it, with the task as md.data.task), no imports, data files, URLs or components defined in the text; skills/atm-create-tasks/SKILL.md says what renders. Update this copy with CompMD; agents read it with `atm docs compmd`. -->
+<!-- CompMD's llms.txt, version 0.10.0 (github.com/comp-markdown/compmd, spec/llms.txt at tag v0.10.0, commit 7a06d7e7f071; new in it since v0.9.0: the type params, image boxes, fonts, gradients, no-code components), as atm ships it: the CompMD version the dashboard renders with. In atm, task text gets no frontmatter of its own (the dashboard adds it, with the task as md.data.task), no imports, data files, URLs or components defined in the text; skills/atm-create-tasks/SKILL.md says what renders. Update this copy with CompMD; agents read it with `atm docs compmd`. -->
 # CompMD
 
 > CompMD (Component Markdown) is CommonMark + GFM with components, containers, named slots, typed params, data, inputs and CSS-like layout. Files end in `.comp.md`. Every construct is one line, so a document stays readable in any plain Markdown renderer. This file is everything you need to write valid CompMD; the normative spec is compmd-spec-v1.md.
@@ -279,26 +279,28 @@ md:
 
 | Component | Lays out | Own params |
 | --- | --- | --- |
-| `box` | per `display` (`block`, `flex`, `grid`) | `display`, `flex-direction`, `gap`, `align-items`, `justify-content`, `flex-wrap`, `grid-template-columns`, `grid-template-rows`, `grid-template-areas` |
+| `box` | per `display` (`block`, `flex`, `grid`) | `display`, `flex-direction`, `gap`, `align-items`, `justify-content`, `flex-wrap`, `grid-template-columns`, `grid-template-rows`, `grid-auto-rows`, `grid-template-areas` |
 | `stack` | top to bottom | `gap`, `align-items` |
 | `row` | side by side, wrapping | `gap`, `align-items`, `justify-content`, `flex-wrap` |
-| `grid` | as many per row as fit (`min`), or an exact grid | `min`, `gap`, `align-items`, `grid-template-columns`, `grid-template-rows`, `grid-template-areas` |
+| `grid` | as many per row as fit (`min`), or an exact grid | `min`, `gap`, `align-items`, `grid-template-columns`, `grid-template-rows`, `grid-auto-rows`, `grid-template-areas` |
 
-`box`'s params take: `display=block|flex|grid|contents`, `flex-direction=row|column`, `align-items=start|center|end|stretch`, `justify-content=start|center|end|between|around|space-between|space-around`, `flex-wrap=wrap|nowrap`, `gap` a space (below), `grid-template-columns` and `grid-template-rows` tracks (`1fr 2fr`, `repeat(auto-fill, minmax(12rem, 1fr))`), `grid-template-areas` quoted rows of area names (`"'head head' 'side main'"`).
+`box`'s params take: `display=block|flex|grid|contents`, `flex-direction=row|column`, `align-items=start|center|end|stretch`, `justify-content=start|center|end|between|around|space-between|space-around`, `flex-wrap=wrap|nowrap`, `gap` a space (below), `grid-template-columns`, `grid-template-rows` and `grid-auto-rows` tracks (`1fr 2fr`, `repeat(auto-fill, minmax(12rem, 1fr))`; `grid-auto-rows=1fr` makes every row as tall as the tallest), `grid-template-areas` quoted rows of area names (`"'head head' 'side main'"`).
 
 Common params, on any container or leaf (they style its outer box):
 
 - size: `width`, `height`, `min-width`, `max-width` (`auto` or a length), `aspect-ratio` (`none` or a ratio such as `16/9`)
 - spacing: `padding`, `padding-inline`, `padding-block` (one or two spaces), `padding-inline-start`, `padding-inline-end`, `padding-block-start`, `padding-block-end` (one space); a space is `none`, `s`, `m`, `l` or a length
-- look: `border` (`none subtle strong` or CSS), `border-radius` (`none s m l full` or a length), `background` (`none subtle strong accent` or a CSS color)
+- look: `border` (`none subtle strong` or CSS) and its sides `border-inline-start`, `border-inline-end`, `border-block-start`, `border-block-end` (the same values; `border` covers them), `border-radius` (`none s m l full` or a length), `background` (`none subtle strong accent` or a CSS color), `shadow` (`none s m l`, tokens only), `rotate` (an angle from `-15deg` to `15deg`: a tilt, which moves nothing around it)
+- type, inherited by what the box holds: `font-size` (`s m l xl`, in `em`, or a length), `font-weight` (`normal bold`), `font-style` (`normal italic`), `font-family` (`body heading mono`, the host's fonts; never a font's name), `color` (`muted accent` or a CSS color), `text-align` (`start center end`), `line-height` (`tight normal loose` or a number), `letter-spacing` (`tight normal wide` or a length), `text-transform` (`none uppercase lowercase capitalize`: shown, not written, so `:badge[new]{text-transform=uppercase}` is read "new"), `text-decoration` (`none underline line-through`); W126 for a `color` and a `background` in hex, `rgb()` or `hsl()` that contrast below 4.5:1
 - placement: `grid-area`, `order` (`first last none`), `align-self` (`start center end stretch`), `justify-self` (`start center end`), `inset-inline-start`, `inset-inline-end`, `inset-block-start`, `inset-block-end` (`auto` or a length)
-- behavior: `scroll`, `fill` (flags: alone, or `true` or `false`), `sticky=top|bottom|none`, `show=sm|md|lg`, `hide=sm|md|lg`
+- behavior: `scroll`, `fill` (flags: alone, or `true` or `false`), `sticky=top|bottom|none`, `show=sm|md|lg`, `hide=sm|md|lg`, `stretch-link` (a flag, no breakpoint: the box's first link covers the whole box, a card that is a link; W124 with no link in it)
+- what a component draws in its box: `object-fit=contain|cover|fill` (as large as fits, the default; filling the box, cropped; stretched), `object-position` one or two of `start center end`, block then inline (`object-position="center start"`; `center` by default); no breakpoint. A component fits its box: size a QR code or a chart with `width`, `height` or `aspect-ratio`, never with a param of its own. They fit an image box's image too: a `box` holding one Markdown image and nothing else, `::: box {aspect-ratio=4/3 object-fit=cover}` around `![…](harbour.jpg)` crops it to 4:3; on any other box they are W125.
 
 - Spaces (`gap`, padding): tokens `none`, `s`, `m`, `l`, or a length (`px rem em %`). Prefer tokens.
 - Each top-level block in a layout container is one item. Wrap several blocks in `::: box` to make one item.
-- Directions are logical only: `inline`/`block`, `start`/`end`. There is no `left`, `top`, `margin`, `color`, `font-size` or `style`. Unknown params are errors (F008); the vocabulary is closed, so raw CSS never passes.
+- Directions are logical only: `inline`/`block`, `start`/`end`. There is no `left`, `top`, `margin` or `style`. Unknown params are errors (F008); the vocabulary is closed, so raw CSS never passes.
 - Breakpoints follow the width of the block's nearest box (the closest `box`, layout or component box around it; list items and quotes don't count), not the window and not the block's own width. Write the narrow layout first and override up: `::: grid {gap=s md:gap=l md:grid-template-columns="2fr 1fr"}`.
-- A block with an `inset-*` is placed over its nearest box, which needs `height`, `aspect-ratio` or `fill` (W119).
+- A block with an `inset-*` is placed over its nearest box, which needs a height: blocks in its flow, or `height`, `aspect-ratio` or `fill` (W119).
 - A box that holds blocks with breakpoints (`md:…`, `show`, `hide`) needs a `width` wherever its width would come from its content (W114): in a `row`; in a `stack` with `align-self` or `align-items` other than `stretch`, or `justify-self=center|end`; in a `grid` with `justify-self`; or positioned without both inline insets.
 
 ```md
@@ -381,7 +383,8 @@ export default function Chart({ rows, selected, compmd }) {
 - React and Svelte 5: params are camelCase props, the default slot is `children`, named slots are props of their names, and `compmd` is `{slots, set, fallback, headingLevel, host}`. Plain `js`/`ts`: the default export is `mount(target, {params, slots, set, fallback, headingLevel, host})` returning `{update, destroy}`.
 - A param typed `input<…>` is bound to an input by the caller (`selected=region`); the component calls `compmd.set("selected", "eu")` to change it. This is the only output a component has.
 - The code has no network and sees only its params and slots. Use `fallback.text` as the accessible label of non-text content.
-- A signature fence (`compmd component=<name> signature`) holds only the YAML signature, no `---`, no body, no param list.
+- In a `compmd` definition's body: `{{md.fallback}}` is a leaf's or inline use's fallback (also in an image's alt: `![{{md.fallback}}]({{src}})`; F014 in a definition that declares slots), and `md.slots.<name>` in expressions is whether the caller gave that slot (`::: if {when=(md.slots.middle)}`). A link or image destination that starts with a param (`[{{title}}]({{href}})`) resolves against the caller's document; one that starts with text, against the definition's file. In the expanded tree, such a file of a pack is its place (`@acme/kit@1.4.2/icons/star.svg`) with `pack: true`, which the renderer's `packFile` maps to where the host serves it; one of an imported file is relative to the processed document. An inline use (`:badge[beta]`) of a definition fenced with params is one inline box with them.
+- A signature fence (`compmd component=<name> signature`) holds only the YAML signature, no `---`, no body. Its param list, when it has one, gives the component's box its defaults, as a definition fence's does (`compmd component=qr-code signature {width=12rem max-width=100%}`): the place for them when the component is a built module. A signature never declares a common param (`width`, `height`, `object-fit`, …), `class`, `id`, `lang` or `dir` (F013): the processor keeps them.
 - A component file (`./chart.jsx`) imported by path exports its default export, named after the file stem.
 - A code renderer draws the code blocks of one language: import it (`names: [mermaid]`), then write the block as anywhere, with its params and an `alt` after the language: ```` ```mermaid {alt="Draft, then review"} ````. For source computed from data, use the same component as a leaf, its source as `code`: `:: mermaid[Draft, then review] {code=(…)}`; a code block is never interpolated.
 - A host application may provide components of its own, declared in its pack by a signature alone. Use them like any component, importing the host's pack by name to say so (`from: "@acme/app"`); they work only in that host (W113), so write fallbacks other processors can show.
@@ -458,7 +461,7 @@ F codes are errors, W codes warnings. Each line: what it means → how to fix it
 - F010 required param missing → give it.
 - F011 broken param list → close quotes and brackets; quote values with spaces or parentheses; no `title=` without a value.
 - F012 `::: +` not after an opener, leaf or continuation → move it directly under that line.
-- F013 name clash or reserved name → rename: no `if`, `each`, `value`, `box`, `md`, no CEL reserved words or type names as definition params, `as` names or inputs, no two names differing only in `-` vs `_`.
+- F013 name clash or reserved name → rename: no `if`, `each`, `value`, `box`, `md`, no CEL reserved words or type names as definition params, `as` names or inputs, no two names differing only in `-` vs `_`, and in a signature no common param (`width`, `object-fit`, …), `class`, `id`, `lang` or `dir`, which the processor keeps.
 - F014 unknown `{{path}}` → use `md.doc.`, `md.data.`, `md.input.` or a declared name; write `\{{` for literal braces.
 - F015 slot line outside a container → move it inside, or remove it.
 - F016 malformed component line → exactly `::: name`, `::: /name`, `::: + …`, `:: name[…]`, `:: #name`, with a space after the colons; no scoped names in the body.
@@ -481,7 +484,7 @@ F codes are errors, W codes warnings. Each line: what it means → how to fix it
 - F033 frontmatter not plain YAML 1.2 → remove anchors, aliases, tags and duplicate keys.
 - F034 expansion too large → filter or slice the data (`md.slice`), or nest fewer `each` blocks.
 - F035 pack doesn't match its `integrity` → update the hash or the version.
-- F036 param list on a signature fence → remove it; box params go on the definition fence.
+- F036 a component's box styled by both its definition fence and its signature fence → keep one param list (the definition fence's is used).
 - F037 a declaration's type isn't a type → use one: `string`, `number`, `boolean`, `date`, `array`, `object`, `length`, `space`, `color`, `tracks`, `areas`, `surface`, `border`, `radius`, `name`, an enum `a | b`, or `input<…>`.
 - W101 leaf without fallback → add `[readable text]`.
 - W102 language or runtime not supported → expect the fallback; write a good one.
@@ -501,9 +504,10 @@ F codes are errors, W codes warnings. Each line: what it means → how to fix it
 - W116 `::` line inside an HTML block → put a blank line after the HTML tag, or drop the HTML.
 - W117 exported host component without `runtime` → add `runtime=react@19` (or `svelte@5`).
 - W118 host component threw → fix the component; the fallback was shown.
-- W119 box placing blocks by position has no height → give it `height`, `aspect-ratio` or `fill`.
+- W119 box placing all its blocks by position has no height → give it `height`, `aspect-ratio` or `fill`.
 - W120 box param given to a `display=contents` component → remove it; that component has no box.
 - W121 component code can't load (an import that isn't its runtime, a library the processor offers or one its pack names in `peerDependencies`; a relative import in source; a compile error; or a pack needing a runtime or library the processor lacks) → import only those, or bundle the library into a pack's built module.
+- W126 a box's `color` and `background` contrast below 4.5:1 → darken one or lighten the other, or use the tokens.
 
 ## Links
 

@@ -1,0 +1,97 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "c7c4eff501436a23471afc6cf2d2d49cae1f464c",
+    "head": "7f0edd61932da26afd748de2e4a7168a802d2d34"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/lib/address.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/api/http.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/api/inbox.ts",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/api/ipc.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/api/review-changes.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/inbox/InboxPage.svelte",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/projects.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/shell/NewTabPage.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/shell/Sidebar.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/shell/ViewPanel.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/state.svelte.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/helpers.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/inbox.spec.ts",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/tabs.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/InboxPage.component.test.ts",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/Sidebar.component.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/inbox.test.ts",
+      "status": "added",
+      "binary": false
+    }
+  ],
+  "by": "claude:ba530ebb",
+  "at": "2026-11-24T17:06:59Z"
+}

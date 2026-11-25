@@ -6,7 +6,8 @@
   it.
 - **Opening one for your task:** `atm review create --title '<one line>' --task <key> --range <base>..HEAD
 [--summary-file <file>]`. It puts its tasks in review, with the review's link in their note; you don't also run
-  `atm task state <key> in_review`. `--draft` keeps it a draft (nothing in review yet). Opened by an agent, it either
+  `atm task state <key> in_review`, which atm refuses an agent with no review the task waits on (ATM-770: the
+  dashboard decides a task only through its review, so it would wait on nobody). `--draft` keeps it a draft (nothing in review yet). Opened by an agent, it either
   opens the review with every task in review or refuses and writes nothing, naming what to do instead: a task you hold, or no one
   does, goes in review; one whose claim of yours lapsed (back in to do while your checks ran) is taken back and goes in
   review, its note saying so; one already in review is linked, unless another review already waits on it (add a round

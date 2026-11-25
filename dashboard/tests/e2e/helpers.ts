@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -26,12 +27,26 @@ const AGENT_SKILLS = ['atm-do-task', 'atm-serve'];
 const WORKSPACE_PROJECTS = /\/api\/v2\/workspaces\/[^/]+\/projects(\?.*)?$/;
 const V1_TASKS = /\/api\/v1\/projects\/([^/]+)\/tasks(\?.*)?$/;
 const V1_STATS = /\/api\/v1\/projects\/([^/]+)\/stats(\?.*)?$/;
-const V1_DOCUMENTS = /\/api\/v1\/projects\/([^/]+)\/documents\?/;
+/** A project's documents route: a file (`?path=`), or without a path its documents' listing (ATM-766) */
+const V1_DOCUMENTS = /\/api\/v1\/projects\/([^/]+)\/documents(\?|$)/;
 const V1_FILES = /\/api\/v1\/projects\/([^/]+)\/files\?/;
 /** A project's reviews, or one review's page (ATM-574) */
 const V1_REVIEWS = /\/api\/v1\/projects\/([^/]+)\/reviews(?:\/([^/?]+))?(?:\?.*)?$/;
 /** The review routes that change something, always v2 (ATM-572): the project, and the path past `reviews` */
 const V2_REVIEW_CHANGES = /\/api\/v2\/workspaces\/[^/]+\/projects\/([^/]+)\/reviews(\/[^?]*)?(?:\?.*)?$/;
+/** A project's inbox (ATM-761, ATM-762), v1's and v2's: its items, and on v2 the page's changes */
+const INBOX = /\/api\/(?:v1\/projects|v2\/workspaces\/[^/]+\/projects)\/([^/]+)\/inbox(\/[^?]*)?(?:\?.*)?$/;
+
+/** An inbox item, as atm keeps it */
+export interface FixtureInboxItem {
+  id: string;
+  text: string;
+  state: 'created' | 'discarded' | 'injected';
+  reason?: string;
+  tasks?: string[];
+  created_at?: string;
+  created_by?: string;
+}
 
 /** A file as the documents route answers it (docs/multi-project-api.md §2.6): Markdown by default, as it is */
 export function projectDocument(path: string, text: string, fields: Record<string, unknown> = {}) {
@@ -409,6 +424,41 @@ export class TasksServer {
     this.images.set(at ? `${at}:${path}` : path, { contentType, body });
   }
 
+  /** The default project's documents' listing (the documents route without a path, ATM-766): the one a test sets,
+   * else made from the documents set (`setDocument`), each by its title or file name, tracked; the searches it was
+   * asked for, in order ('' for every document) */
+  private documentList: { documents: unknown[]; submodules: unknown[]; more: number; git?: boolean } | null = null;
+  documentListRequests: string[] = [];
+  setDocumentList(listing: { documents: unknown[]; submodules?: unknown[]; more?: number; git?: boolean }) {
+    this.documentList = { submodules: [], more: 0, ...listing };
+  }
+  private listedDocuments(q: string) {
+    const all = this.documentList ?? {
+      documents: [...this.documents.entries()]
+        .filter(([, d]) => d.status === 200 && /\.(md|markdown)$/.test((d.body as { path: string }).path))
+        .map(([path, d]) => {
+          const body = d.body as { title?: string; document?: string; modified_at?: string; tracked?: boolean };
+          const heading = /^#\s+(.+)$/m.exec(body.document ?? '')?.[1];
+          return {
+            path,
+            title: body.title ?? heading ?? path.split('/').pop(),
+            bytes: (body.document ?? '').length,
+            modified_at: body.modified_at ?? '2026-11-20T10:00:00Z',
+            tracked: body.tracked ?? true,
+          };
+        }),
+      submodules: [],
+      more: 0,
+    };
+    const query = q.toLowerCase();
+    const documents = query
+      ? (all.documents as { path: string; title: string }[]).filter(
+          (d) => d.path.toLowerCase().includes(query) || d.title.toLowerCase().includes(query),
+        )
+      : all.documents;
+    return { ...all, documents, more: query ? 0 : all.more };
+  }
+
   /** Answer the documents route for `path` with an error, as atm serve refuses a file */
   refuseDocument(path: string, status: number, error: string) {
     this.documents.set(path, { status, body: { error }, version: 0 });
@@ -425,6 +475,64 @@ export class TasksServer {
   reviewChanges: { method: string; path: string; body: unknown; session: string | undefined }[] = [];
   /** What the next changes are answered with: their status and body */
   private reviewChangeAnswer: { status: number; body: unknown } = { status: 201, body: { comment: 'c9' } };
+
+  /** The default project's inbox (ATM-762), and its archive, newest first; atm's rules for its changes, played */
+  inbox: FixtureInboxItem[] = [];
+  inboxArchive: FixtureInboxItem[] = [];
+  /** The inbox listings asked for (their query), and the changes the page sent with their session token */
+  inboxRequests: string[] = [];
+  inboxChanges: { method: string; path: string; body: unknown; session: string | undefined }[] = [];
+
+  /** The inbox's answer to one operation, as atm's routes and commands give it: `[status, body]` */
+  private answerInbox(
+    op:
+      | { list: { state?: string | null; archived: boolean } }
+      | { add: string }
+      | { edit: [string, string] }
+      | {
+          decide: [string, { decision?: string; reason?: string }];
+        },
+  ): [number, unknown] {
+    if ('list' in op) {
+      const all = op.list.archived ? this.inboxArchive : this.inbox;
+      const state = op.list.state || 'created';
+      const count = (s: string) => all.filter((i) => i.state === s).length;
+      const items = state === 'all' ? all : all.filter((i) => i.state === state);
+      return [200, { items, created: count('created'), discarded: count('discarded'), injected: count('injected') }];
+    }
+    if ('add' in op) {
+      if (!op.add.trim()) return [400, { error: 'an item needs some text' }];
+      const next = Math.max(0, ...[...this.inbox, ...this.inboxArchive].map((i) => Number(i.id.slice(3)))) + 1;
+      const item: FixtureInboxItem = {
+        id: `IN-${next}`,
+        text: op.add,
+        state: 'created',
+        created_at: '2026-11-24T09:00:00Z',
+        created_by: 'Ana',
+      };
+      this.inbox.unshift(item);
+      return [201, { item }];
+    }
+    const [id] = 'edit' in op ? op.edit : op.decide;
+    const item = this.inbox.find((i) => i.id === id);
+    if (!item) return [404, { error: `no item ${id}` }];
+    if ('edit' in op) {
+      if (item.state !== 'created') return [403, { error: `${id} isn't open` }];
+      item.text = op.edit[1];
+      return [200, { item }];
+    }
+    const decision = op.decide[1];
+    if (decision.decision === 'discarded' && item.state === 'created' && decision.reason?.trim()) {
+      Object.assign(item, { state: 'discarded', reason: decision.reason });
+      return [200, { item }];
+    }
+    if (decision.decision === 'restored' && item.state === 'discarded') {
+      item.state = 'created';
+      delete item.reason;
+      return [200, { item }];
+    }
+    return [403, { error: `${id} can't be ${decision.decision} now` }];
+  }
 
   /** Serve the reviews list (`GET …/reviews`) */
   setReviews(list: unknown) {
@@ -667,10 +775,49 @@ export class TasksServer {
         body: JSON.stringify(this.reviewChangeAnswer.body),
       });
     });
+    await this.page.route(INBOX, (route) => {
+      const request = route.request();
+      const [, id, rest] = INBOX.exec(request.url())!;
+      if (decodeURIComponent(id) !== this.projectId)
+        return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error": "unknown project"}' });
+      const url = new URL(request.url());
+      const answer = ([status, body]: [number, unknown]) =>
+        route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+      if (request.method() === 'GET') {
+        this.inboxRequests.push(url.search);
+        return answer(
+          this.answerInbox({
+            list: { state: url.searchParams.get('state'), archived: url.searchParams.get('archived') === '1' },
+          }),
+        );
+      }
+      const path = rest ?? '';
+      const body = request.postDataJSON() as { text?: string; decision?: string; reason?: string };
+      this.inboxChanges.push({ method: request.method(), path, body, session: request.headers()['x-atm-session'] });
+      const [, item, decisions] = /^\/?([^/]*)(\/decisions)?$/.exec(path) ?? [];
+      if (request.method() === 'POST' && !item) return answer(this.answerInbox({ add: body.text ?? '' }));
+      if (request.method() === 'PATCH' && item && !decisions)
+        return answer(this.answerInbox({ edit: [decodeURIComponent(item), body.text ?? ''] }));
+      if (request.method() === 'POST' && item && decisions)
+        return answer(this.answerInbox({ decide: [decodeURIComponent(item), body] }));
+      return answer([405, { error: 'no such route' }]);
+    });
     await this.page.route(V1_DOCUMENTS, (route) => {
       const url = new URL(route.request().url());
       const path = url.searchParams.get('path') ?? '';
       const revision = url.searchParams.get('at');
+      // No path: the documents' listing (ATM-766), tagged by what it answers
+      if (!path && !revision) {
+        const q = url.searchParams.get('q') ?? '';
+        this.documentListRequests.push(q);
+        if (!isDefault(route.request().url(), V1_DOCUMENTS))
+          return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error": "unknown project"}' });
+        const body = JSON.stringify(this.listedDocuments(q));
+        const etag = `"l${createHash('sha1').update(body).digest('hex').slice(0, 12)}"`;
+        if (route.request().headers()['if-none-match'] === etag)
+          return route.fulfill({ status: 304, headers: { ETag: etag } });
+        return route.fulfill({ status: 200, contentType: 'application/json', body, headers: { ETag: etag } });
+      }
       if (revision) {
         this.documentRequests.push(`${path}@${revision}`);
         const doc = this.revisionDocuments.get(`${revision}:${path}`);
@@ -837,6 +984,9 @@ export class TasksServer {
   updateInstallHeld: Promise<unknown> = Promise.resolve();
   /** The update commands the page called, in order */
   updateCalls: string[] = [];
+  /** `list_projects` answers once this settles: a test holds it to look at the page before atm has listed the
+   * projects (ATM-776) */
+  listProjectsHeld: Promise<unknown> = Promise.resolve();
 
   /** The app's agent commands the page called, in order (`agents_status`, `connect_agents <harness>`) */
   agentCalls: string[] = [];
@@ -902,9 +1052,13 @@ export class TasksServer {
       const { pathname } = new URL(r.url());
       if (/^\/(api|p)\//.test(pathname)) this.httpRequests.push(pathname);
     });
-    await this.page.exposeFunction('__atmInvoke', (command: string, args: Record<string, unknown>) =>
-      command === 'install_update' ? this.answerInstall(args) : this.answerCommand(command, args),
-    );
+    await this.page.exposeFunction('__atmInvoke', async (command: string, args: Record<string, unknown>) => {
+      // As the page asks, before any answer is held
+      this.commands.push({ command, project: typeof args.project === 'string' ? args.project : null });
+      if (command === 'install_update') return this.answerInstall(args);
+      if (command === 'list_projects') await this.listProjectsHeld;
+      return this.reload(command, args);
+    });
     await this.page.addInitScript((version) => {
       const w = window as unknown as Record<string, unknown> & {
         __atmInvoke: (command: string, args: unknown) => Promise<{ ok?: unknown; error?: unknown }>;
@@ -986,6 +1140,28 @@ export class TasksServer {
     return JSON.stringify(parsed);
   }
 
+  /** The reload commands' answers (ATM-768), in order: the command, and whether it carried a body (the page didn't
+   * have it) */
+  reloads: { command: string; body: boolean }[] = [];
+  /** Every command the page called, in order, with the project it named (ATM-776) */
+  commands: { command: string; project: string | null }[] = [];
+
+  /** A command's answer, a reload command's as the app's `Fresh` (ATM-768): its tag (a hash of the answer and what
+   * asked for it) and its body, or none when the page's `known` tag is still it */
+  private reload(command: string, args: Record<string, unknown>): { ok?: unknown; error?: unknown } {
+    const answer = this.answerCommand(command, args);
+    if (!['list_projects', 'project_tasks', 'claims', 'worktrees'].includes(command) || !('ok' in answer))
+      return answer;
+    const { known, ...asked } = args;
+    const digest = createHash('sha1')
+      .update(JSON.stringify([command, asked, answer.ok]))
+      .digest('hex');
+    const tag = `"${digest.slice(0, 16)}"`;
+    const body = known === tag ? null : answer.ok;
+    this.reloads.push({ command, body: body !== null });
+    return { ok: { tag, body } };
+  }
+
   /** What the app's command answers: `{ok}`, or `{error}` as its `AppError` */
   private answerCommand(command: string, args: Record<string, unknown>): { ok?: unknown; error?: unknown } {
     const unknown = { error: { kind: 'not_found', message: 'unknown project' } };
@@ -1029,6 +1205,26 @@ export class TasksServer {
       }
       case 'project_reviews':
         return body ? { ok: this.reviewList ?? { reviews: [], you: 'Ana' } } : unknown;
+      case 'project_inbox':
+      case 'add_inbox_item':
+      case 'edit_inbox_item':
+      case 'decide_inbox_item': {
+        if (project !== this.projectId) return unknown;
+        const [status, answered] = this.answerInbox(
+          command === 'project_inbox'
+            ? { list: { state: (args.which as string | undefined) ?? null, archived: args.archived === true } }
+            : command === 'add_inbox_item'
+              ? { add: String((args.item as { text?: string }).text ?? '') }
+              : command === 'edit_inbox_item'
+                ? { edit: [String(args.id), String((args.edit as { text?: string }).text ?? '')] }
+                : { decide: [String(args.id), args.decision as { decision?: string; reason?: string }] },
+        );
+        if (command !== 'project_inbox')
+          this.inboxChanges.push({ method: command, path: String(args.id ?? ''), body: args, session: undefined });
+        if (status < 300) return { ok: answered };
+        const kind = status === 404 ? 'not_found' : status === 400 ? 'invalid' : 'refused';
+        return { error: { kind, message: (answered as { error: string }).error } };
+      }
       case 'project_review': {
         const page = this.reviewPages.get(String(args.review));
         return page ? { ok: page } : { error: { kind: 'not_found', message: `no review ${String(args.review)}` } };
@@ -1351,10 +1547,65 @@ export async function follow(page: Page, address: string) {
   }, address);
 }
 
+/** Focus the dependency graph once it takes keys (ATM-742): it does from the moment it is laid out in its panel,
+ * which is when it sets its SVG's viewBox (DepGraph's `active`). A key pressed before that is dropped, and under a
+ * loaded run the page can still be laying it out when a test presses one */
+export async function focusGraph(page: Page) {
+  await expect(page.locator('#dep-graph')).toHaveAttribute('viewBox', /\S/);
+  await page.locator('#graph-container').focus();
+}
+
+/** The Activity pill's bars and line as drawn (ATM-739): each bar's place, size and colour, and the line's path */
+export async function sparkline(page: Page): Promise<string[]> {
+  const svg = page.locator('#activity-card svg.sparkline');
+  await expect(svg).toBeVisible();
+  return svg.evaluate((s) => [
+    ...[...s.querySelectorAll('rect')].map((r) =>
+      ['x', 'y', 'width', 'height', 'fill'].map((a) => r.getAttribute(a)).join(' '),
+    ),
+    s.querySelector('path')?.getAttribute('d') ?? '',
+  ]);
+}
+
 /** The page's address as the dashboard writes it: its path and query (`/projects/fixture/list?about`) */
 export function addressOf(page: Page): string {
   const url = new URL(page.url());
   return url.pathname + url.search;
+}
+
+/** A project's view, or one of All projects' (`overview: true`), as a user reaches it (ATM-752): its item, then its
+ * sub-tab where the item has several */
+const ITEM_OF_VIEW: Record<string, string> = {
+  project: 'overview',
+  projects: 'overview',
+  inbox: 'inbox',
+  kanban: 'tasks',
+  board: 'tasks',
+  list: 'tasks',
+  graph: 'tasks',
+  reviews: 'reviews',
+  documents: 'documents',
+  progress: 'analysis',
+  agents: 'analysis',
+};
+const WITH_SUB_TABS = new Set(['tasks', 'analysis']);
+
+export async function openView(page: Page, view: string, { overview = false } = {}) {
+  const item = ITEM_OF_VIEW[view];
+  const subTab = page.locator(overview ? `#overview-tab-${view}` : `#tab-${view}`);
+  // Already on the item: its sub-tab
+  if (WITH_SUB_TABS.has(item) && (await subTab.count())) return subTab.click();
+  if (await page.locator(`#item-${item}`).count()) {
+    await page.locator(`#item-${item}`).click();
+  } else {
+    // In the app, whose items are the sidebar's (each a new tab, ATM-753): the view in this tab, as a link to it would
+    const { pathname } = new URL(page.url());
+    const project = /^((?:\/w\/[^/]+)?\/projects\/[^/]+)/.exec(pathname)?.[1];
+    if (!project) throw new Error(`openView: no item row and no project in ${pathname}`);
+    await follow(page, `${project}/${view}`);
+    return;
+  }
+  if (WITH_SUB_TABS.has(item)) await subTab.click();
 }
 
 /** Open the filter panel (Phase, Type and Status buttons) under the search line, if it isn't open yet. */

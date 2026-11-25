@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ReviewList from '../../src/lib/reviews/ReviewList.svelte';
+import { offeredReviewSearch } from '../../src/lib/reviews/search.svelte';
 import { NO_QUERY, type ListQuery, type ReviewEntry, type ReviewStatus } from '../../src/lib/reviews/types';
 
 // The reviews page (lib/reviews/ReviewList.svelte, ATM-574): the list and the query are given; what the user does is
@@ -224,15 +225,21 @@ describe('ReviewList', () => {
     expect(onopen).not.toHaveBeenCalled();
   });
 
-  it('asks for a search once typing stops, trimmed', async () => {
-    const { onquery } = show([entry(1, 'waiting')]);
-    const search = screen.getByRole('searchbox', { name: 'Search reviews' });
-    await fireEvent.input(search, { target: { value: 'tw' } });
-    await fireEvent.input(search, { target: { value: ' two words ' } });
-    expect(onquery).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(300);
-    expect(onquery).toHaveBeenCalledTimes(1);
-    expect(onquery).toHaveBeenCalledWith({ ...NO_QUERY, q: 'two words' });
+  // ATM-738: the search is the title bar's; the list offers it while shown, the query's text and a way to change it
+  it('offers its search while shown: its query’s text, and a search is the query with that text', async () => {
+    expect(offeredReviewSearch()).toBeNull();
+    const query = { ...NO_QUERY, status: ['open' as const], q: 'names' };
+    const { onquery, unmount, rerender } = show([entry(1, 'waiting')], query);
+    expect(screen.queryByRole('searchbox')).toBeNull();
+    const offered = offeredReviewSearch()!;
+    expect(offered.q).toBe('names');
+    offered.search('two words');
+    expect(onquery).toHaveBeenCalledWith({ ...query, q: 'two words' });
+    // A new query given: the offer reads it
+    await rerender({ query: { ...query, q: 'other' } });
+    expect(offeredReviewSearch()!.q).toBe('other');
+    unmount();
+    expect(offeredReviewSearch()).toBeNull();
   });
 
   // ATM-613: Open is every review not decided yet, the first chip; the statuses narrow it further

@@ -184,6 +184,8 @@ describe('loadProjects', () => {
       unchanged: false,
       projects: [{ ...body.projects[0], worktrees: [], logo: null }],
       validators: { etag: '"p1"' },
+      // The list as given, for the app to keep (ATM-776)
+      listed: body.projects,
     });
     const again = vi.fn().mockResolvedValue(new Response(null, { status: 304 }));
     expect(await loadProjects(again, { etag: '"p1"' })).toEqual({ unchanged: true });

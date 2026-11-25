@@ -1,0 +1,52 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "df03fcd51cd4774ce6e94fde9203f67cc6885ebf",
+    "head": "9cc4fa394f796d8f074c8174f2699d8558888bfb"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/lib/insights.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/overview/OverviewActivity.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/progress/ActivityWidget.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/helpers.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/overview-activity.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/widgets.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/ActivityWidget.component.test.ts",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/insights.test.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:ba530ebb",
+  "at": "2026-11-24T15:08:38Z"
+}

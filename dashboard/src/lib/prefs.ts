@@ -37,10 +37,14 @@ export interface Prefs {
   sidebarOpen: boolean;
   /** The app's sidebar's width, in pixels (T-515) */
   sidebarWidth: number;
+  /** The scope the app's sidebar was set to by hand (ATM-753): a project's id, or '' for All projects */
+  sidebarScope: string;
   /** The app's icon shows the workspace's needs-you count (T-517's switch, T-518's badge) */
   needsYouBadge: boolean;
   /** The app notifies when a project's needs-you count goes up (T-520) */
   needsYouNotify: boolean;
+  /** The Documents page's open folders, by project id (ATM-766): their paths */
+  documentFolders: Record<string, string[]>;
 }
 
 function storage(): Storage | null {

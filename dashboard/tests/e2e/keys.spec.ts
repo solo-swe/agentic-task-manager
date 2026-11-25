@@ -139,7 +139,8 @@ test.describe('task keys', () => {
     await expect(tabs).toHaveCount(1);
     await page.locator(`#detail-panel a.detail-dep-item.foreign[data-foreign="${FOREIGN}"]`).click();
     await expect(tabs).toHaveCount(2);
-    await expect(page.locator('#dashboard-title')).toHaveText('Learn Forever Blog');
+    // Its tab is its project's (ATM-754): listed here without a summary, so by its name, cut to 16 characters
+    await expect(page.locator('#dashboard-title')).toHaveText(/^Learn Forever B… - /);
     await expect.poll(() => addressOf(page)).toMatch(/^\/projects\/3f2a9c1e(\/[a-z]+)?\?task=LFB-5$/);
     await expect(page.locator('#detail-key')).toHaveText('LFB-5');
   });

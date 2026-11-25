@@ -1,0 +1,331 @@
+diff --git a/dashboard/src/app.css b/dashboard/src/app.css
+index ea2cf555..215c3709 100644
+--- a/dashboard/src/app.css
++++ b/dashboard/src/app.css
+@@ -5199,6 +5199,15 @@ svg.graph-minimap.hidden {
+ .vocab-item strong {
+   font-variant-numeric: tabular-nums;
+ }
++/* A sprint or a status that opens the Board or the List (ATM-756): the text's own colour, a link on hover */
++.vocab-link {
++  color: inherit;
++  text-decoration: none;
++}
++.vocab-link:hover {
++  color: var(--accent);
++  text-decoration: underline;
++}
+ .project-view .link-button {
+   background: none;
+   border: none;
+diff --git a/dashboard/src/lib/shell/ProjectTab.svelte b/dashboard/src/lib/shell/ProjectTab.svelte
+index 422d35ff..9ba3d87c 100644
+--- a/dashboard/src/lib/shell/ProjectTab.svelte
++++ b/dashboard/src/lib/shell/ProjectTab.svelte
+@@ -1,5 +1,8 @@
+ <script lang="ts">
++  import { BACKLOG } from '../filters';
+   import { formatMinutes } from '../format';
++  import { currentAddress } from '../navigation';
++  import { sprintBoardAddress, statusListAddress } from '../sprint-param';
+   import { actorsOf, vocabCounts } from '../projectinfo';
+   import { histogramOf, numbersOf } from '../projectstats';
+   import { repositoryOf } from '../repo';
+@@ -42,6 +45,19 @@
+   const closed = $derived(counts.sprints.filter((s) => s.state === 'closed'));
+   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+ 
++  // Links into the Board and the List (ATM-756, docs/sidebar-overhaul-design.md §2.4): to this project's pages, in its
++  // workspace, which is all they take from the address (read again for another project)
++  const here = $derived(dashboard.projectId === null ? '' : currentAddress());
++  /** The statuses whose counts open the List: to do, in review, blocked */
++  const LISTED_KINDS = new Set(['todo', 'review', 'blocked']);
++  /** A status count clicked: the List of its tasks, with the status in the Filters, in place; ⌘ or Ctrl the link's own
++   * way (the List, a tab of its own) */
++  function openStatus(e: MouseEvent, status: string) {
++    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
++    e.preventDefault();
++    dashboard.showStatus(status);
++  }
++
+   // Stats (T-253)
+   const stats = $derived(numbersOf(dashboard.stats));
+   const hours = (msValue: number) => (msValue ? formatMinutes(msValue / 60_000) : '0 m');
+@@ -174,18 +190,32 @@
+         <!-- The sprints in the planning order, the backlog, then the closed ones, folded (T-323) -->
+         <dt>Sprints</dt>
+         <dd id="project-sprints">
++          <!-- Each a link to the Board on it (ATM-756, docs/sidebar-overhaul-design.md §2.4), in place in the tab -->
+           {#each open as s (s.id)}
+-            <span class="vocab-item" data-sprint={s.id} data-state={s.state}
+-              ><SprintMarker state={s.state} />{s.id} <strong>{s.count}</strong></span
++            <a
++              class="vocab-item vocab-link"
++              data-sprint={s.id}
++              data-state={s.state}
++              href={sprintBoardAddress(here, s.id)}
++              title="The Board on {s.id}"><SprintMarker state={s.state} />{s.id} <strong>{s.count}</strong></a
+             >
+           {/each}
+           {#if counts.backlog || counts.sprints.length}
+-            <span class="vocab-item" data-sprint="backlog">Backlog <strong>{counts.backlog}</strong></span>
++            <a
++              class="vocab-item vocab-link"
++              data-sprint="backlog"
++              href={sprintBoardAddress(here, BACKLOG)}
++              title="The Board on the backlog">Backlog <strong>{counts.backlog}</strong></a
++            >
+           {/if}
+           {#if showClosed}
+             {#each closed as s (s.id)}
+-              <span class="vocab-item" data-sprint={s.id} data-state={s.state}
+-                ><SprintMarker state={s.state} />{s.id} <strong>{s.count}</strong></span
++              <a
++                class="vocab-item vocab-link"
++                data-sprint={s.id}
++                data-state={s.state}
++                href={sprintBoardAddress(here, s.id)}
++                title="The Board on {s.id}"><SprintMarker state={s.state} />{s.id} <strong>{s.count}</strong></a
+               >
+             {/each}
+           {/if}
+@@ -228,9 +258,19 @@
+         <dt>Statuses</dt>
+         <dd id="project-statuses">
+           {#each counts.statuses as s (s.id)}
+-            <span class="vocab-item" data-status={s.id}
+-              >{s.label}{s.kind && s.kind !== s.id ? ` (${s.kind})` : ''} <strong>{s.count}</strong></span
+-            >
++            {@const text = `${s.label}${s.kind && s.kind !== s.id ? ` (${s.kind})` : ''}`}
++            {#if s.kind && LISTED_KINDS.has(s.kind)}
++              <!-- To do, in review, blocked: the List of those tasks, every sprint (ATM-756) -->
++              <a
++                class="vocab-item vocab-link"
++                data-status={s.id}
++                href={statusListAddress(here)}
++                title="The List of the tasks {s.label.toLowerCase()}"
++                onclick={(e) => openStatus(e, s.id)}>{text} <strong>{s.count}</strong></a
++              >
++            {:else}
++              <span class="vocab-item" data-status={s.id}>{text} <strong>{s.count}</strong></span>
++            {/if}
+           {/each}
+         </dd>
+         <dt>Priorities</dt>
+diff --git a/dashboard/src/lib/sprint-param.ts b/dashboard/src/lib/sprint-param.ts
+index 78bae21e..fac560dd 100644
+--- a/dashboard/src/lib/sprint-param.ts
++++ b/dashboard/src/lib/sprint-param.ts
+@@ -4,6 +4,7 @@
+ import { ACTIVE, BACKLOG } from './filters';
+ import { addressParams, formatAddress } from './address';
+ import type { SprintModel } from './sprints';
++import { projectPage } from './tabs';
+ 
+ const ALL = 'all';
+ 
+@@ -39,3 +40,15 @@ export function withSprintParam(address: string, values: Iterable<string> | null
+   if (values !== null) for (const value of sprintParamValues(values)) params.append('sprint', value);
+   return formatAddress(params);
+ }
++
++/** The Board of the project `address` shows, on one sprint (its ID, ACTIVE or BACKLOG): a sprint's link on the
++ * project's Overview (ATM-756, docs/sidebar-overhaul-design.md §2.4) */
++export function sprintBoardAddress(address: string, sprint: string): string {
++  return withSprintParam(projectPage(address, 'kanban'), [sprint]);
++}
++
++/** The List of the project `address` shows, over every sprint: where a status count on its Overview opens (ATM-756),
++ * the status chosen in the Filters */
++export function statusListAddress(address: string): string {
++  return withSprintParam(projectPage(address, 'list'), []);
++}
+diff --git a/dashboard/src/lib/state.svelte.ts b/dashboard/src/lib/state.svelte.ts
+index 300cb404..d599cac0 100644
+--- a/dashboard/src/lib/state.svelte.ts
++++ b/dashboard/src/lib/state.svelte.ts
+@@ -84,7 +84,7 @@ import { latest, type Ticket } from './latest';
+ import type { ListGroupBy } from './list-groups';
+ import { loadProjectSources, type ProjectSource } from './overview-data';
+ import { scopeOf } from './scope';
+-import { sprintParamOf, withSprintParam } from './sprint-param';
++import { sprintParamOf, statusListAddress, withSprintParam } from './sprint-param';
+ import type { Release } from './releases';
+ import { NO_SPRINTS, type SprintModel } from './sprints';
+ import { DEFAULT_VOCABULARY, type Vocabulary } from './vocab';
+@@ -1010,6 +1010,15 @@ export class DashboardState {
+     this.filters = { ...this.filters, sprint: new Set(values) };
+   }
+ 
++  /** The List of the project's tasks in `status`, in every sprint, as the Overview counts them (its status counts'
++   * links, ATM-756): the other filters and the search cleared, in place */
++  showStatus(status: string) {
++    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- a fresh set, never changed
++    this.filters = { ...emptyFilters(), status: new Set([status]) };
++    this.query = '';
++    navigate(statusListAddress(currentAddress()));
++  }
++
+   /** The other filters and the search cleared, the sprints kept (the scope bar's "filtered ✕") */
+   clearNarrowing() {
+     this.filters = { ...emptyFilters(), sprint: this.filters.sprint };
+diff --git a/dashboard/src/lib/tabs.ts b/dashboard/src/lib/tabs.ts
+index 8afb511c..c3d40983 100644
+--- a/dashboard/src/lib/tabs.ts
++++ b/dashboard/src/lib/tabs.ts
+@@ -109,6 +109,19 @@ export function withView(address: string, view: ViewId): string {
+   return formatAddress(params);
+ }
+ 
++/** The project page `view` of the project `address` shows, in its workspace, with nothing open over it and no query:
++ * where a project's Overview links go (ATM-756) */
++export function projectPage(address: string, view: ViewId): string {
++  const from = addressParams(address);
++  const params = new URLSearchParams();
++  for (const key of ['workspace', 'project']) {
++    const value = from.get(key);
++    if (value !== null) params.set(key, value);
++  }
++  params.set('view', view);
++  return formatAddress(params);
++}
++
+ /** The neighbour of `value` in `values` for arrow-key navigation, wrapping around at the ends */
+ export function adjacent<T>(values: readonly T[], value: T, step: 1 | -1): T {
+   const i = Math.max(0, values.indexOf(value));
+diff --git a/dashboard/tests/e2e/project.spec.ts b/dashboard/tests/e2e/project.spec.ts
+index 4839caa0..6ebe401d 100644
+--- a/dashboard/tests/e2e/project.spec.ts
++++ b/dashboard/tests/e2e/project.spec.ts
+@@ -130,6 +130,34 @@ test.describe('Project tab', () => {
+     ]);
+   });
+ 
++  // ATM-756 (docs/sidebar-overhaul-design.md §2.4): the Overview links into the Board and the List, in place
++  test('a sprint opens the Board on it and Back returns; a status count opens the List of its tasks', async ({
++    page,
++    tasksServer,
++  }) => {
++    await openDashboard(page, tasksServer, shop(), { tab: 'project' });
++    await page.locator('#project-sprints a[data-sprint="Checkout"]').click();
++    await expect(page.locator('#panel-kanban')).toBeVisible();
++    await expect(page).toHaveURL(/\/kanban\?sprint=Checkout$/);
++    // Checkout's two tasks
++    await expect(page.locator('#kanban .kanban-card')).toHaveCount(2);
++    await page.goBack();
++    await expect(page.locator('#project-sprints')).toBeVisible();
++    // The backlog too
++    await page.locator('#project-sprints a[data-sprint="backlog"]').click();
++    await expect(page).toHaveURL(/\/kanban\?sprint=backlog$/);
++    await page.goBack();
++    // To Do: the List of the to-do tasks, every sprint
++    await page.locator('#project-statuses a[data-status="todo"]').click();
++    await expect(page).toHaveURL(/\/list\?sprint=all$/);
++    await expect(page.locator('.task-card')).toHaveCount(1);
++    await expect(page.locator('#filters-toggle .filters-badge')).toHaveText('1');
++    await page.goBack();
++    await expect(page.locator('#project-statuses')).toBeVisible();
++    // Done isn't a link
++    await expect(page.locator('#project-statuses a[data-status="done"]')).toHaveCount(0);
++  });
++
+   test('the stats: when, how much, and agent time (T-253)', async ({ page, tasksServer }) => {
+     await openDashboard(page, tasksServer, shop(), { tab: 'project' });
+     const stat = (key: string) => page.locator(`#project-stats [data-stat="${key}"]`);
+diff --git a/dashboard/tests/unit/ProjectTab.component.test.ts b/dashboard/tests/unit/ProjectTab.component.test.ts
+new file mode 100644
+index 00000000..5fc69dc9
+--- /dev/null
++++ b/dashboard/tests/unit/ProjectTab.component.test.ts
+@@ -0,0 +1,91 @@
++import { fireEvent, render } from '@testing-library/svelte';
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
++import ProjectTab from '../../src/lib/shell/ProjectTab.svelte';
++import { sprintBoardAddress, statusListAddress } from '../../src/lib/sprint-param';
++import { dashboard } from '../../src/lib/state.svelte';
++import standard from '../fixtures/standard.json';
++import { loadIntoDashboard } from './components.helpers';
++
++const navigate = vi.hoisted(() => vi.fn());
++vi.mock('../../src/lib/navigation', async (actual) => ({ ...(await actual()), navigate }));
++
++// A project's Overview (the Project tab) links into the Board and the List (ATM-756, docs/sidebar-overhaul-design.md
++// §2.4): each sprint and the backlog to the Board on it, the counts of to do, in review and blocked to the List
++
++/** A link's address, as its parts: the path and each sprint it names */
++const parts = (href: string | null) => {
++  const url = new URL(href ?? '', 'http://x');
++  return { path: url.pathname, sprint: url.searchParams.getAll('sprint') };
++};
++
++describe('ProjectTab’s links (ATM-756)', () => {
++  beforeEach(() => {
++    loadIntoDashboard(standard);
++    dashboard.projectId = 'fixture';
++    history.replaceState(null, '', '/projects/fixture/project?task=T-001');
++    navigate.mockClear();
++  });
++  afterEach(() => {
++    dashboard.projectId = null;
++    history.replaceState(null, '', '/');
++  });
++
++  it('each sprint listed and the backlog open the Board on it; the closed ones too, once shown', async () => {
++    const { container } = render(ProjectTab);
++    const sprints = () => [...container.querySelectorAll<HTMLAnchorElement>('#project-sprints a[data-sprint]')];
++    expect(sprints().length).toBeGreaterThan(1);
++    for (const link of sprints()) {
++      const id = link.dataset.sprint!;
++      expect(parts(link.getAttribute('href')), id).toEqual({
++        path: '/projects/fixture/kanban',
++        sprint: [id === 'backlog' ? 'backlog' : id],
++      });
++    }
++    const toggle = container.querySelector<HTMLButtonElement>('#project-closed-toggle');
++    if (toggle) {
++      const before = sprints().length;
++      await fireEvent.click(toggle);
++      expect(sprints().length).toBeGreaterThan(before);
++      for (const link of sprints().filter((l) => l.dataset.state === 'closed'))
++        expect(parts(link.getAttribute('href')).sprint).toEqual([link.dataset.sprint]);
++    }
++  });
++
++  it('the counts of to do, in review and blocked link to the List over every sprint; the others stay text', () => {
++    const { container } = render(ProjectTab);
++    const linked = [...container.querySelectorAll<HTMLAnchorElement>('#project-statuses a[data-status]')];
++    const kinds = new Map(dashboard.vocab.statuses.map((s) => [s.id, s.kind]));
++    expect(linked.map((l) => kinds.get(l.dataset.status!))).toEqual(
++      dashboard.vocab.statuses.filter((s) => ['todo', 'review', 'blocked'].includes(s.kind)).map((s) => s.kind),
++    );
++    for (const link of linked)
++      expect(parts(link.getAttribute('href'))).toEqual({ path: '/projects/fixture/list', sprint: ['all'] });
++    const text = [...container.querySelectorAll('#project-statuses span[data-status]')].map((s) =>
++      kinds.get((s as HTMLElement).dataset.status!),
++    );
++    expect(text).not.toContain('todo');
++    expect(text).toContain('done');
++  });
++
++  it('a status count clicked: the List, with that status alone in the Filters and no search; ⌘-click left to the link', async () => {
++    dashboard.query = 'something';
++    const { container } = render(ProjectTab);
++    const review = dashboard.vocab.statuses.find((s) => s.kind === 'review')!.id;
++    const link = container.querySelector<HTMLAnchorElement>(`#project-statuses a[data-status="${review}"]`)!;
++    await fireEvent.click(link, { metaKey: true });
++    expect(navigate).not.toHaveBeenCalled();
++    await fireEvent.click(link);
++    expect([...dashboard.filters.status]).toEqual([review]);
++    expect(dashboard.filters.sprint.size).toBe(0);
++    expect(dashboard.query).toBe('');
++    expect(navigate).toHaveBeenCalledWith('/projects/fixture/list?sprint=all');
++  });
++
++  it('the addresses keep the workspace and leave out what is open over the page', () => {
++    expect(sprintBoardAddress('/w/work/projects/p1/project?task=T-1&doc=a.md', 'Phase 2')).toBe(
++      '/w/work/projects/p1/kanban?sprint=Phase%202',
++    );
++    expect(statusListAddress('/w/work/projects/p1/project?task=T-1')).toBe('/w/work/projects/p1/list?sprint=all');
++    expect(statusListAddress('/projects/p1')).toBe('/projects/p1/list?sprint=all');
++  });
++});

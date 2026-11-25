@@ -3,7 +3,8 @@ This dashboard shows the tasks of every project you use atm in, from each projec
 reloads every 5 seconds while agents work through the tasks (and does nothing when nothing changed). It only reads the
 files; agents and the `atm` command change them.
 
-Jump to: [your projects](#your-projects), [the views](#views), [filters and saved views](#filters-and-saved-views),
+Jump to: [your projects](#your-projects), [the sidebar and tabs](#the-sidebar-and-tabs), [the views](#views),
+[filters and saved views](#filters-and-saved-views),
 [statuses](#statuses-and-kinds), [waiting on you](#waiting-on-you), [priorities and labels](#priorities-and-labels),
 [the task details](#the-task-details), [documents](#documents), [workflows and stages](#workflows-and-stages),
 [the archive](#the-archive),
@@ -11,17 +12,37 @@ Jump to: [your projects](#your-projects), [the views](#views), [filters and save
 
 ## Your projects
 
-- **The arrow next to the title** switches projects. Type to filter the list; a bar shows each project's progress and
-  a dot marks the ones with something waiting for you. A badge on the arrow counts what waits for you in the other
-  projects.
+- **Choosing a project:** in the atm app, the sidebar's top (below); in a browser, the arrow next to the title. Type to
+  filter the list; a bar shows each project's progress and a badge counts what waits for you.
 - **All projects** (first in that list) shows a card per project: its progress, the sprint it is in, the agents at
   work, what needs you and when it last moved. Click a card to open the project, or its "need you" to see those tasks
-  on its Kanban board. **Active only** hides projects with nothing open and nothing done in the last two weeks.
+  on its board. **Hide inactive projects** hides projects with nothing open and nothing done in the last two weeks.
 - A project appears here once atm has run in it. Projects are grouped in **workspaces**: `atm workspace projects`
   lists a workspace's projects, `atm workspace remove-project` takes one off, and `atm workspace create` makes another
   workspace.
 - Updating atm (with Homebrew, or the app's own update) updates this dashboard: when a new version is ready, a bar
   offers to reload.
+
+## The sidebar and tabs
+
+In the atm app, the sidebar is where places start, and each tab is a place you move around in:
+
+- **The scope**, at the sidebar's top: **All projects** or one project. Choosing one changes the sidebar only, never
+  the tab you are in; switching to a tab of another project chooses that project.
+- **Its items** open that scope's pages, each in a new tab: **Overview**, **Inbox** (things you noted for later, with
+  a count of new ones), **Tasks**, **Code Reviews** (with a count of those waiting on you), **Documents** and
+  **Analysis**. All projects has Overview, Tasks, Code Reviews and Analysis. ⌘-click opens one in the background;
+  right-click offers Open in New Tab, Open in New Window and Copy Link.
+- **Hidden** (the sidebar button, or View ▸ Show Sidebar), the sidebar leaves a thin rail of its items' icons; point at
+  it to see the whole sidebar over the page.
+- **+** (or ⌘T) opens a new tab on a chooser: a scope on the left, its items on the right. The arrow keys move, typing
+  filters the projects, Enter opens.
+- **A tab's title** says its project and page, such as *ATM - Tasks* or *All - Code Reviews*; a review or a document
+  open in it names itself (*ATM - CR-134*).
+- **Each tab keeps its own history:** a link opens in the same tab, and Back and Forward (the arrows in the title bar,
+  ⌘[ and ⌘]) walk that tab's pages.
+
+In a browser there is no sidebar: the same items are the tabs under the title bar.
 
 ## The top bar
 
@@ -36,16 +57,28 @@ Jump to: [your projects](#your-projects), [the views](#views), [filters and save
 
 ## Views
 
-- **Dependency Graph** — tasks as boxes, in the order their dependencies allow. Drag to move, use the buttons or
-  Ctrl/⌘ + scroll to zoom. Click a task for its details.
-- **Kanban Board** — a column per status. To Do shows which tasks are ready and which one the loop takes next.
-  Group the board by sprint, or show skipped tasks, with the options above it.
-- **Task List** — every task as a card, in the file's order or by priority.
-- **Agents** — who worked on what, and when: a lane per agent (🤖) or person (👤), with a bar per task. A green mark
-  at the end of a bar means someone else completed it, usually a reviewer approving it. Zoom and move the time range,
-  or tick **Live** to follow the current time.
-- **Progress** — each sprint's progress and an estimate of the agent work left, a burndown chart, and how busy the
-  agents have been.
+A project's pages, as the sidebar's items (or a browser's tabs) name them:
+
+- **Overview** — the project at a glance: its active sprint, the sprints planned and closed lately, and its tasks by
+  status. Each sprint and count opens the board or the list on it. A project opens here.
+- **Inbox** — what you noted for later. Add a line in the box at its top; an agent sorts the items into tasks with you
+  (`/atm-triage-inbox`). An item another project's agent left for you says where it came from.
+- **Tasks**, in three views:
+  - **Board** — a column per status. To Do shows which tasks are ready and which one the loop takes next. Group the
+    board by sprint, or show skipped tasks, with the options above it.
+  - **List** — every task as a row, grouped and sorted as you choose.
+  - **Dependencies** — tasks as boxes, in the order their dependencies allow. Drag to move, use the buttons or
+    Ctrl/⌘ + scroll to zoom. Click a task for its details.
+- **Code Reviews** — the project's reviews, those waiting on you first; a review opens with its overview, its diffs and
+  its comments.
+- **Documents** — the project's documents, as a tree or the most recently changed first, with a search; a click opens
+  one in the document viewer.
+- **Analysis**, in two views:
+  - **Progress** — each sprint's progress and an estimate of the agent work left, a burndown chart, and how busy the
+    agents have been.
+  - **Agents** — who worked on what, and when: a lane per agent (🤖) or person (👤), with a bar per task. A green mark
+    at the end of a bar means someone else completed it, usually a reviewer approving it. Zoom and move the time
+    range, or tick **Live** to follow the current time.
 
 ## Filters and saved views
 
@@ -188,6 +221,7 @@ Code), or in your own words ("loop the tasks"):
 - `atm-do-task` — do one task: the next available one, or the one you name.
 - `atm-loop-tasks` — keep doing tasks until none is left.
 - `atm-push` — push the work (or open its pull request), watch CI and fix what fails.
+- `atm-triage-inbox` — go through your inbox with you, turning items into tasks or setting them aside.
 - `atm-serve` — start or stop this dashboard's server, one for all your projects.
 
 ## Running agents in parallel

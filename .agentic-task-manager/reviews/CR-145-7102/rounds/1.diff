@@ -1,0 +1,437 @@
+diff --git a/dashboard/src/lib/reviews/ChainBox.svelte b/dashboard/src/lib/reviews/ChainBox.svelte
+index a21c3a19..5a8fc2bf 100644
+--- a/dashboard/src/lib/reviews/ChainBox.svelte
++++ b/dashboard/src/lib/reviews/ChainBox.svelte
+@@ -9,6 +9,7 @@
+   import { commentEdits, documentLinks, taskLinks } from './links';
+   import type { Chain, ReviewComment } from './types';
+   import { forgetUnsent, keepsUnsent, unsent } from './unsent';
++  import { seenInView, unseenMarks } from './unseen';
+ 
+   // A chain of comments (docs/code-review-design.md §3.4, §3.7, ATM-573, ATM-574), in place under its lines in the diff
+   // viewer: its lines (the diff shows the file and the text, so the chain doesn't repeat them), each comment with its
+@@ -43,6 +44,8 @@
+ 
+   /** What drafting does on this page (ATM-612); none where drafts can't be kept */
+   const drafts = draftActions();
++  /** Which comments came since the page opened (ATM-733): marked New until they have been in view */
++  const marks = unseenMarks();
+ 
+   // A reply or an edit being written here comes back when this chain's box is made again (ATM-732: an update of the
+   // review that cuts the diff's rows again above it, a comment from an agent arriving): kept in `unsent`, by comment
+@@ -145,7 +148,13 @@
+ </script>
+ 
+ {#snippet comment(c: ReviewComment, depth: number)}
+-  <li class="chain-comment" data-comment={c.id} data-depth={depth}>
++  <li
++    class="chain-comment"
++    class:unseen={marks?.isNew(c.id)}
++    data-comment={c.id}
++    data-depth={depth}
++    {@attach seenInView(c.id, marks)}
++  >
+     {#if c.resolved !== null && onresolve && !c.resolved}
+       <div class="chain-state">
+         <button class="chain-button chain-resolve" onclick={() => onresolve?.(c.id, true)}
+@@ -172,6 +181,7 @@
+       {#if c.draft}<span class="chain-draft" title="Only you see it: sent with your review"
+           ><Icon name="pencil" size={12} /> Draft</span
+         >{/if}
++      {#if marks?.isNew(c.id)}<span class="chain-new" title="Came while you had the review open">New</span>{/if}
+       <time class="chain-time" datetime={c.at}>{when(c.at)}</time>
+       {#if editable(c) && editing !== c.id}
+         <span class="chain-draft-actions">
+@@ -431,6 +441,18 @@
+     color: var(--text-muted);
+     font-size: var(--text-xs);
+   }
++  /* A comment that came while the page was open (ATM-733), until it has been in view */
++  .chain-new {
++    padding: 0 var(--space-3);
++    border-radius: var(--radius-pill);
++    background: var(--accent);
++    color: var(--on-accent);
++    font-size: var(--text-xs);
++    font-weight: 600;
++  }
++  .chain-comment.unseen {
++    box-shadow: inset 2px 0 0 var(--accent);
++  }
+   /* A poke (ATM-611): marked by its author, never resolved */
+   .chain-poke {
+     display: inline-flex;
+diff --git a/dashboard/src/lib/reviews/ReviewPage.svelte b/dashboard/src/lib/reviews/ReviewPage.svelte
+index 0dec6b70..709b597b 100644
+--- a/dashboard/src/lib/reviews/ReviewPage.svelte
++++ b/dashboard/src/lib/reviews/ReviewPage.svelte
+@@ -17,6 +17,7 @@
+   import ReviewFile, { holdNearCards, whenIdle } from './ReviewFile.svelte';
+   import { forgetAllUnsent } from './unsent';
+   import { isDiffMode, type DiffMode } from './diff';
++  import { seenAtFirst, setUnseenMarks, unseenOf, withSeen, type Seen } from './unseen';
+   import {
+     chainsOf,
+     driftedOf,
+@@ -169,6 +170,29 @@
+   /** Sent back to its author: more words are *Publish comments* (ATM-597, CR-2), the button's name only */
+   const sentBack = $derived(review.status === 'changes_requested');
+   const rounds = $derived(page.rounds.map((r) => r.number));
++  // What came since the page opened (ATM-733): what it showed first is seen; a comment after it is new until it has
++  // been in view (ChainBox marks it, through `setUnseenMarks`), a round until the Diffs show it. The page is one
++  // review's (ATM-675), so another review starts again
++  let seen = $state.raw<Seen>(
++    untrack(() =>
++      seenAtFirst(
++        page.chains,
++        page.rounds.map((r) => r.number),
++      ),
++    ),
++  );
++  const unseen = $derived(unseenOf(seen, page.chains, rounds, page.you));
++  setUnseenMarks({
++    isNew: (id) => unseen.comments.has(id),
++    seen: (id) => {
++      if (unseen.comments.has(id)) seen = withSeen(seen, [id]);
++    },
++  });
++  $effect(() => {
++    const round = unseen.round;
++    if (round !== null && tab === 'diffs' && !view.now && view.round === round)
++      untrack(() => (seen = { ...seen, round }));
++  });
+   const sideOf = (revision: string | null) => (revision ? side(revision) : null);
+   const statusLetter = { added: 'A', modified: 'M', deleted: 'D', renamed: 'R' } as const;
+   const totals = $derived(
+@@ -705,12 +729,33 @@
+     anchor: { ...c.anchor, lines: c.placed ?? c.drifted?.lines ?? c.anchor.lines },
+   });
+ 
++  // `fresh`: what came under each since the page opened (ATM-733): the review's own comments (the Overview's
++  // conversation), the files' and a new round (the Diffs), all of them (the Comments)
+   const tabs = $derived([
+-    { id: 'overview', label: 'Overview', icon: 'info', count: null, open: 0 },
+-    { id: 'diffs', label: 'Diffs', icon: 'file-diff', count: files.length, open: 0 },
++    { id: 'overview', label: 'Overview', icon: 'info', count: null, open: 0, fresh: unseen.general, round: false },
++    {
++      id: 'diffs',
++      label: 'Diffs',
++      icon: 'file-diff',
++      count: files.length,
++      open: 0,
++      fresh: unseen.onFiles,
++      round: unseen.round !== null,
++    },
+     // The open ones beside the total (ATM-614): *Comments 7 (2 open)*
+-    { id: 'comments', label: 'Comments', icon: 'message-square', count: allChains.length, open: chainCounts.open },
++    {
++      id: 'comments',
++      label: 'Comments',
++      icon: 'message-square',
++      count: allChains.length,
++      open: chainCounts.open,
++      fresh: unseen.general + unseen.onFiles,
++      round: false,
++    },
+   ] as const);
++  /** A tab's badge's words: how many new comments, and a new round */
++  const freshText = (t: { fresh: number; round: boolean }) =>
++    [t.fresh ? `${t.fresh} new` : '', t.round ? `round ${unseen.round}` : ''].filter(Boolean).join(', ');
+ </script>
+ 
+ <svelte:window {onkeydown} />
+@@ -893,7 +938,11 @@
+             aria-label={t.open ? `${t.label}: ${t.count}, ${t.open} open` : undefined}
+             ><Icon name={t.icon} size={15} /><span class="review-tab-label">{t.label}</span>{#if t.count !== null}<span
+                 class="review-count">{t.count}</span
+-              >{/if}{#if t.open}<span class="review-count-open">({t.open} open)</span>{/if}</button
++              >{/if}{#if t.open}<span class="review-count-open">({t.open} open)</span>{/if}{#if t.fresh || t.round}<span
++                class="review-new"
++                data-new={t.id}
++                title="Came while you had the review open">{freshText(t)}</span
++              >{/if}</button
+           >
+         {/each}
+       </div>
+@@ -910,9 +959,17 @@
+               }}
+             >
+               {#if live}<option value="now">Now, as it is being made</option>{/if}
+-              {#each rounds as n (n)}<option value={String(n)}>{n} of {rounds.length}</option>{/each}
++              {#each rounds as n (n)}<option value={String(n)}
++                  >{n} of {rounds.length}{n === unseen.round ? ' (new)' : ''}</option
++                >{/each}
+             </select>
+           </label>
++          {#if unseen.round !== null}<button
++              class="review-new review-new-round"
++              id="review-new-round"
++              title="Show round {unseen.round}, new since you opened the review"
++              onclick={() => onround(unseen.round, null)}>Round {unseen.round} new</button
++            >{/if}
+           <select
+             class="review-select-bare"
+             id="review-against"
+@@ -1548,6 +1605,20 @@
+     color: var(--text-muted);
+     font-size: var(--text-xs);
+   }
++  /* What came while the page was open (ATM-733): on its tab, and the round picker's new round */
++  .review-new {
++    margin-left: var(--space-2);
++    padding: 0 var(--space-3);
++    border: none;
++    border-radius: var(--radius-pill);
++    background: var(--accent);
++    color: var(--on-accent);
++    font-size: var(--text-xs);
++    font-weight: 600;
++  }
++  .review-new-round {
++    cursor: pointer;
++  }
+   /* The Diffs tab's tools */
+   .review-tools {
+     display: flex;
+diff --git a/dashboard/src/lib/reviews/unseen.ts b/dashboard/src/lib/reviews/unseen.ts
+new file mode 100644
+index 00000000..04fbd9a6
+--- /dev/null
++++ b/dashboard/src/lib/reviews/unseen.ts
+@@ -0,0 +1,95 @@
++// What arrived on a review since its page opened (ATM-733): comments, replies and rounds the reader hasn't seen. The
++// page remembers what it showed first; what comes with each refresh after it (an agent's reply, a new round) is new
++// until seen: a comment once it has been in view, a round once the Diffs show it. Badges say where: each sub-tab with
++// how many new comments are under it, the round picker with the new round. The reader's own comments and drafts are
++// never new to them.
++import { getContext, setContext } from 'svelte';
++import type { Chain, ReviewComment } from './types';
++
++/** What the reader has seen of the review: comment IDs, and the last round */
++export interface Seen {
++  comments: ReadonlySet<string>;
++  round: number;
++}
++
++/** Every comment of `chains`, replies too, with whether its chain is on the review as a whole (no file) */
++function everyComment(chains: readonly Chain[]): { comment: ReviewComment; general: boolean }[] {
++  const walk = (c: ReviewComment, general: boolean): { comment: ReviewComment; general: boolean }[] => [
++    { comment: c, general },
++    ...c.replies.flatMap((r) => walk(r, general)),
++  ];
++  return chains.flatMap((ch) => ch.comments.flatMap((c) => walk(c, ch.anchor.path === null)));
++}
++
++/** What the page showed when it opened: all of it seen */
++export function seenAtFirst(chains: readonly Chain[], rounds: readonly number[]): Seen {
++  return {
++    comments: new Set(everyComment(chains).map(({ comment }) => comment.id)),
++    round: Math.max(0, ...rounds),
++  };
++}
++
++/** What is new: the comments the reader hasn't seen (not their own, not a draft), by where they are, and the newest
++ * round when it is past the one seen */
++export interface Unseen {
++  comments: ReadonlySet<string>;
++  /** On the review as a whole: the Overview's conversation */
++  general: number;
++  /** On a file: the Diffs */
++  onFiles: number;
++  /** The newest round, when the reader hasn't seen it; else null */
++  round: number | null;
++}
++
++export function unseenOf(seen: Seen, chains: readonly Chain[], rounds: readonly number[], you: string): Unseen {
++  const fresh = everyComment(chains).filter(
++    ({ comment }) => !seen.comments.has(comment.id) && !comment.draft && comment.author !== you,
++  );
++  const newest = Math.max(0, ...rounds);
++  return {
++    comments: new Set(fresh.map(({ comment }) => comment.id)),
++    general: fresh.filter((f) => f.general).length,
++    onFiles: fresh.filter((f) => !f.general).length,
++    round: newest > seen.round ? newest : null,
++  };
++}
++
++/** `seen` with these comments seen too */
++export function withSeen(seen: Seen, ids: Iterable<string>): Seen {
++  return { ...seen, comments: new Set([...seen.comments, ...ids]) };
++}
++
++const KEY = Symbol('review-unseen');
++
++/** What the chains under a review's page ask of it: whether a comment is new, and that it has been seen */
++export interface UnseenMarks {
++  isNew(id: string): boolean;
++  seen(id: string): void;
++}
++
++export function setUnseenMarks(marks: UnseenMarks): void {
++  setContext(KEY, marks);
++}
++
++/** The page's marks; none outside a review's page (a chain elsewhere is never marked new) */
++export function unseenMarks(): UnseenMarks | undefined {
++  return getContext<UnseenMarks | undefined>(KEY);
++}
++
++/** An attachment: `id` is seen once at least half of the element has been in view (`onseen`), once */
++export function seenInView(id: string, marks: UnseenMarks | undefined) {
++  return (el: HTMLElement) => {
++    if (!marks?.isNew(id) || typeof IntersectionObserver === 'undefined') return;
++    const watch = new IntersectionObserver(
++      (entries) => {
++        if (entries.some((e) => e.isIntersecting)) {
++          marks.seen(id);
++          watch.disconnect();
++        }
++      },
++      { threshold: 0.5 },
++    );
++    watch.observe(el);
++    return () => watch.disconnect();
++  };
++}
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 00a157f8..939c9077 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -2454,6 +2454,62 @@ test.describe('the diff viewer on a review’s page', () => {
+     await expect(mine.getByLabel('Edit your comment')).toHaveValue('Half written');
+   });
+ 
++  // ATM-733 (Hakan): what came while the review was open shows where it came, until it is seen
++  test('comments and a round arriving while the review is open are badged on their tabs, marked New, cleared once seen', async ({
++    page,
++    tasksServer,
++  }) => {
++    await openReviews(page, tasksServer);
++    const page_ = reviewPage();
++    await page.goto(reviewPath(tasksServer, '/CR-2'));
++    const badge = (tab: string) => page.locator(`[data-new="${tab}"]`);
++    await expect(page.locator('#review-tab-overview')).toHaveAttribute('aria-selected', 'true');
++    await expect(page.locator('.review-new')).toHaveCount(0);
++    // An agent replies on src/a.rs, comments on the review as a whole, and adds round 4; the user comments too
++    const [t1, t2, t3] = page_.chains as { comments: Record<string, unknown>[] }[];
++    const agent = (id: string, body: string) => ({ ...comment(id, body), author: 'claude:b', resolved: null });
++    tasksServer.setReview('CR-2', {
++      ...page_,
++      rounds: [...page_.rounds, { number: 4, kind: { kind: 'files' }, files: [], by: 'claude:a', at: '' }],
++      view: { ...page_.view, round: 4 },
++      chains: [
++        { ...t1, comments: [{ ...t1.comments[0], replies: [agent('c11', 'Upper case is the style.')] }] },
++        t2,
++        t3,
++        {
++          id: 't12',
++          anchor: { round: 4, path: null, side: 'new', lines: null, quote: null },
++          comments: [{ ...agent('c12', 'Round 4 is up.'), resolved: false }],
++          placed: null,
++          drifted: null,
++        },
++        {
++          id: 't13',
++          anchor: { round: 4, path: null, side: 'new', lines: null, quote: null },
++          comments: [{ ...comment('c13', 'My own note.'), author: 'Ana' }],
++          placed: null,
++          drifted: null,
++        },
++      ],
++    });
++    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
++    // On the Diffs: the reply, and the new round; the Comments: both comments (the user's own, Ana's, isn't new)
++    await expect(badge('diffs')).toHaveText('1 new, round 4');
++    await expect(badge('comments')).toHaveText(/^[12] new$/);
++    // The Overview shows the comment on the review, marked New; in view, it is seen, and its badges go down
++    const general = page.locator('.review-conversation [data-comment="c12"]');
++    await expect(general).toBeVisible();
++    await expect(badge('overview')).toHaveCount(0);
++    await expect(badge('comments')).toHaveText('1 new');
++    await expect(page.locator('.review-conversation [data-comment="c13"] .chain-new')).toHaveCount(0);
++    // The Diffs show round 4 (seen) and the reply under src/a.rs's chain, marked New until it is in view
++    await page.locator('#review-tab-diffs').click();
++    await expect(diffOf(page, 'src/a.rs').locator('[data-comment="c11"]')).toBeVisible();
++    await expect(page.locator('#review-new-round')).toHaveCount(0);
++    await expect(page.locator('.review-new')).toHaveCount(0);
++    await expect(page.locator('.chain-new')).toHaveCount(0);
++  });
++
+   // ATM-732 (Hakan): an agent's comment arriving above a box being written in cut the diff's rows again, which made
+   // the box again: the reply's text was lost, and the comment's box lost its focus and its cursor
+   test('comments arriving while you write a comment and a reply in the diff keep both, the cursor and the focus', async ({
+diff --git a/dashboard/tests/unit/unseen.test.ts b/dashboard/tests/unit/unseen.test.ts
+new file mode 100644
+index 00000000..2a705e99
+--- /dev/null
++++ b/dashboard/tests/unit/unseen.test.ts
+@@ -0,0 +1,68 @@
++import { describe, expect, it } from 'vitest';
++import { seenAtFirst, unseenOf, withSeen } from '../../src/lib/reviews/unseen';
++import type { Chain, ReviewComment } from '../../src/lib/reviews/types';
++
++// What came on a review since its page opened (lib/reviews/unseen.ts, ATM-733)
++
++const YOU = 'Hakan Serce';
++const comment = (id: string, author = 'claude:a', more: Partial<ReviewComment> = {}): ReviewComment => ({
++  id,
++  author,
++  at: '2026-11-24T10:00:00Z',
++  body: id,
++  resolved: false,
++  replies: [],
++  ...more,
++});
++const chain = (id: string, path: string | null, comments: ReviewComment[]): Chain => ({
++  id,
++  anchor: { round: 1, path, side: 'new', lines: path ? [3, 3] : null, quote: null },
++  comments,
++});
++
++describe('unseenOf', () => {
++  const first = [chain('t1', 'src/a.rs', [comment('c1')]), chain('t2', null, [comment('c2', YOU)])];
++
++  it('nothing is new on the page as it opened', () => {
++    const seen = seenAtFirst(first, [1, 2]);
++    expect(unseenOf(seen, first, [1, 2], YOU)).toEqual({ comments: new Set(), general: 0, onFiles: 0, round: null });
++  });
++
++  it('a reply, a comment on a file and one on the review are new, counted where they are', () => {
++    const seen = seenAtFirst(first, [1, 2]);
++    const now = [
++      chain('t1', 'src/a.rs', [comment('c1', 'claude:a', { replies: [comment('c3')] })]),
++      chain('t2', null, [comment('c2', YOU)]),
++      chain('t4', 'src/b.rs', [comment('c4')]),
++      chain('t5', null, [comment('c5', 'Ana')]),
++    ];
++    const unseen = unseenOf(seen, now, [1, 2], YOU);
++    expect([...unseen.comments].sort()).toEqual(['c3', 'c4', 'c5']);
++    expect([unseen.onFiles, unseen.general]).toEqual([2, 1]);
++  });
++
++  it('the reader’s own comments and drafts are never new to them', () => {
++    const seen = seenAtFirst(first, [1]);
++    const now = [
++      ...first,
++      chain('t6', 'src/a.rs', [comment('c6', YOU)]),
++      chain('t7', null, [comment('d1', YOU, { draft: true })]),
++      chain('t8', null, [comment('d2', 'claude:a', { draft: true })]),
++    ];
++    expect(unseenOf(seen, now, [1], YOU).comments.size).toBe(0);
++  });
++
++  it('a round past the last one seen is new until it is seen; an older one never is', () => {
++    const seen = seenAtFirst(first, [1, 2]);
++    expect(unseenOf(seen, first, [1, 2, 3], YOU).round).toBe(3);
++    expect(unseenOf({ ...seen, round: 3 }, first, [1, 2, 3], YOU).round).toBeNull();
++    expect(unseenOf(seen, first, [1], YOU).round).toBeNull();
++    expect(seenAtFirst([], []).round).toBe(0);
++  });
++
++  it('a comment seen is no longer new; the others stay', () => {
++    const now = [...first, chain('t9', 'x', [comment('c9'), comment('c10')])];
++    const seen = withSeen(seenAtFirst(first, [1]), ['c9']);
++    expect([...unseenOf(seen, now, [1], YOU).comments]).toEqual(['c10']);
++  });
++});

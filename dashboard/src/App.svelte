@@ -22,6 +22,7 @@
   import { addressOf, reviewOf } from './lib/address';
   import AppTitleBar from './lib/shell/AppTitleBar.svelte';
   import ReviewsTab from './lib/shell/ReviewsTab.svelte';
+  import NewTabPage from './lib/shell/NewTabPage.svelte';
   import { reviewWindow } from './lib/reviews/window.svelte';
   import SettingsMenu from './lib/shell/SettingsMenu.svelte';
 
@@ -40,8 +41,8 @@
     reloadedAt: dashboard.live ? dashboard.loadedAt : 0,
   });
 
+  // The first load is the layout's (routes/+layout.svelte): in the app, once the address of the tab it starts on is in
   onMount(() => {
-    dashboard.load();
     // "System" mode follows the OS setting while the page is open
     const query = matchMedia('(prefers-color-scheme: light)');
     const onChange = () => (dashboard.systemPrefersLight = query.matches);
@@ -66,6 +67,10 @@
   <Sidebar />
   <AppTitleBar title={reviewWindow.title || dashboard.projectName} end={reviewEnd} />
   <main class="review-tab-main" id="app-main"><ReviewsTab /></main>
+{:else if dashboard.route.page === 'new'}
+  <!-- The new tab (ATM-755): its chooser of scope and item, under the window's sidebar and title bar -->
+  {#if inApp}<Sidebar /><AppTitleBar title="New Tab" end={reviewEnd} />{/if}
+  <main class="new-tab-main" id="app-main"><NewTabPage /></main>
 {:else if reviewing}
   <!-- A review's page in the browser (ATM-574): the whole window -->
   <div class="review-window" id="review-window">
@@ -120,5 +125,9 @@
   .review-window-main {
     flex: 1;
     min-height: 0;
+  }
+  /* The new tab's chooser, under the app's title bar */
+  .new-tab-main {
+    min-height: calc(100vh - 40px);
   }
 </style>

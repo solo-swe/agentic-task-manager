@@ -1,9 +1,11 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import type { TaskLinks } from '../compmd';
   import { formatAgoOrDate } from '../format';
   import { readStored, writeStored } from '../prefs';
   import Icon from '../ui/Icon.svelte';
   import { groupReviews, waitedFor } from './page';
+  import { offerReviewSearch } from './search.svelte';
   import {
     NO_QUERY,
     STATUS_LABELS,
@@ -32,6 +34,7 @@
     taskHref,
     taskLinks,
     unreadable = [],
+    searchAside,
   }: {
     entries: ReviewEntry[];
     query: Query;
@@ -52,6 +55,8 @@
     taskLinks?: TaskLinks;
     /** The reviews atm can't read (ATM-617): rows of their own, with why, after the others and whatever the query */
     unreadable?: UnreadableReview[];
+    /** Beside its search in the title bar (All reviews' project filter, ATM-757) */
+    searchAside?: Snippet;
   } = $props();
 
   function openTask(e: MouseEvent, key: string) {
@@ -105,14 +110,19 @@
     (groups ? groups.flatMap((g) => g.entries) : entries).filter((e) => e.needs_you || e.waiting === 'answered'),
   );
 
-  // What is typed, until the query takes it (a moment later), then the query's
-  let search = $derived(query.q);
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  function typed(text: string) {
-    search = text;
-    clearTimeout(timer);
-    timer = setTimeout(() => onquery({ ...query, q: text.trim() }), 250);
-  }
+  // The search is the title bar's, where a project's is (ATM-738): offered while the list is shown, and what is typed
+  // there is the query's text
+  $effect(() =>
+    offerReviewSearch({
+      get q() {
+        return query.q;
+      },
+      search: (q) => onquery({ ...query, q }),
+      get aside() {
+        return searchAside;
+      },
+    }),
+  );
 
   function toggleStatus(status: StatusFilter) {
     const status_ = query.status.includes(status)
@@ -140,33 +150,22 @@
 </script>
 
 <div class="review-list" id="review-list">
-  <div class="review-list-bar">
-    <label class="review-search-box">
-      <Icon name="search" size={15} />
-      <input
-        class="review-search"
-        type="search"
-        placeholder="Search titles, summaries and comments"
-        aria-label="Search reviews"
-        value={search}
-        oninput={(e) => typed(e.currentTarget.value)}
-      />
-    </label>
-    {#if waiting.length}
-      <button class="review-next" onclick={() => onopen(waiting[0].review.reference, false, waiting[0])}>
-        Next review needing you <span class="review-count">{waiting.length}</span>
-      </button>
-    {/if}
-    {#if onlive}
-      <button
-        class="review-new-live"
-        id="review-new-live"
-        aria-expanded={starting}
-        title="Review a change while it is being made: the working copy, followed as it changes"
-        onclick={() => (starting = !starting)}><Icon name="eye" size={15} /> New live review</button
-      >
-    {/if}
-  </div>
+  {#if waiting.length || onlive}<div class="review-list-bar">
+      {#if waiting.length}
+        <button class="review-next" onclick={() => onopen(waiting[0].review.reference, false, waiting[0])}>
+          Next review needing you <span class="review-count">{waiting.length}</span>
+        </button>
+      {/if}
+      {#if onlive}
+        <button
+          class="review-new-live"
+          id="review-new-live"
+          aria-expanded={starting}
+          title="Review a change while it is being made: the working copy, followed as it changes"
+          onclick={() => (starting = !starting)}><Icon name="eye" size={15} /> New live review</button
+        >
+      {/if}
+    </div>{/if}
   {#if starting}
     <form
       class="review-live-form"
@@ -359,32 +358,6 @@
     flex-wrap: wrap;
     align-items: center;
     gap: var(--space-4);
-  }
-  .review-search-box {
-    flex: 1;
-    min-width: 12rem;
-    display: flex;
-    align-items: center;
-    gap: var(--space-4);
-    height: 34px;
-    padding: 0 var(--space-6);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--bg);
-    color: var(--text-muted);
-  }
-  .review-search-box:focus-within {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
-  }
-  .review-search {
-    flex: 1;
-    min-width: 0;
-    border: none;
-    outline: none;
-    background: none;
-    color: var(--text);
-    font: inherit;
   }
   .review-next,
   .review-clear,

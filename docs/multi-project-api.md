@@ -30,6 +30,7 @@ parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev
 | `GET /p/<id>/logo` | that project's logo image (§2.3) | yes |
 | `GET /api/v1/projects/<id>/tasks` | that project's tasks, each with what atm derives for it (§2.5) | yes |
 | `GET /api/v1/projects/<id>/documents?path=<p>` | a file of that project, for the document viewer (§2.6); `&at=<rev>` as a commit or tree has it | yes (with `at`, only at a full object ID, kept by the browser) |
+| `GET /api/v1/projects/<id>/documents` (no `path`; `?q=`) | the project's documents, for the Documents page (§2.6, ATM-765) | yes |
 | `GET /api/v1/projects/<id>/files?path=<p>` | an image file of that project, its bytes (§2.6) | yes |
 | `GET /api/v1/projects/<id>/reviews?q=&status=&…` | that project's code reviews (§2.9) | no |
 | `GET /api/v1/projects/<id>/reviews/<CR>?round=&against=` | a review's page for one view of it (§2.9) | no |
@@ -40,6 +41,7 @@ parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev
 | `GET /api/v2/workspaces/<w>/search?q=<text>` | the tasks matching a search, in its projects (§2.4) | no |
 | `GET /api/v2/workspaces/<w>/projects/<id>/tasks` | as `api/v1/projects/<id>/tasks`, in that workspace | yes |
 | `GET /api/v2/workspaces/<w>/projects/<id>/documents?path=`, `files?path=` | as the v1 file routes (§2.6) | yes |
+| `GET /api/v2/workspaces/<w>/projects/<id>/documents` (no `path`; `?q=`) | as v1's documents listing (§2.6) | yes |
 | `GET /api/v2/workspaces/<w>/projects/<id>/claims`, `worktrees`, `logo` | as `/p/<id>/claims.json`, `worktrees.json`, `logo` | yes |
 | `GET /api/v2/workspaces/<w>/projects/<id>/reviews`, `reviews/<CR>` | as the v1 review routes (§2.9) | no |
 | `POST`, `PATCH`, `PUT` `/api/v2/workspaces/<w>/projects/<id>/reviews/…` | a change to that project's code reviews, from atm's own page (§2.9) | no |
@@ -291,6 +293,14 @@ reads the working copy through the version control. `path` is relative to the pr
   With `&at=<revision>` (ATM-689: a review's image file, its old and new sides), the image as that commit or tree has
   it, through `documents?…&at=`'s checks and then the image's; kept as `documents?…&at=` is at a full object ID
   (tagged by the revision and the path, `immutable`), neither tagged nor kept at any other revision.
+- `documents` without `path` (and without `at`; ATM-765, docs/documents-design.md §5) answers the project's documents,
+  for the Documents page: `{documents: [{path, title, bytes, modified_at, tracked}], submodules: [{path,
+  checked_out}], more}`. Its Markdown files (`*.md`, `*.markdown`) that git lists, tracked or new (`tracked` false),
+  never one git ignores, in `.git` or `.agentic-task-manager`, or reached through a symlink; a submodule's documents
+  among them by their path from the project's root; at most 500, `more` saying how many were left out. `?q=` (at most
+  200 characters, else `400`) keeps those whose title or path holds it, before the cap. The ETag is what the listing is
+  made from (the files git lists, their versions, the commit) and the query; a project outside git has none. Read-only,
+  answered by atm-docs' `list_documents` through atm-lib, as the app's `project_documents` command (I27).
 - Refused: a malformed path (`..`, absolute, empty parts, a backslash, over 512 characters) `400`; git's or atm's own
   folder (`.git`, `.agentic-task-manager`), an environment file (`.env`, `.env.local`; not `.env.example`), a key file
   (`*.pem`, `id_rsa*`, …) or one git ignores `403` (other hidden files, `.github/` or `.gitignore`, are shown: CR-3); a missing file, or one reached through a
@@ -306,8 +316,9 @@ text the page reads, never a file it looks up.
 | Path | The page shows |
 |---|---|
 | `/` | the landing page: the overview with two or more projects, the project with one (whose address it then takes) |
-| `/projects` | the overview's project cards; `/board`, `/progress`, `/agents` and `/reviews` (every project's reviews, with a project picker; ATM-575) its other tabs |
-| `/projects/<id>` | a project, on its saved tab; `/projects/<id>/<tab>` on a tab (`kanban`, `list`, `graph`, `progress`, `agents`, `project`, `reviews`). The Reviews list's filter and search in the query (ATM-697): `?q=&status=waiting,live&author=&reviewer=&tasks=&branch=` |
+| `/projects` | the overview's project cards; `/board`, `/progress`, `/agents` and `/reviews` (every project's reviews, ATM-575, narrowed to some projects by `?projects=atm,compmd`, ATM-757) its other tabs; `/list` every project's tasks as a list (the sidebar's Tasks item, ATM-751; its page is ATM-752's) |
+| `/projects/<id>` | a project on its Overview (the `project` tab; until ATM-751 its saved tab); `/projects/<id>/<tab>` on a tab (`kanban`, `list`, `graph`, `progress`, `agents`, `project`, `reviews`, and the sidebar's `inbox` and `documents`, ATM-751). The Reviews list's filter and search in the query (ATM-697): `?q=&status=waiting,live&author=&reviewer=&tasks=&branch=` |
+| `/new` | the app's new tab: a chooser of scope and item (docs/sidebar-overhaul-design.md §3, ATM-755) |
 | `/projects/<id>/reviews/<CR>` | a review's page (ATM-574; its reference letters, digits, `-` and `.`, at most 64) on its Overview, `…/<CR>/diffs` and `…/<CR>/comments` its other sub-tabs (ATM-697), with `?round=&against=&file=` the view and the file gone to and `?comment=c12` a comment in view (never a `#` anchor: the app's `atm://` links carry none), titled by the project's key, the reference and the title. A click opens it in place; ⌘ or Ctrl, or a middle click, in a new tab (ATM-698). In the browser it is a page of its own, without the dashboard's title bar and view tabs; in the app it is in a tab, under the window's title bar and its tabs (ATM-574) |
 | `/w/<w>`, `/w/<w>/…` | any of the above in workspace `<w>` (§2.8, T-457): `/w/<w>` its landing page. Without `/w/<w>`, `default`'s; `/` itself opens the workspace opened last |
 
@@ -419,6 +430,26 @@ page has them as `drafts` too, a draft comment placed in the round shown (`place
   `reply_to_review_comment`, `poke_review`, and the drafts' `list_review_drafts`, `add_review_draft`,
   `update_review_draft` and `remove_review_draft`.
 
+### 2.10 A project's inbox (ATM-761)
+
+The project's inbox (docs/inbox-design.md): `IN-<n>` items a person notes for later, each `created`, then `discarded`
+with a reason or `injected` into tasks. Under `api/v2/workspaces/<w>/projects/<p>/`:
+
+| Route | Body | Does | Answer |
+|---|---|---|---|
+| `GET inbox?state=&archived=` | — | the items `state` names (`created`, the open ones, by default; `discarded`, `injected`, `all`), of the archive with `archived=1`, newest first; also at `api/v1/projects/<p>/inbox` | `200`, `{items, created, discarded, injected}` (the counts are the whole inbox's or archive's), with an `ETag`: `304` while it is unchanged |
+| `POST inbox` | `{text}` | an item added, as the user (`atm inbox add`) | `201`, `{item}` |
+| `PATCH inbox/<IN>` | `{text}` | an open item's text (`atm inbox edit`) | `200`, `{item}` |
+| `POST inbox/<IN>/decisions` | `{decision: "discarded", reason}` or `{decision: "restored"}` | a person's decision (`atm inbox discard`, `restore`) | `201`, `{item}` |
+
+- **The same checks as the review routes** (§2.9): the server's own `Origin`, the session token, JSON (at most 1 MB),
+  each body an object with exactly its fields, acting as the user at the machine: so the inbox's own rule, that an
+  agent doesn't add, edit or restore, holds whatever environment started the server. v1's path takes no change.
+- **No route injects an item**: the tasks an item became are an agent's to record (`atm inbox inject`), in the triage
+  skill, with the user.
+- The app's commands do the same, one each: `project_inbox` (with `which` and `archived`), `add_inbox_item`,
+  `edit_inbox_item` and `decide_inbox_item`.
+
 ## 3. `GET /api/projects`
 
 ```json
@@ -504,6 +535,7 @@ and `key_final` too, as the task views give them; a project before task keys has
 | `next` | up to 2 tasks `atm loop next` would hand out, in its order, by the same code (`loop_order` in `claims.py`): tasks back from review first, then to do; dependencies done, not claimed, not done or waiting in another worktree, not done together with the user; in the loop's default selection, the active sprint's or else every task; most urgent priority, lowest ID. `{ id, name }`. The project card lists them; the project's Kanban marks the first *Next up* (T-321), so the dashboard never applies the loop's rule itself. `atm project summary` prints this whole summary for the project it runs in |
 | `last_done` | the done-kind task with the latest `completed_at`: `{ id, name, completed_at }`, or `null` |
 | `description` | `meta.description` (an optional line about the project), trimmed and capped at 200 characters; `null` without one. The card shows it only as the name's tooltip |
+| `key` | `meta.key`, the project's short name its tasks' keys start with (`ATM`); `null` without one (or an empty one); absent from an older server. The app's tabs are titled by it (`ATM - Tasks`, ATM-754) |
 | `git.branch` | the main worktree's checked-out branch (from `.git/HEAD`; a detached HEAD's short SHA), or `null` outside git |
 | `git.pr` | the latest PR recorded on the tasks (`atm vcs pr`; the highest number): `{ number, url, state }`, `url` as recorded (or `null`), `state` `"merged"` once a task of it has `merged_at` (`atm vcs pushed`), else `"open"`; `null` without one. No forge is asked, and there is no CI state |
 | `needs_you.review` | review-kind tasks, but those a reviewer approved or asked changes for (back with the agent), and those waiting through a code review counted in `code_reviews` (ATM-606: counted once) |
@@ -516,6 +548,7 @@ and `key_final` too, as the task views give them; a project before task keys has
 | `completions_14d` | 14 integers, oldest first, ending with today: done-kind tasks by the UTC day of `completed_at` (tasks without `completed_at` aren't counted) |
 | `board` | the cards for the All projects board (§3.3) |
 | `board_active_sprint` | the same columns, of the active sprint's tasks only, with their own counts: the board's default view (T-340, §3.3); `null` without an active sprint. Absent before 0.26, when the dashboard shows `board` |
+| `inbox` | `{ open }`: the project's inbox items waiting to be triaged (ATM-761), the Inbox item's badge; `0` when the inbox can't be read; absent from an older server. The summary's stamp includes `inbox.json`, so its cache and `ETag` move with an item |
 | `progress` | the overview's Progress tab (ATM-722, atm-lib's `stats::overview`), so the overview loads no project's tasks for it: `done` and `total` (all but the skipped, the archive too), `open_releases` (`[{ id, name, done, total }]`, the planned ones), `done_days` (`[[day, count]]`, days since 1970 in UTC, for the velocity chart), `burndown` (`[[day, scope, remaining]]` at the end of each day from the first task's to today) and `forecast` (`{ minutes: { likely, low, high }, waiting }`, the agent work left at the agents' pace and the open tasks waiting on someone; `null` without a pace) |
 | `stats` | the overview card's line (T-255), archived tasks included (a task in both files counted once, from `tasks.json`; an unreadable archive left out): `started`, the earliest `created_at` (else `meta.created`, else `null`); `tasks`, how many; `agent_minutes`, the agent time as the Project tab counts it: the work (`started_at` until the review request or completion, until now while active) of tasks an agent (`claude:…`) or nobody recorded started, each agent's spans merged, added up. Computed when the summary is (a change to `tasks.json` or the claims), so a running task's time grows between changes only then |
 

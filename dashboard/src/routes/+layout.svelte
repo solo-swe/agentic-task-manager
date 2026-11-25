@@ -90,8 +90,25 @@
     if (legacyParams(location.hash) || addressOf(location) !== shown) navigate(addressOf(location), { replace: true });
   }
 
+  /** In the app, whether the address of the tab the window starts on is in: until then nothing is drawn or loaded, so
+   * the window's own address (the app's root) is never shown before it (ATM-776) */
+  let started = $state(!inApp);
+  /** The address the app starts on, until the router is there: the page (`page.url`) names it only then */
+  let startingAt: string | null = null;
+  /** Never a blank window: drawn after this long even if the router's arrival was missed */
+  const START_LATEST_MS = 1000;
+  /** atm hasn't answered by now: the page is drawn anyway, as it is, rather than an empty window */
+  let waitedLong = $state(false);
+  const DRAWN_LATEST_MS = 5000;
+  if (inApp) setTimeout(() => (waitedLong = true), DRAWN_LATEST_MS);
+  /** In the app, the page is drawn once it knows what to show (ATM-776): at the tab's address, with the projects listed
+   * (kept from the last start, or atm's first answer), so no tab is named by a project's ID and no page is a guess;
+   * or when the load failed, to say so */
+  const drawn = $derived(started && (!inApp || dashboard.projectsLoaded || dashboard.loadError !== null || waitedLong));
+
   onMount(() => {
     settle();
+    if (!inApp) void dashboard.load();
     // In the atm app: the window's tabs, from the page shown (T-514); its atm:// links open their page, the one it was
     // started with here, later ones in a new tab (T-459); its menu's items do what their controls do (T-512)
     if (inApp) {
@@ -99,7 +116,15 @@
       // link the app was started with opens in a new tab of them
       void restoredTabs().then((restored) => {
         const back = appTabs.start(addressOf(location), restored);
+        // Drawn once the router is at the active tab's address (afterNavigate), so the root's page never shows first
+        if (back && back !== currentAddress()) {
+          startingAt = back;
+          setTimeout(() => (started = true), START_LATEST_MS);
+        } else started = true;
         if (back) navigate(back, { replace: true });
+        // The first load, at the active tab's address (navigate writes it at once): a page that needs its route
+        // settled (a review) shows at once, not after a load of the root and a second one for it
+        void dashboard.load();
         void listenForLinks(
           // The link the app was started with is where its first tab starts (ATM-694: no Back to the app's root)
           (address) => (back ? tabs.open(address) : navigate(address, { replace: true })),
@@ -155,6 +180,10 @@
 
   afterNavigate(({ type }) => {
     arrived();
+    if (startingAt !== null && currentAddress() === startingAt) {
+      startingAt = null;
+      started = true;
+    }
     if (type === 'link' && leaving && leaving.address !== currentAddress() && !(page.state as EntryState).atmFrom)
       replaceState('', { ...page.state, ...originOf(currentAddress(), leaving.address, leaving.state) });
     leaving = null;
@@ -174,7 +203,9 @@
   onmouseup={mouseBackForward}
 />
 
-<App />
-<!-- atm's right-click menus, the app only (ATM-699): the browser keeps its own -->
-{#if inApp}<AppContextMenu />{/if}
+{#if drawn}
+  <App />
+  <!-- atm's right-click menus, the app only (ATM-699): the browser keeps its own -->
+  {#if inApp}<AppContextMenu />{/if}
+{/if}
 {@render children()}

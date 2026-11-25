@@ -222,15 +222,16 @@ project's (`meta.review`), else `none`. Run `atm task state $TASK_ID done --note
 - `none`: it is done.
 - `batch`: it is done, and waits for the end-of-sprint review (`sprint_review: pending`): write the note as what
   the reviewer should check.
-- `blocker` or `async`: atm refuses (`… is reviewed (blocker): ask for it with atm task state … in_review …`), unless
+- `blocker` or `async`: atm refuses (`… is reviewed (blocker): open its code review with atm review create …`), unless
   an approved live review already covers the change (then it is done, naming that review). Then open a **code
   review** of the task's change: write what the reviewer should check to a scratch file outside the repository, and
   run `atm review create --task $TASK_ID --title '<one line>' --range <base>..HEAD --summary-file <file>` (`<base>`:
   the commit before the task's first; `--file <path>` instead of `--range` for a document reviewed whole). It puts
   the task in review with the review's link in its note (CR-7), and your claim is released; the tasks that depend on
-  it keep waiting until the review passes. Work with no change to review (a decision, a check) asks with
-  `atm task state $TASK_ID in_review --note '<what the reviewer should check>'` instead (with `--status <id>` when the
-  project has several review statuses and one fits, e.g. `awaiting_user`). Report it as **waiting for review**.
+  it keep waiting until the review passes. An agent's review is always a code review: atm refuses
+  `atm task state $TASK_ID in_review` without one, as the dashboard decides a task only through its review. Work with
+  no change to review (a decision, a check) is blocked on the user instead, the question saying what to decide or
+  check (`atm task state $TASK_ID blocked --on user --question '…'`). Report it as **waiting for review**.
   - **`blocker`**: the review happens now, before anything else: if the user is in the session, tell them it is open
     (`atm review show CR-7`) and wait for them with `atm review wait CR-7 --json` in the background. In an unattended
     loop, stop the loop and say what waits.
@@ -258,8 +259,8 @@ for agents' work. A task in review leaves it only by its review's decision, for 
   **A review you hold with the user** (the task says to review a draft or proposal with them): commit the draft, then
   open its review, `atm review create --task $TASK_ID --title '<one line>' --file <the draft>`, which puts the task in
   review, so the dashboard shows it waiting on them. Wait with `atm review wait CR-7 --json` and answer their comments
-  as above while it stays in review. A review of no file (a check in the preview) asks with
-  `atm task state $TASK_ID in_review` before you show it.
+  as above while it stays in review. A check in the preview is a review of the change it shows: open it with
+  `--range` as above before you show it.
   The decision is theirs, and they record it: on the review (`atm review submit`), or `atm task review approve $TASK_ID [--note '<what is left>']`,
   `request-changes $TASK_ID --reason '<what to change>'` or `reject $TASK_ID --reason '<why>'` (no skill
   pre-approves them; if they ask you to run one, it asks them for permission). Rejected, the task goes back to to do

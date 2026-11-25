@@ -215,6 +215,31 @@ export function unifiedBlocks(hunks: Hunk[], newText: string | null, expanded: R
   );
 }
 
+/** How the diff view lays a file out (ATM-731): side by side, one column with the changes marked, or one column of
+ * the file as it is after the change, nothing marked */
+export type DiffMode = 'split' | 'unified' | 'final';
+
+export function isDiffMode(value: unknown): value is DiffMode {
+  return value === 'split' || value === 'unified' || value === 'final';
+}
+
+/**
+ * The final view (ATM-731): the file as it is after the change, whole (no run folded) and unmarked: the unified
+ * view's rows without the removed lines, the added ones plain. Each row keeps its numbers (an added line has no old
+ * one), so a chain on a line of the new side, or on an unchanged line of the old, stays under its line; one on a line
+ * the change removed has no line here, and shows after the file. A deleted file has no rows.
+ */
+export function finalBlocks(hunks: Hunk[], newText: string | null): Block<UnifiedRow>[] {
+  if (newText === null) return [];
+  const folded = unifiedBlocks(hunks, newText);
+  const every = new Set(folded.flatMap((b) => (b.type === 'fold' ? [foldKey(b.fold)] : [])));
+  const rows = unifiedBlocks(hunks, newText, every)
+    .flatMap((b) => (b.type === 'rows' ? b.rows : []))
+    .filter((r) => r.kind !== 'removed')
+    .map((r) => ({ ...r, kind: 'context' as const }));
+  return rows.length ? [{ type: 'rows', rows }] : [];
+}
+
 /** The lines each side changed: the old side's removed, the new side's added (for the rendered view's marks) */
 export function changedLines(hunks: Hunk[]): { old: Set<number>; new: Set<number> } {
   const result = { old: new Set<number>(), new: new Set<number>() };

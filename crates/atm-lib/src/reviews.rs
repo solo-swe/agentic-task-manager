@@ -23,7 +23,8 @@ pub use atm_review::{
     ReviewFilter, ReviewHeader, ReviewId, ReviewRef, ReviewStore, Reviews, RoundKind, Status,
 };
 
-use crate::changes::change_task_status;
+// The reviews' own moves: each as a review asks it, so not refused as an agent's review without one (ATM-770)
+use crate::changes::move_task_status as change_task_status;
 use crate::project::Project;
 use crate::review_keys;
 use crate::state::{Command, Options};

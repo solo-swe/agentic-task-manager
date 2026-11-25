@@ -17,7 +17,7 @@ export type Fetch = typeof fetch;
 export const inApp = typeof window !== 'undefined' && isTauri();
 
 /** The transport: the browser's fetch to atm serve, or in the app the IPC one */
-export const browserFetch: Fetch = (input, init) => (inApp ? ipcFetch(input) : fetch(input, init));
+export const browserFetch: Fetch = (input, init) => (inApp ? ipcFetch(input, init) : fetch(input, init));
 
 /** What atm serve computes for a project under p/<id>/ (the task files themselves come only through the v1 route) */
 export type ProjectFile = 'claims.json' | 'worktrees.json';
@@ -66,6 +66,25 @@ export function statsUrl(project: string, request: StatsRequest = {}): string {
   if (request.to !== undefined) query.set('to', String(Math.round(request.to)));
   const text = query.toString();
   return projectRoute(project, 'stats') + (text ? `?${text}` : '');
+}
+
+/** Which of a project's inbox items a listing gives (docs/inbox-design.md §6, ATM-762) */
+export type InboxState = 'created' | 'discarded' | 'injected' | 'all';
+
+/** A project's inbox items (GET …/projects/<id>/inbox, ATM-761): those in `state` (the open ones by default), of the
+ * archive with `archived` */
+export function inboxUrl(project: string, state: InboxState = 'created', archived = false): string {
+  const query = new URLSearchParams();
+  if (state !== 'created') query.set('state', state);
+  if (archived) query.set('archived', '1');
+  const text = query.toString();
+  return projectRoute(project, 'inbox') + (text ? `?${text}` : '');
+}
+
+/** A project's documents (GET …/projects/<id>/documents without a path, ATM-765): those `q` names, every one without */
+export function documentsUrl(project: string, q = ''): string {
+  const query = q.trim();
+  return projectRoute(project, 'documents') + (query ? `?q=${encodeURIComponent(query)}` : '');
 }
 
 /** A file of the project for the document viewer: what it is, and the CompMD document to render (T-392) */
@@ -147,7 +166,9 @@ export interface Validators {
   lastModified?: string;
 }
 
-export type FileResult = { unchanged: true } | { unchanged: false; text: string; validators: Validators };
+/** A file's answer: unchanged, or its JSON parsed (`data`), as the response gives it: in the app the command's answer
+ * itself, never turned back into text (ATM-769) */
+export type FileResult = { unchanged: true } | { unchanged: false; data: unknown; validators: Validators };
 
 /**
  * Fetches a URL from the server (D-5.1). With the validators of the last load, the request is conditional
@@ -159,21 +180,21 @@ export async function fetchFile(
   url: string,
   fetchFn: Fetch,
   since?: Validators,
-  missing?: string,
+  missing?: unknown,
 ): Promise<FileResult> {
   const headers: Record<string, string> = {};
   if (since?.etag) headers['If-None-Match'] = since.etag;
   if (since?.lastModified) headers['If-Modified-Since'] = since.lastModified;
   const resp = await fetchFn(url, { cache: 'no-store', headers });
   if (resp.status === 304 && since) return { unchanged: true };
-  if (resp.status === 404 && missing !== undefined) return { unchanged: false, text: missing, validators: {} };
+  if (resp.status === 404 && missing !== undefined) return { unchanged: false, data: missing, validators: {} };
   if (!resp.ok) throw new Error('HTTP ' + resp.status);
   const validators: Validators = {};
   const etag = resp.headers.get('ETag');
   const lastModified = resp.headers.get('Last-Modified');
   if (etag) validators.etag = etag;
   if (lastModified) validators.lastModified = lastModified;
-  return { unchanged: false, text: await resp.text(), validators };
+  return { unchanged: false, data: await resp.json(), validators };
 }
 
 /** fetchFile for a project's file (p/<id>/<file>) */
@@ -182,7 +203,7 @@ export function fetchProjectFile(
   file: ProjectFile,
   fetchFn: Fetch,
   since?: Validators,
-  missing?: string,
+  missing?: unknown,
 ): Promise<FileResult> {
   return fetchFile(projectFileUrl(project, file), fetchFn, since, missing);
 }

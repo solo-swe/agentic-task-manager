@@ -4,3 +4,5 @@ tasks.json merge=atm
 tasks-archive.json merge=atm
 reviews/*/review.md merge=atm
 reviews/*/comments.md merge=atm
+inbox.json merge=atm
+inbox-archive.json merge=atm

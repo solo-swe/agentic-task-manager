@@ -1,0 +1,648 @@
+diff --git a/crates/atm-common/schema/api.schema.json b/crates/atm-common/schema/api.schema.json
+index bfeb17f2..edfbdeb3 100644
+--- a/crates/atm-common/schema/api.schema.json
++++ b/crates/atm-common/schema/api.schema.json
+@@ -754,6 +754,10 @@
+         },
+         "git": { "$ref": "#/$defs/GitSummary" },
+         "description": { "type": ["string", "null"], "description": "meta.description, capped at 200 characters" },
++        "key": {
++          "type": ["string", "null"],
++          "description": "meta.key, the project's short name its tasks' keys start with; null without one; absent from an older server (ATM-754: the app's tab titles)"
++        },
+         "last_activity": { "type": ["string", "null"] },
+         "completions_14d": { "type": "array", "items": { "type": "integer" }, "description": "Oldest day first" },
+         "board": { "$ref": "#/$defs/ProjectBoard" },
+diff --git a/crates/atm-lib/src/summary.rs b/crates/atm-lib/src/summary.rs
+index 776b66be..88f41d81 100644
+--- a/crates/atm-lib/src/summary.rs
++++ b/crates/atm-lib/src/summary.rs
+@@ -6,7 +6,7 @@
+ use std::collections::HashMap;
+ 
+ use atm_common::edits::is_agent;
+-use atm_common::keys::{key_of, keys_format, label_of, number_of, with_key};
++use atm_common::keys::{key_of, keys_format, label_of, number_of, project_key, with_key};
+ use atm_common::py::{py_str, py_str_opt, strip, truthy};
+ use atm_common::rules::{natural_cmp, unfinished_dependencies};
+ use atm_common::time::{format_iso, now, parse_iso};
+@@ -822,6 +822,8 @@ pub fn project_summary(project: &Project) -> Result<Value> {
+             .collect::<Vec<_>>(),
+         "git": git_summary(project, &tasks),
+         "description": description(document.get("meta")),
++        // Its short name (`meta.key`), which the app's tabs are titled by (ATM-754); null without one
++        "key": project_key(document).filter(|k| !k.is_empty()),
+         "last_activity": last.map(format_iso),
+         "completions_14d": completions,
+         "board": board(&shown, &tasks, &kinds, &todo_refs, current, &live, true),
+diff --git a/crates/atm-lib/src/summary/tests.rs b/crates/atm-lib/src/summary/tests.rs
+index 4c7c8db7..0f5bee23 100644
+--- a/crates/atm-lib/src/summary/tests.rs
++++ b/crates/atm-lib/src/summary/tests.rs
+@@ -55,6 +55,8 @@ fn a_keys_format_project_gives_its_tasks_keys_and_a_legacy_one_does_not() {
+         &json!({"format": 2, "key": "ATM", "next_number": 14}),
+     );
+     let s = project_summary(&keyed).unwrap();
++    // The project's own key (ATM-754: the app's tabs are titled by it)
++    assert_eq!(s["key"], json!("ATM"));
+     // Keys plain (ADR-009): no key_final carried, whatever the file still says
+     let key_of = |v: &Value| (v["key"].clone(), v.get("key_final").cloned());
+     assert_eq!(key_of(&s["last_done"]), (json!("ATM-2"), None));
+@@ -84,6 +86,10 @@ fn a_keys_format_project_gives_its_tasks_keys_and_a_legacy_one_does_not() {
+         &json!({}),
+     );
+     let s = project_summary(&legacy).unwrap();
++    assert_eq!(s["key"], Value::Null);
++    // An empty key is none
++    let empty = project(&json!([]), &json!({"key": ""}));
++    assert_eq!(project_summary(&empty).unwrap()["key"], Value::Null);
+     for entry in [
+         &s["last_done"],
+         &s["next"][0],
+diff --git a/dashboard/src/lib/places.ts b/dashboard/src/lib/places.ts
+index dbc99f2e..7c1f7788 100644
+--- a/dashboard/src/lib/places.ts
++++ b/dashboard/src/lib/places.ts
+@@ -1,7 +1,8 @@
+ // A place's name, from its address (ATM-686): what a back button says it goes back to ("← Board", "← ATM-12",
+ // "← All reviews"). What is open over a page names it first (a task's details, a document), then a review, then the
+ // page itself.
+-import { addressParams, type Item } from './address';
++import { addressParams, itemOf, namesNewTab, reviewOf, type Item } from './address';
++import { ITEM_ICONS } from './tabs';
+ 
+ /** A project's tabs, as their buttons name them (the Kanban is the Board and the graph Dependencies, ATM-751) */
+ const PROJECT_TABS: Record<string, string> = {
+@@ -36,6 +37,54 @@ export const ITEM_NAMES: Record<Item, string> = {
+   analysis: 'Analysis',
+ };
+ 
++/** How a tab names its project: its key, else its name (api/projects lists both) */
++export interface ProjectNaming {
++  key?: string | null;
++  name: string;
++}
++
++/** A scope's name cut to this many characters, when it has no key */
++const SCOPE_MAX = 16;
++
++/** A tab's scope (docs/sidebar-overhaul-design.md §3, ATM-754): the project's key (`ATM`), else its name cut to 16
++ * characters (its ID while the projects aren't listed); All projects is `All` */
++export function scopeName(id: string | null, project: ProjectNaming | undefined): string {
++  if (id === null) return 'All';
++  const key = project?.key?.trim();
++  if (key) return key;
++  const name = project?.name.trim() || id;
++  return name.length > SCOPE_MAX ? `${name.slice(0, SCOPE_MAX - 1)}…` : name;
++}
++
++/** A tab's title and icon (ATM-754) */
++export interface TabTitle {
++  title: string;
++  icon: (typeof ITEM_ICONS)[Item] | 'plus';
++}
++
++/**
++ * The title of a tab showing `address` (docs/sidebar-overhaul-design.md §3, ATM-754): `<scope> - <item>` with the
++ * item's icon (`ATM - Tasks`, `All - Code Reviews`). A review or a document open in the tab names itself instead
++ * (`ATM - CR-134`, `ATM - sidebar-overhaul-design.md`), keeping the item's icon; `/new` is *New Tab*. The landing
++ * page (`/`) is All's Overview. `project` names a project by its ID.
++ */
++export function tabTitle(address: string, project: (id: string) => ProjectNaming | undefined): TabTitle {
++  if (namesNewTab(address)) return { title: 'New Tab', icon: 'plus' };
++  const params = addressParams(address);
++  const id = params.get('project');
++  const scope = scopeName(id, id === null ? undefined : project(id));
++  const item = itemOf(address) ?? 'overview';
++  const icon = ITEM_ICONS[item];
++  const doc = params.get('doc');
++
++  // The file's name, without a link's lines or text (`docs/x.md#L4-L9`)
++  const file = doc?.split('#')[0].split('/').filter(Boolean).at(-1);
++  if (file) return { title: `${scope} - ${file}`, icon };
++  const review = reviewOf(address).review;
++  if (review) return { title: `${scope} - ${review}`, icon };
++  return { title: `${scope} - ${ITEM_NAMES[item]}`, icon };
++}
++
+ /** What `address` shows, in a word or two */
+ export function placeName(address: string): string {
+   const params = addressParams(address);
+diff --git a/dashboard/src/lib/shell/AppTitleBar.svelte b/dashboard/src/lib/shell/AppTitleBar.svelte
+index a80e4363..a0f1bc65 100644
+--- a/dashboard/src/lib/shell/AppTitleBar.svelte
++++ b/dashboard/src/lib/shell/AppTitleBar.svelte
+@@ -19,9 +19,8 @@
+     type AppShell,
+   } from '../api/shell';
+   import { dashboard } from '../state.svelte';
+-  import Logo from '../ui/Logo.svelte';
+-  import ProjectLogo from '../ui/ProjectLogo.svelte';
+   import { appTabs, tabProject, type AppTab } from '../app-tabs.svelte';
++  import { tabTitle, type ProjectNaming } from '../places';
+   import { tabActions } from '../tab-actions';
+   import TitleBarTabs from '../ui/TitleBarTabs.svelte';
+   import AppMenus from './AppMenus.svelte';
+@@ -43,14 +42,20 @@
+     void setWindowTitle(title);
+   });
+ 
+-  /** A tab's name, by the project or review in its own address (T-525, ATM-574): its label's, and its entry's in the
+-   * strip's More menu (ATM-685) */
+-  function tabName(tab: AppTab): string {
+-    const id = tabProject(tab.address);
++  /** How a tab names a project: its key, else its name as its page titles it (kept once shown, T-525) */
++  function naming(id: string): ProjectNaming | undefined {
++    const listed = dashboard.projects.find((p) => p.id === id);
++    return listed ? { key: listed.summary?.key, name: dashboard.nameOf(id) ?? listed.name } : undefined;
++  }
++
++  /** A tab's title and icon, by its own address (ATM-754, docs/sidebar-overhaul-design.md §3: `ATM - Tasks`, `All -
++   * Code Reviews`, `ATM - CR-134`): its label's, and its entry's in the strip's More menu (ATM-685). Every tab, chosen
++   * or not, by its own address, so a label doesn't change when its tab is chosen */
++  const titleOf = (tab: AppTab) => tabTitle(tab.address, naming);
++  /** A review's tab says the review's title on hover (its label names it by its reference) */
++  function hoverOf(tab: AppTab): string | undefined {
+     const review = reviewOf(tab.address).review;
+-    if (review) return reviewWindow.names[`${id}:${review}`] ?? review;
+-    const listed = id === null ? undefined : dashboard.projects.find((p) => p.id === id);
+-    return listed ? (dashboard.nameOf(listed.id) ?? listed.name) : id === null ? 'Projects Overview' : title;
++    return review ? reviewWindow.names[`${tabProject(tab.address)}:${review}`] : undefined;
+   }
+ </script>
+ 
+@@ -76,29 +81,17 @@
+     onclose={(id) => tabs.close(id)}
+     onnew={() => tabs.open()}
+     onmove={tabs.move}
+-    name={tabName}
++    name={(tab) => titleOf(tab).title}
+   >
+     {#snippet label(tab)}
+-      <!-- Every tab, chosen or not, by the project in its own address (T-525): its logo and its name as its page
+-           titles it (kept once shown), so a tab's label doesn't change when it is chosen, while the page still shows
+-           the tab before -->
+-      {@const id = tabProject(tab.address)}
+-      {@const listed = id === null ? undefined : dashboard.projects.find((p) => p.id === id)}
+-      {@const name = tabName(tab)}
+-      {#if reviewOf(tab.address).review}
+-        <!-- A review's tab (ATM-574): its reference and title, no project chooser -->
+-        <Icon name="message-square" size={15} />
+-        {#if tab.id === appTabs.active}<h1 id="dashboard-title">{name}</h1>
+-        {:else}<span class="app-tab-name">{name}</span>{/if}
++      {@const shown = titleOf(tab)}
++      <span class="app-tab-icon" title={hoverOf(tab)}><Icon name={shown.icon} size={15} /></span>
++      {#if tab.id === appTabs.active}
++        <!-- The tab shown: its title is the page's heading. No project chooser: the sidebar's scope does its job, and a
++             tab doesn't change project in place (ATM-753, docs/sidebar-overhaul-design.md §2.3) -->
++        <h1 id="dashboard-title" title={hoverOf(tab)}>{shown.title}</h1>
+       {:else}
+-        {#if listed}<ProjectLogo project={listed} size={16} />{:else}<Logo size={16} />{/if}
+-        {#if tab.id === appTabs.active}
+-          <!-- The tab shown: its name is the page's heading. No project chooser: the sidebar's scope does its job, and a
+-               tab doesn't change project in place (ATM-753, docs/sidebar-overhaul-design.md §2.3) -->
+-          <h1 id="dashboard-title">{name}</h1>
+-        {:else}
+-          <span class="app-tab-name">{name}</span>
+-        {/if}
++        <span class="app-tab-name" title={hoverOf(tab)}>{shown.title}</span>
+       {/if}
+     {/snippet}
+   </TitleBarTabs>
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index ecebce43..fb64cce1 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -10,7 +10,7 @@ test.describe('the dashboard in the atm app', () => {
+     await tasksServer.asApp();
+     tasksServer.use('standard');
+     await page.goto(`/projects/${tasksServer.projectId}/kanban`);
+-    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
++    await expect(page.locator('#dashboard-title')).toHaveText(/^Standard Project - /);
+     await expect(page.locator('#kanban .kanban-card').first()).toBeVisible();
+     expect(tasksServer.httpRequests).toEqual([]);
+   });
+@@ -24,11 +24,11 @@ test.describe('the dashboard in the atm app', () => {
+     tasksServer.use('standard');
+     await page.goto('/');
+     // Two projects: the page opens on the overview
+-    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
++    await expect(page.locator('#dashboard-title')).toHaveText(/^All - /);
+     await expect.poll(() => tasksServer.windowTitles.at(-1)).toBe(await page.title());
+ 
+     await tasksServer.pushLink('/projects/second/list');
+-    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
++    await expect(page.locator('#dashboard-title')).toHaveText(/^Minimal Project - /);
+     await expect.poll(() => tasksServer.windowTitles.at(-1)).toContain('Minimal Project');
+   });
+ 
+@@ -105,8 +105,9 @@ test.describe('the dashboard in the atm app', () => {
+       await page.goto('/');
+       // One row: the tab, labelled with the project's name, and a +; the page's header, its subtitle, Filters and the
+       // charts are inside the tab, under it, without a second title
++      // Its title: the scope and the item, the Overview the landing page opens on (ATM-754)
+       await expect(page.locator('#app-titlebar .title-bar-tab.selected #dashboard-title')).toHaveText(
+-        'Standard Project',
++        'Standard Project - Overview',
+       );
+       await expect(page.locator('#dashboard-title')).toHaveCount(1);
+       await expect(page.locator('#app-tab-new')).toBeVisible();
+@@ -187,7 +188,7 @@ test.describe('the dashboard in the atm app', () => {
+     await page.goto('/');
+     const tabs = page.locator('.title-bar-tab [role="tab"]');
+     await expect(tabs).toHaveCount(2);
+-    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
++    await expect(page.locator('#dashboard-title')).toHaveText(/^Standard Project - /);
+     // What the switches show: the tabs' labels whenever they change, and whether the board was ever empty
+     await page.evaluate(() => {
+       const w = window as unknown as { __labels: string[]; __empty: boolean };
+@@ -201,7 +202,7 @@ test.describe('the dashboard in the atm app', () => {
+       new MutationObserver(() => {
+         if (labels() !== w.__labels.at(-1)) w.__labels.push(labels());
+         // The first project's board (the minimal one's is empty in its active sprint, as it should be)
+-        const first = document.querySelector('#dashboard-title')?.textContent === 'Standard Project';
++        const first = document.querySelector('#dashboard-title')?.textContent?.startsWith('Standard Project - ');
+         if (first && !document.querySelector('#kanban .kanban-card')) w.__empty = true;
+       }).observe(document.body, { subtree: true, childList: true, characterData: true });
+     });
+@@ -215,18 +216,18 @@ test.describe('the dashboard in the atm app', () => {
+     // A project not shown yet: loaded; its tab keeps its name (the workspace's, then its own: the same here)
+     const asked = tasksServer.projectTaskRequests;
+     await tabs.nth(1).click();
+-    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
++    await expect(page.locator('#dashboard-title')).toHaveText(/^Minimal Project - /);
+     await expect.poll(() => tasksServer.projectTaskRequests).toBeGreaterThan(asked);
+     await expect(page.locator('#kanban')).toContainText('To Do');
+     // Back to the first: shown from what was kept, before any answer, so its board is never empty
+     const loads = tasksServer.projectTaskRequests;
+     await tabs.nth(0).click();
+-    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
++    await expect(page.locator('#dashboard-title')).toHaveText(/^Standard Project - /);
+     expect((await seen()).__empty).toBe(false);
+     // Its load still asks (a change since would show), and finds nothing new
+     await expect.poll(() => tasksServer.projectTaskRequests).toBeGreaterThan(loads);
+     // The labels never changed, and the window's title went only to each project's name: never "Task Dashboard"
+-    expect((await seen()).__labels).toEqual(['Standard Project | Minimal Project']);
++    expect((await seen()).__labels).toEqual(['Standard Project - Tasks | Minimal Project - Tasks']);
+     expect(tasksServer.windowTitles.slice(titles)).not.toContain('Task Dashboard');
+   });
+ 
+@@ -380,14 +381,14 @@ test.describe('the dashboard in the atm app', () => {
+       ).toBe(true);
+       await more.click();
+       const items = page.locator('#app-tab-more-menu .title-bar-tabs-menu-item');
+-      await expect(items.first()).toHaveText('Second Project');
++      await expect(items.first()).toHaveText(/^Second Project - /);
+       // Only those out of view: the active one is in view, so it isn't listed
+       const listed = await items.evaluateAll((els) => els.map((e) => e.getAttribute('data-tab')));
+       const active = await page.locator('.title-bar-tab.selected [role="tab"]').getAttribute('id');
+       expect(listed).not.toContain(active!.replace('app-tab-', ''));
+       // Over the page, so a real click reaches it (it was under the page's subtitle at first)
+       await items.first().click({ timeout: 5000 });
+-      await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
++      await expect(page.locator('#dashboard-title')).toHaveText(/^Minimal Project - /);
+       // Shown, and scrolled into view: wholly inside the strip
+       const first = page.locator('.title-bar-tab').first();
+       await expect(first).toHaveClass(/selected/);
+@@ -402,7 +403,7 @@ test.describe('the dashboard in the atm app', () => {
+         .toBe(true);
+       // Now the last tabs are out of view: the menu lists them, not the first
+       await more.click();
+-      await expect(items.first()).not.toHaveText('Minimal Project');
++      await expect(items.first()).not.toHaveText(/^Minimal Project - /);
+       await page.keyboard.press('Escape');
+     },
+   );
+@@ -524,8 +525,9 @@ test.describe('the dashboard in the atm app', () => {
+     await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+     // Opened on its own, its back button goes up to its reviews list
+     await expect(page.locator('.review-back')).toHaveText('Reviews');
+-    // The tab is the review's: its reference and title
+-    await expect(page.locator('#dashboard-title')).toHaveText('CR-2: Trim the names');
++    // The tab is the review's (ATM-754): its project and reference, its title on hover, the item's icon
++    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project - CR-2');
++    await expect(page.locator('#dashboard-title')).toHaveAttribute('title', 'CR-2: Trim the names');
+     // The window's own bar and sidebar toggle are there, as on every tab
+     await expect(page.locator('#app-titlebar')).toBeVisible();
+     // ATM-691 (Hakan): and the ⋯ at its right end, which opens Settings, the document's text size with them
+@@ -547,7 +549,7 @@ test.describe('the dashboard in the atm app', () => {
+     await tabs.nth(0).click();
+     await expect(page.locator('#review-list')).toBeVisible();
+     // And the review's tab keeps its name while another is shown
+-    await expect(page.locator('#app-tab-t2-label')).toContainText('CR-2: Trim the names');
++    await expect(page.locator('#app-tab-t2-label')).toContainText('Standard Project - CR-2');
+     expect(tasksServer.httpRequests).toEqual([]);
+ 
+     // From the review's tab, another project's page from the sidebar: a new tab of its own, labelled by it (ATM-753:
+@@ -559,11 +561,11 @@ test.describe('the dashboard in the atm app', () => {
+     await page.locator('#app-sidebar [data-item="overview"]').click();
+     await expect(tabs).toHaveCount(3);
+     await expect(tabs.nth(2)).toHaveAttribute('aria-selected', 'true');
+-    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
++    await expect(page.locator('#dashboard-title')).toHaveText(/^Minimal Project - /);
+     await expect.poll(() => addressOf(page)).toMatch(/^\/projects\/second\/project(\?|$)/);
+     // The other tabs are as they were
+     await expect(page.locator('#app-tab-t1-label')).toContainText('Standard Project');
+-    await expect(page.locator('#app-tab-t2-label')).toContainText('CR-2: Trim the names');
++    await expect(page.locator('#app-tab-t2-label')).toContainText('Standard Project - CR-2');
+   });
+ 
+   test('tabs are addresses (T-514): + opens the overview, a click goes back, × closes, the menu steps', async ({
+@@ -576,13 +578,13 @@ test.describe('the dashboard in the atm app', () => {
+     tasksServer.link(`/projects/${tasksServer.projectId}/list`);
+     await page.goto('/');
+     const tabs = page.locator('#app-titlebar [role="tab"]');
+-    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
++    await expect(page.locator('#dashboard-title')).toHaveText(/^Standard Project - /);
+     await expect(tabs).toHaveCount(1);
+ 
+     // + : a second tab, on the overview
+     await page.locator('#app-tab-new').click();
+     await expect(tabs).toHaveCount(2);
+-    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
++    await expect(page.locator('#dashboard-title')).toHaveText(/^All - /);
+     await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+     // The other tab keeps its project's name, and a click goes back to where it was
+     await expect(page.locator('#app-tab-t1-label')).toContainText('Standard Project');
+@@ -592,14 +594,14 @@ test.describe('the dashboard in the atm app', () => {
+     // A link while the app runs opens in a new tab
+     await tasksServer.pushLink('/projects/second/list');
+     await expect(tabs).toHaveCount(3);
+-    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
++    await expect(page.locator('#dashboard-title')).toHaveText(/^Minimal Project - /);
+ 
+     // The menu's Previous Tab, then Close Tab: the next tab takes its place
+     await tasksServer.chooseMenu({ kind: 'previous_tab' });
+-    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
++    await expect(page.locator('#dashboard-title')).toHaveText(/^Standard Project - /);
+     await tasksServer.chooseMenu({ kind: 'close_tab' });
+     await expect(tabs).toHaveCount(2);
+-    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
++    await expect(page.locator('#dashboard-title')).toHaveText(/^Minimal Project - /);
+ 
+     // ×, on the last tab left: the window closes
+     await page.locator('.title-bar-tab').nth(0).hover();
+@@ -767,9 +769,9 @@ test.describe('the dashboard in the atm app', () => {
+ 
+     // A new tab: its own history, Back going nowhere
+     await page.locator('#app-tab-new').click();
+-    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
++    await expect(page.locator('#dashboard-title')).toHaveText(/^All - /);
+     await tasksServer.chooseMenu({ kind: 'back' });
+-    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
++    await expect(page.locator('#dashboard-title')).toHaveText(/^All - /);
+     // Back to the first tab: as it was left, and its Back still the list (the switch added nothing)
+     await page.locator('#app-titlebar [role="tab"]').nth(0).click();
+     await expect.poll(at).toBe(`${base}/kanban`);
+@@ -853,7 +855,7 @@ test.describe('the dashboard in the atm app', () => {
+ 
+     // A new tab: its own history, both disabled; back to the first, the arrows follow it
+     await page.locator('#app-tab-new').click();
+-    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
++    await expect(page.locator('#dashboard-title')).toHaveText(/^All - /);
+     await expect(backArrow).toBeDisabled();
+     await expect(forwardArrow).toBeDisabled();
+     await page.locator('#app-titlebar [role="tab"]').nth(0).click();
+@@ -906,13 +908,13 @@ test.describe('the dashboard in the atm app', () => {
+     await expect(scope).toHaveAttribute('data-scope', tasksServer.projectId);
+     await expect(sidebar.locator('.app-sidebar-link')).toHaveCount(6);
+     await expect(tabs).toHaveCount(1);
+-    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
++    await expect(page.locator('#dashboard-title')).toHaveText(/^All - /);
+ 
+     // An item opens its page in a new tab, shown
+     await sidebar.locator('[data-item="tasks"]').click();
+     await expect(tabs).toHaveCount(2);
+     await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+-    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
++    await expect(page.locator('#dashboard-title')).toHaveText(/^Standard Project - /);
+     await expect(page.locator('#kanban')).toBeVisible();
+     await expect(sidebar.locator('[data-item="tasks"]')).toHaveAttribute('aria-current', 'page');
+     // Even the page the tab shows: a new tab again
+@@ -934,7 +936,7 @@ test.describe('the dashboard in the atm app', () => {
+ 
+     // ⌘-click on a task's card opens its details in a new tab
+     await tabs.nth(1).click();
+-    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
++    await expect(page.locator('#dashboard-title')).toHaveText(/^Standard Project - /);
+     const card = page.locator('#kanban .kanban-card').first();
+     const id = await card.getAttribute('data-id');
+     await card.click({ modifiers: ['ControlOrMeta'] });
+@@ -1034,7 +1036,7 @@ test.describe('the dashboard in the atm app', () => {
+     await page.locator('#app-sidebar-scopes [data-scope=""]').click();
+     for (const item of ['overview', 'tasks', 'analysis', 'reviews']) {
+       await page.locator(`#app-sidebar [data-item="${item}"]`).click();
+-      await expect(page.locator('#dashboard-title'), item).toHaveText('Projects Overview');
++      await expect(page.locator('#dashboard-title'), item).toHaveText(/^All - /);
+       await expect(trail.locator('#activity-card'), item).toBeVisible();
+       await expect(trail.locator('#progress-card'), item).toHaveCount(0);
+       await expect(page.locator('#app-titlebar #activity-card'), item).toHaveCount(0);
+@@ -1121,7 +1123,7 @@ test.describe('the dashboard in the atm app', () => {
+     tasksServer.use('standard');
+     await page.goto('/');
+     // From the menu: atm ▸ Connect Your Agents… (the app's footer is a status bar, T-516)
+-    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
++    await expect(page.locator('#dashboard-title')).toHaveText(/^Standard Project - /);
+     await tasksServer.chooseMenu({ kind: 'connect_agents' });
+     const harness = page.locator('.agents-harness[data-harness="claude"]');
+     await expect(harness.locator('.agents-harness-state')).toHaveText('Not connected');
+@@ -1144,7 +1146,7 @@ test.describe('the dashboard in the atm app', () => {
+     await tasksServer.asApp();
+     tasksServer.use('standard');
+     await page.goto('/');
+-    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
++    await expect(page.locator('#dashboard-title')).toHaveText(/^Standard Project - /);
+     await tasksServer.chooseMenu({ kind: 'connect_agents' });
+     const shared = page.locator('.agents-harness[data-harness="agents"]');
+     await expect(shared.locator('.agents-harness-tools')).toHaveText('Found here: Codex, Cursor');
+@@ -1247,7 +1249,7 @@ test.describe('the dashboard in the atm app', () => {
+       .poll(() => tasksServer.savedTabs?.addresses.map((a) => a.split('?')[0]))
+       .toEqual(['/board', first, '/projects/second/list']);
+     // The drag didn't select it: the first project's tab is still shown
+-    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
++    await expect(page.locator('#dashboard-title')).toHaveText(/^Standard Project - /);
+     // A plain click selects: the tab is chosen and the page goes to its project (not its heading's text, which turns
+     // from the listed name to the project's own once its page loads)
+     await tabs.nth(2).locator('[role="tab"]').click();
+@@ -1290,11 +1292,11 @@ test.describe('the dashboard in the atm app', () => {
+     tasksServer.use('standard');
+     tasksServer.link('/projects/second/list');
+     await page.goto('/');
+-    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
++    await expect(page.locator('#dashboard-title')).toHaveText(/^Minimal Project - /);
+     await expect.poll(() => addressOf(page)).toMatch(/^\/projects\/second\/list(\?|$)/);
+ 
+     await tasksServer.pushLink(`/projects/${tasksServer.projectId}/kanban`);
+-    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
++    await expect(page.locator('#dashboard-title')).toHaveText(/^Standard Project - /);
+     // Not a page of the dashboard: the page stays where it is
+     await tasksServer.pushLink('/api/projects');
+     await expect.poll(() => addressOf(page)).toMatch(new RegExp(`^/projects/${tasksServer.projectId}/kanban(\\?|$)`));
+@@ -1342,7 +1344,7 @@ test.describe('the dashboard in the atm app', () => {
+     // Another project (a deep link: in-page, as the project menu goes): the first one's subscription ends, the second's
+     // starts
+     await tasksServer.pushLink('/projects/second/kanban');
+-    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
++    await expect(page.locator('#dashboard-title')).toHaveText(/^Minimal Project - /);
+     await expect
+       .poll(() => [...tasksServer.subscriptions.values()].map((s) => `${s.workspace}/${s.project}`).sort())
+       .toEqual(['default/null', 'default/second']);
+@@ -1373,7 +1375,7 @@ test.describe('the dashboard in the atm app', () => {
+     await bar.getByRole('button', { name: 'Not now' }).click();
+     await expect(bar).toHaveCount(0);
+     await page.reload();
+-    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
++    await expect(page.locator('#dashboard-title')).toHaveText(/^Standard Project - /);
+     await expect.poll(() => tasksServer.updateCalls.filter((c) => c === 'check_update').length).toBe(2);
+     await expect(bar).toHaveCount(0);
+   });
+diff --git a/dashboard/tests/e2e/keys.spec.ts b/dashboard/tests/e2e/keys.spec.ts
+index 18537904..8cdcba24 100644
+--- a/dashboard/tests/e2e/keys.spec.ts
++++ b/dashboard/tests/e2e/keys.spec.ts
+@@ -139,7 +139,8 @@ test.describe('task keys', () => {
+     await expect(tabs).toHaveCount(1);
+     await page.locator(`#detail-panel a.detail-dep-item.foreign[data-foreign="${FOREIGN}"]`).click();
+     await expect(tabs).toHaveCount(2);
+-    await expect(page.locator('#dashboard-title')).toHaveText('Learn Forever Blog');
++    // Its tab is its project's (ATM-754): listed here without a summary, so by its name, cut to 16 characters
++    await expect(page.locator('#dashboard-title')).toHaveText(/^Learn Forever B… - /);
+     await expect.poll(() => addressOf(page)).toMatch(/^\/projects\/3f2a9c1e(\/[a-z]+)?\?task=LFB-5$/);
+     await expect(page.locator('#detail-key')).toHaveText('LFB-5');
+   });
+diff --git a/dashboard/tests/unit/AppTitleBar.component.test.ts b/dashboard/tests/unit/AppTitleBar.component.test.ts
+index 89155ea1..b1912172 100644
+--- a/dashboard/tests/unit/AppTitleBar.component.test.ts
++++ b/dashboard/tests/unit/AppTitleBar.component.test.ts
+@@ -34,20 +34,28 @@ describe('AppTitleBar (T-513)', () => {
+     expect(container.querySelector('#app-sidebar-toggle')).not.toBeNull();
+     expect(container.querySelector('#window-buttons')).toBeNull();
+     expect(container.querySelector('#app-menus')).toBeNull();
+-    expect(container.querySelector('#dashboard-title')).toHaveTextContent('Standard Project');
++    // Titled by its scope and item (ATM-754): a project not listed by its ID
++    expect(container.querySelector('#dashboard-title')).toHaveTextContent('fixture - Tasks');
+     // Open, the traffic lights and the button are over the sidebar's strip instead
+     dashboard.sidebarOpen = true;
+     await waitFor(() => expect(container.querySelector('.app-titlebar.system-buttons')).toBeNull());
+     expect(container.querySelector('#app-sidebar-toggle')).toBeNull();
+   });
+ 
+-  it('names each tab by the page in its own address, chosen or not (T-525): the overview’s tab is the overview', async () => {
++  it('names each tab by the page in its own address, chosen or not (T-525, ATM-754): its scope, its item and its icon', async () => {
+     app({ system_menu_bar: true, system_window_buttons: true });
++    dashboard.projects = [
++      { id: 'fixture', name: 'Standard Project', path: '', missing: false, summary: { key: 'STD' } },
++    ] as unknown as typeof dashboard.projects;
+     appTabs.open('/');
+     const { container } = render(AppTitleBar, { title: 'Standard Project' });
+-    // The page still shows the project (its title), but the chosen tab is the overview's: named so at once
+-    expect(container.querySelector('#dashboard-title')).toHaveTextContent('Projects Overview');
+-    expect(container.querySelector('.app-tab-name')).toHaveTextContent('Standard Project');
++    // The page still shows the project (its title), but the chosen tab is All's Overview: named so at once
++    expect(container.querySelector('#dashboard-title')).toHaveTextContent('All - Overview');
++    // The other, the project's board: by its key, with the item's icon
++    expect(container.querySelector('.app-tab-name')).toHaveTextContent('STD - Tasks');
++    const icons = [...container.querySelectorAll('.app-tab-icon svg')].map((s) => s.getAttribute('class'));
++    expect(icons).toEqual([expect.stringContaining('square-kanban'), expect.stringContaining('layout-dashboard')]);
++    dashboard.projects = [];
+   });
+ 
+   it('on Windows and Linux draws its own buttons and the app’s menus', async () => {
+diff --git a/dashboard/tests/unit/places.test.ts b/dashboard/tests/unit/places.test.ts
+index dd5100ac..87363ea1 100644
+--- a/dashboard/tests/unit/places.test.ts
++++ b/dashboard/tests/unit/places.test.ts
+@@ -1,5 +1,67 @@
+ import { describe, expect, it } from 'vitest';
+-import { placeName } from '../../src/lib/places';
++import { placeName, scopeName, tabTitle, type ProjectNaming } from '../../src/lib/places';
++
++// A tab's title (ATM-754, docs/sidebar-overhaul-design.md §3): `<scope> - <item>` with the item's icon
++describe('tabTitle', () => {
++  const projects: Record<string, ProjectNaming> = {
++    atm: { key: 'ATM', name: 'Agentic Task Manager' },
++    blog: { key: null, name: 'Blog' },
++    long: { name: 'A project with a long name' },
++  };
++  const of = (id: string) => projects[id];
++  const title = (address: string) => tabTitle(address, of);
++
++  it('names each item of a project by its key, with the item’s icon', () => {
++    expect(title('/projects/atm')).toEqual({ title: 'ATM - Overview', icon: 'layout-dashboard' });
++    expect(title('/projects/atm/project')).toEqual({ title: 'ATM - Overview', icon: 'layout-dashboard' });
++    expect(title('/projects/atm/inbox')).toEqual({ title: 'ATM - Inbox', icon: 'inbox' });
++    for (const view of ['kanban', 'list', 'graph'])
++      expect(title(`/projects/atm/${view}`), view).toEqual({ title: 'ATM - Tasks', icon: 'square-kanban' });
++    expect(title('/projects/atm/reviews')).toEqual({ title: 'ATM - Code Reviews', icon: 'file-diff' });
++    expect(title('/projects/atm/documents')).toEqual({ title: 'ATM - Documents', icon: 'file-text' });
++    for (const view of ['progress', 'agents'])
++      expect(title(`/projects/atm/${view}`), view).toEqual({ title: 'ATM - Analysis', icon: 'trending-up' });
++    // A task open over the page doesn't change it
++    expect(title('/projects/atm/kanban?task=ATM-1').title).toBe('ATM - Tasks');
++  });
++
++  it('All projects is All, on each of its items; the landing page is All’s Overview', () => {
++    expect(title('/projects')).toEqual({ title: 'All - Overview', icon: 'layout-dashboard' });
++    expect(title('/')).toEqual({ title: 'All - Overview', icon: 'layout-dashboard' });
++    for (const tab of ['board', 'list']) expect(title(`/${tab}`).title, tab).toBe('All - Tasks');
++    expect(title('/reviews')).toEqual({ title: 'All - Code Reviews', icon: 'file-diff' });
++    for (const tab of ['progress', 'agents']) expect(title(`/${tab}`).title, tab).toBe('All - Analysis');
++    expect(title('/w/work/reviews').title).toBe('All - Code Reviews');
++  });
++
++  it('a review or a document names itself, keeping the item’s icon', () => {
++    expect(title('/projects/atm/reviews/CR-134')).toEqual({ title: 'ATM - CR-134', icon: 'file-diff' });
++    expect(title('/projects/atm/reviews/CR-134/diffs?round=2').title).toBe('ATM - CR-134');
++    expect(title('/projects/atm/kanban?doc=docs/sidebar-overhaul-design.md')).toEqual({
++      title: 'ATM - sidebar-overhaul-design.md',
++      icon: 'square-kanban',
++    });
++    expect(title('/projects/atm/documents?doc=README.md').title).toBe('ATM - README.md');
++    expect(title(`/projects/atm/kanban?doc=${encodeURIComponent('docs/x.md#L4-L9')}`).title).toBe('ATM - x.md');
++    // A document over All's page
++    expect(title('/board?doc=docs/a.md').title).toBe('All - a.md');
++  });
++
++  it('a project without a key by its name, cut to 16 characters; one not listed by its ID', () => {
++    expect(title('/projects/blog/kanban').title).toBe('Blog - Tasks');
++    expect(title('/projects/long/kanban').title).toBe('A project with … - Tasks');
++    expect(scopeName('long', projects.long)).toHaveLength(16);
++    expect(title('/projects/gone/kanban').title).toBe('gone - Tasks');
++    expect(scopeName('x', { key: '  ', name: 'Named' })).toBe('Named');
++    expect(scopeName('x', { name: '' })).toBe('x');
++    expect(scopeName(null, undefined)).toBe('All');
++  });
++
++  it('the new tab is New Tab', () => {
++    expect(title('/new')).toEqual({ title: 'New Tab', icon: 'plus' });
++    expect(title('/w/work/new').title).toBe('New Tab');
++  });
++});
+ 
+ // A place's name from its address (lib/places.ts, ATM-686): what a review's back button says it goes back to
+ 
+diff --git a/docs/multi-project-api.md b/docs/multi-project-api.md
+index 7b6f6f93..b348f426 100644
+--- a/docs/multi-project-api.md
++++ b/docs/multi-project-api.md
+@@ -525,6 +525,7 @@ and `key_final` too, as the task views give them; a project before task keys has
+ | `next` | up to 2 tasks `atm loop next` would hand out, in its order, by the same code (`loop_order` in `claims.py`): tasks back from review first, then to do; dependencies done, not claimed, not done or waiting in another worktree, not done together with the user; in the loop's default selection, the active sprint's or else every task; most urgent priority, lowest ID. `{ id, name }`. The project card lists them; the project's Kanban marks the first *Next up* (T-321), so the dashboard never applies the loop's rule itself. `atm project summary` prints this whole summary for the project it runs in |
+ | `last_done` | the done-kind task with the latest `completed_at`: `{ id, name, completed_at }`, or `null` |
+ | `description` | `meta.description` (an optional line about the project), trimmed and capped at 200 characters; `null` without one. The card shows it only as the name's tooltip |
++| `key` | `meta.key`, the project's short name its tasks' keys start with (`ATM`); `null` without one (or an empty one); absent from an older server. The app's tabs are titled by it (`ATM - Tasks`, ATM-754) |
+ | `git.branch` | the main worktree's checked-out branch (from `.git/HEAD`; a detached HEAD's short SHA), or `null` outside git |
+ | `git.pr` | the latest PR recorded on the tasks (`atm vcs pr`; the highest number): `{ number, url, state }`, `url` as recorded (or `null`), `state` `"merged"` once a task of it has `merged_at` (`atm vcs pushed`), else `"open"`; `null` without one. No forge is asked, and there is no CI state |
+ | `needs_you.review` | review-kind tasks, but those a reviewer approved or asked changes for (back with the agent), and those waiting through a code review counted in `code_reviews` (ATM-606: counted once) |
+diff --git a/tests/scripts/serve.test.mjs b/tests/scripts/serve.test.mjs
+index ee128a8d..2ee8b844 100644
+--- a/tests/scripts/serve.test.mjs
++++ b/tests/scripts/serve.test.mjs
+@@ -297,6 +297,8 @@ describe('serve', () => {
+       needs_you_reviews: [],
+       git: { branch: 'main', pr: null },
+       description: null,
++      // No meta.key (ATM-754)
++      key: null,
+       last_activity: '2026-03-15T11:00:00Z',
+       completions_14d: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
+       // The All projects board (T-257): T-7 ready; T-5 waits for a review; T-6 blocked on the user before T-8 on an

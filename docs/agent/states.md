@@ -10,9 +10,13 @@ several statuses, `--status <id>` picks one; otherwise atm uses the first listed
 - `in_progress`: start it (its dependencies must be done; an archived task counts as done). `atm loop next --claim`
   does this for the next task.
 - `done --note '<one-line outcome>'`: finished, once its work is committed.
-- `in_review --note '<what the reviewer should check>'`: ask for a review when the task's review mode needs one
+- `in_review --note '<what the reviewer should check>'`: in review, when the task's review mode needs one
   (`blocker`: reviewed before anything goes on; `async`: reviewed while agents go on; `batch`: in the end-of-sprint
-  review, so it can be done; `none`).
+  review, so it can be done; `none`). **An agent's review is a code review**: its review puts the task in review
+  (`atm review create --task <key> …`, `atm review round CR-N`; `atm docs reviews`), and atm refuses an agent's
+  `in_review` with no review the task waits on (waiting, live or sent back), as the dashboard decides a task only
+  through its review. Work with no change to review is blocked on the user instead. A person may still ask for a
+  review this way and decide it themselves; `atm doctor` names a task in review that no review waits on.
 - `blocked --on user|agent --question '…' [--question '…']`: it can't go on without a decision. Whoever decides
   answers with `atm task state <id> todo --answer '…'` (one per question).
 - `todo`: back to to do: `--reason '…'` when it failed, `--note '<handoff>'` when you stop early; a done or skipped

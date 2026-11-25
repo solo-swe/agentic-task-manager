@@ -29,7 +29,8 @@
     inTab?: boolean;
     /** Inside the tab, before the subtitle, on its line (a project's search and Filters) */
     lead?: Snippet;
-    /** Inside the tab, at the right end of the subtitle's line (a project's Progress and Activity, T-530) */
+    /** Inside the tab, at the right end of the subtitle's line: its pills (a project's Progress and Activity, T-530;
+     * All projects' activity, ATM-736) */
     trail?: Snippet;
   }
   let { title, selector = true, subtitle, charts, below, inTab = false, lead, trail }: Props = $props();
@@ -56,7 +57,7 @@
 
 {#if inTab}
   <!-- In the app, inside the tab (T-513): only the subtitle line, on top of the tab's content; the tab label has the
-       title, its logo and the project picker, the app's title bar the charts and the ⋯ (AppTitleBar) -->
+       title, its logo and the project picker, the app's title bar the ⋯ (AppTitleBar); the pills are the tab's (trail) -->
   <header class="topbar in-tab">
     <div class="in-tab-row">
       {@render lead?.()}

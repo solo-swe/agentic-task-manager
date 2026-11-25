@@ -1,8 +1,9 @@
 // Which page the dashboard shows: a project (/projects/<id>), the overview of all projects (/projects, /board, …), or,
 // with neither in the address, the landing page's choice (docs/multi-project-dashboard-proposal.md 3.5). The address's
 // other parameters (the tab, a dialog, a document) are kept (lib/address.ts).
-import { addressParams, formatAddress, isOverviewTab, OVERVIEW_TABS, type OverviewTab } from './address';
+import { addressParams, formatAddress, isOverviewTab, namesNewTab, OVERVIEW_TABS, type OverviewTab } from './address';
 import type { ProjectEntry } from './load';
+import { VIEWS } from './tabs';
 
 export { isOverviewTab, OVERVIEW_TABS, type OverviewTab };
 
@@ -12,7 +13,9 @@ export type Route =
   /** No project is registered (or none of them is there): how to add one */
   | { page: 'none' }
   /** The address names a project the server doesn't list, or one whose folder is gone */
-  | { page: 'unknown'; id: string };
+  | { page: 'unknown'; id: string }
+  /** The app's new tab (`/new`, ATM-755): its chooser of scope and item, no project's page */
+  | { page: 'new' };
 
 /** The project an address names, if any. */
 export function projectOf(address: string): string | null {
@@ -37,12 +40,20 @@ export function overviewTabOf(address: string): OverviewTab | null {
  * project. */
 export function withProject(address: string, id: string | null, overviewTab?: OverviewTab): string {
   const params = addressParams(address);
-  // Whose tab the view is: the page's the address names; on the landing page (neither named), by its value
+  // Whose tab the view is: the page's the address names. On the landing page (neither named) it is kept where it is
+  // one of the page's to go to: a project's `list` and All's are both "list" (ATM-752)
   const view = params.get('view');
-  const projectView = params.has('project') || (!params.has('overview') && !isOverviewTab(view));
+  const toProject = id !== null;
+  const keep = params.has('project')
+    ? toProject
+    : params.has('overview')
+      ? !toProject
+      : toProject
+        ? (VIEWS as readonly (string | null)[]).includes(view)
+        : isOverviewTab(view);
   params.delete('project');
   params.delete('overview');
-  if (view !== null && projectView !== (id !== null)) params.delete('view');
+  if (view !== null && !keep) params.delete('view');
   // A task's details are its project's, and so is a review open on its page (ATM-581: from a review, another project
   // opened its CR of the same number); that project opens at its Reviews list
   if (id !== projectOf(address)) {
@@ -81,6 +92,8 @@ export function routeFor(projects: readonly ProjectEntry[], address: string): Ro
     return present.some((p) => p.id === named) ? { page: 'project', id: named } : { page: 'unknown', id: named };
   }
   if (namesOverview(address)) return { page: 'overview' };
+  // The new tab is its own page, whatever the projects: never the landing page's one project (ATM-755)
+  if (namesNewTab(address)) return { page: 'new' };
   if (present.length === 0) return { page: 'none' };
   if (present.length === 1) return { page: 'project', id: present[0].id };
   return { page: 'overview' };

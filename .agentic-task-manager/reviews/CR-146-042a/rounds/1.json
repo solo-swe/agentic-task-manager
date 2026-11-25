@@ -1,0 +1,27 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "6189a18380cca367a9f46e476d44b1e5a143feaa",
+    "head": "83a749ae522675cabb86ce777a69dac9fb0380c3"
+  },
+  "files": [
+    {
+      "path": ".github/workflows/release.yml",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/ci-workflow.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/security-architecture.md",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:ba530ebb",
+  "at": "2026-11-24T02:54:27Z"
+}

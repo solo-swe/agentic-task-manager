@@ -5,14 +5,17 @@
 //! module of their own: Tauri's command macros can't be defined at a library's root.)
 //!
 //! By area (ATM-711): [`state`] (what the commands share, their errors and filters), [`reads`] (the workspaces,
-//! projects, tasks, documents and files), [`reviews`] (the review and draft commands) and [`windows`] (the
-//! subscriptions, the links and the agents' skills). Each is re-exported here, so every command keeps its path.
+//! projects, tasks, documents and files), [`reviews`] (the review and draft commands), [`inbox`] (the inbox's,
+//! ATM-761) and [`windows`] (the subscriptions, the links and the agents' skills). Each is re-exported here, so every
+//! command keeps its path.
 
+mod inbox;
 mod reads;
 mod reviews;
 mod state;
 mod windows;
 
+pub use inbox::*;
 pub use reads::*;
 pub use reviews::*;
 pub use state::*;

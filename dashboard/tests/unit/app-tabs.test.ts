@@ -188,14 +188,14 @@ describe('what the tabs do (T-514)', () => {
     return { tabs, actions: tabActions(tabs, win), win, went };
   }
 
-  it('a new tab goes to the overview; select, step and close go where the tab is', () => {
+  it('a new tab goes to the chooser of scope and item (ATM-755); select, step and close go where the tab is', () => {
     const { tabs, actions, went } = setup();
     actions.open();
     actions.open('/projects/b');
     actions.select(tabs.tabs[0].id);
     actions.step(1);
     actions.close();
-    expect(went).toEqual(['/', '/projects/b', '/projects/a', '/', '/projects/b']);
+    expect(went).toEqual(['/new', '/projects/b', '/projects/a', '/new', '/projects/b']);
   });
 
   it('closing the last tab closes the window', () => {

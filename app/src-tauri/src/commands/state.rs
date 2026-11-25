@@ -255,7 +255,7 @@ impl From<ReviewFilters> for atm_lib::review_pages::ReviewQuery {
 
 /// What a project's tasks are filtered by: the REST route's query parameters (`atm task list`'s options); what isn't
 /// given keeps everything.
-#[derive(Debug, Clone, Default, Deserialize, Type)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, Type)]
 #[serde(default)]
 #[allow(clippy::struct_excessive_bools)] // reason: each is one of `atm task list`'s flags
 pub struct TaskFilters {
@@ -337,6 +337,39 @@ pub(super) enum JsonShape {
 #[derive(Debug, Clone, PartialEq, Serialize, Type)]
 #[serde(transparent)]
 pub struct Json(#[specta(type = JsonShape)] pub Value);
+
+/// A reload's answer (ATM-768): its tag, what the answer depends on hashed as atm serve hashes its `ETag`, and the
+/// answer, or none when the tag the page gave (`known`, the one it last got) still matches: the browser's `304`, so an
+/// unchanged reload carries no body across.
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
+pub struct Fresh {
+    /// What the answer depends on, hashed: the page gives it back on its next reload.
+    pub tag: String,
+    /// The answer; none when the page has it already.
+    pub body: Option<Json>,
+}
+
+impl Fresh {
+    /// The answer of what depends on `parts`: none when `known` is still its tag, else `body`'s, worked out only then.
+    ///
+    /// # Errors
+    /// `body`'s.
+    pub(super) fn of(
+        known: Option<&str>,
+        parts: &Value,
+        body: impl FnOnce() -> Result<Value, AppError>,
+    ) -> Result<Self, AppError> {
+        let digest = atm_common::sha1::sha1_hex(atm_common::py::to_json(parts).as_bytes());
+        let tag = format!("\"{}\"", &digest[..16]);
+        if known == Some(tag.as_str()) {
+            return Ok(Self { tag, body: None });
+        }
+        Ok(Self {
+            body: Some(Json(body()?)),
+            tag,
+        })
+    }
+}
 
 /// What a subscription's channel says: something it watches changed, so the UI reads it again.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]

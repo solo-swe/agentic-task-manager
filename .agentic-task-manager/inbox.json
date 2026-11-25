@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "next": 2,
+  "items": [
+    {
+      "id": "IN-1",
+      "text": "testing, ignore",
+      "state": "discarded",
+      "created_at": "2026-11-24T17:35:44Z",
+      "created_by": "Hakan Serce",
+      "updated_at": "2026-11-24T20:42:20Z",
+      "reason": "testing",
+      "decided_at": "2026-11-24T20:42:20Z",
+      "decided_by": "Hakan Serce"
+    }
+  ]
+}

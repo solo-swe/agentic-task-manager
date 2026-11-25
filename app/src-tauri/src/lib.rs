@@ -21,10 +21,11 @@ use session::{reload_window, restored_tabs, save_tabs};
 
 use commands::{
     AppState, agents_status, claims, connect_agents, document, file, list_projects,
-    list_workspaces, logo, project_stats, project_tasks, search, subscribe_links,
-    subscribe_project, subscribe_working_copy, subscribe_workspace, unsubscribe, version,
-    worktrees,
+    list_workspaces, logo, project_documents, project_stats, project_tasks, search,
+    subscribe_links, subscribe_project, subscribe_working_copy, subscribe_workspace, unsubscribe,
+    version, worktrees,
 };
+use commands::{add_inbox_item, decide_inbox_item, edit_inbox_item, project_inbox};
 use commands::{
     add_review_comment, add_review_draft, close_review, create_review, list_review_drafts,
     poke_review, project_review, project_reviews, remove_review_draft, reply_to_review_comment,
@@ -84,6 +85,11 @@ pub fn commands() -> tauri_specta::Builder<tauri::Wry> {
         add_review_draft,
         update_review_draft,
         remove_review_draft,
+        project_inbox,
+        project_documents,
+        add_inbox_item,
+        edit_inbox_item,
+        decide_inbox_item,
         subscribe_links::<tauri::Wry>,
         check_update,
         install_update,

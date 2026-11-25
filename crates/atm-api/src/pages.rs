@@ -1,14 +1,15 @@
 //! The dashboard's pages (T-429; `dashboard/src/lib/address.ts` `PAGE_PATH`): the same page at each, which shows the
 //! one its path names. Nothing else is served under them: a project's ID or tab is only text the page reads.
 
-/// A page's path without its leading `/` and an optional trailing `/`: the root, `board`, `progress`, `agents`,
-/// `reviews` (every project's, ATM-575), `projects`, `projects/<id>`, `projects/<id>/<tab>` (a tab in lowercase
-/// letters) or a review's page, `projects/<id>/reviews/<CR>` (its reference: letters, digits, `-` and `.`, as
-/// `CR-8.2`), on its Overview, or `…/<CR>/diffs` or `…/<CR>/comments`, its other sub-tabs (ATM-697).
+/// A page's path without its leading `/` and an optional trailing `/`: the root, `board`, `list` (every project's
+/// tasks as a list, ATM-751), `progress`, `agents`, `reviews` (every project's, ATM-575), `new` (the app's new tab,
+/// ATM-751), `projects`, `projects/<id>`, `projects/<id>/<tab>` (a tab in lowercase letters: `inbox` and `documents`
+/// too) or a review's page, `projects/<id>/reviews/<CR>` (its reference: letters, digits, `-` and `.`, as `CR-8.2`),
+/// on its Overview, or `…/<CR>/diffs` or `…/<CR>/comments`, its other sub-tabs (ATM-697).
 fn is_form(rest: &str) -> bool {
     if matches!(
         rest,
-        "" | "board" | "progress" | "agents" | "reviews" | "projects"
+        "" | "board" | "list" | "progress" | "agents" | "reviews" | "new" | "projects"
     ) {
         return true;
     }
@@ -79,6 +80,13 @@ mod tests {
             "/projects/abcd1234/reviews/CR-7/comments",
             "/projects/abcd1234/reviews/CR-7/diffs/",
             "/w/work/projects/abcd1234/reviews/CR-8.2/diffs",
+            // The sidebar overhaul's pages (ATM-751): All's List, the app's new tab, a project's Inbox and Documents
+            "/list",
+            "/w/work/list/",
+            "/new",
+            "/w/work/new",
+            "/projects/abcd1234/inbox",
+            "/projects/abcd1234/documents",
         ] {
             assert!(is_page(page), "{page}");
         }
@@ -107,6 +115,9 @@ mod tests {
             "/projects/abcd1234/reviews/<x>",
             "/projects/abcd1234/list/CR-7",
             "/projects//reviews/CR-7",
+            "/new/x",
+            "/list/x",
+            "/news",
             "",
         ] {
             assert!(!is_page(other), "{other}");

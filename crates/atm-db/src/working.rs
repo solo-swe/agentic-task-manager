@@ -28,6 +28,50 @@ pub struct Working {
     before_store: Map<String, Value>,
     archive_first: bool,
     deferred: Option<Error>,
+    /// The inbox and its archive (docs/inbox-design.md, ATM-759), each read on first use
+    inbox: Lazy,
+    inbox_archive: Lazy,
+    inbox_archive_first: bool,
+}
+
+/// A document a change reads only if it asks for it, and the store writes only if it changed.
+struct Lazy {
+    load: Box<dyn Fn() -> Result<Value>>,
+    value: Option<Value>,
+    before: Option<Value>,
+}
+
+impl Lazy {
+    fn new(load: Box<dyn Fn() -> Result<Value>>) -> Self {
+        Self {
+            load,
+            value: None,
+            before: None,
+        }
+    }
+
+    fn get(&mut self) -> Result<&mut Value> {
+        if self.value.is_none() {
+            let value = (self.load)()?;
+            self.before = Some(value.clone());
+            self.value = Some(value);
+        }
+        Ok(self
+            .value
+            .as_mut()
+            .expect("the document was read just above"))
+    }
+
+    fn changed(&self) -> Option<&Value> {
+        self.value
+            .as_ref()
+            .filter(|v| Some(*v) != self.before.as_ref())
+    }
+}
+
+/// An empty inbox, for a store that has none (the memory store, until it is given one)
+fn no_inbox() -> Box<dyn Fn() -> Result<Value>> {
+    Box::new(|| Ok(atm_common::inbox::empty_inbox()))
 }
 
 impl Working {
@@ -53,7 +97,62 @@ impl Working {
             before_store,
             archive_first: false,
             deferred: None,
+            inbox: Lazy::new(no_inbox()),
+            inbox_archive: Lazy::new(no_inbox()),
+            inbox_archive_first: false,
         }
+    }
+
+    /// The same, reading the inbox and its archive with `inbox` and `archive` (only when the change asks for them).
+    #[must_use]
+    pub fn with_inbox(
+        mut self,
+        inbox: Box<dyn Fn() -> Result<Value>>,
+        archive: Box<dyn Fn() -> Result<Value>>,
+    ) -> Self {
+        self.inbox = Lazy::new(inbox);
+        self.inbox_archive = Lazy::new(archive);
+        self
+    }
+
+    /// The inbox document (`{version, next, items}`), to read and change in place; read on first use.
+    ///
+    /// # Errors
+    /// When the inbox exists but can't be read.
+    pub fn inbox(&mut self) -> Result<&mut Value> {
+        self.inbox.get()
+    }
+
+    /// The inbox's archive, the same way.
+    ///
+    /// # Errors
+    /// When it exists but can't be read.
+    pub fn inbox_archive(&mut self) -> Result<&mut Value> {
+        self.inbox_archive.get()
+    }
+
+    /// This change moves items into the inbox's archive: it is written first, so a crash between the two writes
+    /// leaves an item in both, never in neither (as the tasks' archive, DM-5.2).
+    pub fn moving_into_inbox_archive(&mut self) {
+        self.inbox_archive_first = true;
+    }
+
+    /// Whether the inbox's archive goes first.
+    #[must_use]
+    pub fn inbox_archive_first(&self) -> bool {
+        self.inbox_archive_first
+    }
+
+    /// The inbox, when it was asked for and changed: the store writes it then, and only then.
+    #[must_use]
+    pub fn changed_inbox(&self) -> Option<&Value> {
+        self.inbox.changed()
+    }
+
+    /// The inbox's archive, the same way.
+    #[must_use]
+    pub fn changed_inbox_archive(&self) -> Option<&Value> {
+        self.inbox_archive.changed()
     }
 
     /// The working tasks, to read and change in place.
@@ -177,6 +276,37 @@ mod tests {
             .push(json!({"id": "T-0"}));
         w.moving_into_archive();
         assert!(w.changed_archive().is_some() && w.archive_first());
+    }
+
+    #[test]
+    fn the_inbox_and_its_archive_are_read_only_when_asked_and_written_only_when_changed() {
+        let reads = std::rc::Rc::new(std::cell::Cell::new(0));
+        let counted = std::rc::Rc::clone(&reads);
+        let mut w = working().with_inbox(
+            Box::new(move || {
+                counted.set(counted.get() + 1);
+                Ok(json!({"version": 1, "next": 2, "items": [{"id": "IN-1", "state": "created"}]}))
+            }),
+            Box::new(|| Err(Error::failed("unreadable"))),
+        );
+        assert!(w.changed_inbox().is_none() && w.changed_inbox_archive().is_none());
+        assert_eq!(reads.get(), 0, "nothing read until asked");
+        w.inbox().unwrap();
+        w.inbox().unwrap();
+        assert_eq!(reads.get(), 1, "read once");
+        assert!(w.changed_inbox().is_none(), "read, not changed");
+        w.inbox().unwrap()["next"] = json!(3);
+        assert_eq!(w.changed_inbox().unwrap()["next"], 3);
+        assert!(
+            w.inbox_archive().is_err(),
+            "an archive that can't be read is an error"
+        );
+        assert!(!w.inbox_archive_first());
+        w.moving_into_inbox_archive();
+        assert!(w.inbox_archive_first());
+        // Without one given, an empty inbox
+        let mut plain = working();
+        assert_eq!(plain.inbox().unwrap()["items"], json!([]));
     }
 
     #[test]

@@ -1,0 +1,629 @@
+diff --git a/app/src-tauri/build.rs b/app/src-tauri/build.rs
+index ca05fc1c..2e96fc13 100644
+--- a/app/src-tauri/build.rs
++++ b/app/src-tauri/build.rs
+@@ -47,6 +47,7 @@ fn main() {
+         "update_review_draft",
+         "remove_review_draft",
+         "project_inbox",
++        "project_documents",
+         "add_inbox_item",
+         "edit_inbox_item",
+         "decide_inbox_item",
+diff --git a/app/src-tauri/capabilities/main.json b/app/src-tauri/capabilities/main.json
+index 79ad381f..2975a94a 100644
+--- a/app/src-tauri/capabilities/main.json
++++ b/app/src-tauri/capabilities/main.json
+@@ -36,6 +36,7 @@
+     "allow-update-review-draft",
+     "allow-remove-review-draft",
+     "allow-project-inbox",
++    "allow-project-documents",
+     "allow-add-inbox-item",
+     "allow-edit-inbox-item",
+     "allow-decide-inbox-item",
+diff --git a/app/src-tauri/src/commands/reads.rs b/app/src-tauri/src/commands/reads.rs
+index 5cb35373..74ffb343 100644
+--- a/app/src-tauri/src/commands/reads.rs
++++ b/app/src-tauri/src/commands/reads.rs
+@@ -209,6 +209,15 @@ pub fn document_of(
+     })
+ }
+ 
++/// `GET …/projects/<p>/documents` without a path (`?q=`): its documents, its submodules, and how many more past the
++/// cap (ATM-765).
++///
++/// # Errors
++/// No such workspace or project; a query longer than 200 characters.
++pub fn documents_of(workspaces: &Workspaces, w: &str, p: &str, q: &str) -> Result<Value, AppError> {
++    Ok(member(workspaces, w, p)?.documents(q)?)
++}
++
+ /// `GET …/projects/<p>/reviews`: its reviews the filters keep, which need the user.
+ ///
+ /// # Errors
+@@ -413,6 +422,27 @@ pub async fn document(
+     .map(Json)
+ }
+ 
++/// A project's documents, for the Documents page (ATM-765): those `q` names (titles and paths), at most 500.
++///
++/// # Errors
++/// As [`documents_of`].
++#[tauri::command]
++#[specta::specta]
++pub async fn project_documents(
++    state: State<'_, AppState>,
++    workspace: String,
++    project: String,
++    q: Option<String>,
++) -> Result<Json, AppError> {
++    documents_of(
++        &state.workspaces,
++        &workspace,
++        &project,
++        q.as_deref().unwrap_or_default(),
++    )
++    .map(Json)
++}
++
+ /// A project's reviews, for the reviews page.
+ ///
+ /// # Errors
+diff --git a/app/src-tauri/src/integration_tests.rs b/app/src-tauri/src/integration_tests.rs
+index 786ad45c..fed0bed8 100644
+--- a/app/src-tauri/src/integration_tests.rs
++++ b/app/src-tauri/src/integration_tests.rs
+@@ -3,9 +3,9 @@
+ //! not in `tests/`: the commands' handler macros and the app's context are this crate's.)
+ 
+ use super::commands::{
+-    AppError, Fresh, ReviewFilters, TaskFilters, claims_of, document_of, file_of, fresh_claims,
+-    fresh_projects, fresh_tasks, fresh_worktrees, logo_of, projects_of, review_of, reviews_of,
+-    search_in, stats_of, tasks_of, workspaces_of, worktrees_of,
++    AppError, Fresh, ReviewFilters, TaskFilters, claims_of, document_of, documents_of, file_of,
++    fresh_claims, fresh_projects, fresh_tasks, fresh_worktrees, logo_of, projects_of, review_of,
++    reviews_of, search_in, stats_of, tasks_of, workspaces_of, worktrees_of,
+ };
+ use super::*;
+ use serde_json::{Value, json};
+@@ -203,6 +203,34 @@ fn a_reload_with_nothing_new_carries_no_body() {
+     std::fs::remove_dir_all(&home).expect("clean up");
+ }
+ 
++/// ATM-765: the documents' listing the app answers is its REST route's: every one, those a query names, a query too
++/// long refused by both
++#[test]
++fn the_documents_listing_answers_what_its_rest_route_does() {
++    let home = a_state_with_a_project("listing");
++    let workspaces = atm_lib::Workspaces::at(&home);
++    let p = "/api/v2/workspaces/work/projects/abcd1234/documents";
++    for query in ["", "q=read", "q=nothing"] {
++        let q = query.strip_prefix("q=").unwrap_or_default();
++        let listed = documents_of(&workspaces, "work", "abcd1234", q).expect("the documents");
++        let (status, body, _) = rest(&home, p, query);
++        assert_eq!((status, body), (200, listed), "{query}");
++    }
++    let all = documents_of(&workspaces, "work", "abcd1234", "").expect("the documents");
++    assert_eq!(all["documents"][0]["path"], json!("README.md"), "{all}");
++    let long = "x".repeat(201);
++    assert!(matches!(
++        documents_of(&workspaces, "work", "abcd1234", &long),
++        Err(AppError::Invalid(_))
++    ));
++    assert_eq!(rest(&home, p, &format!("q={long}")).0, 400);
++    assert!(matches!(
++        documents_of(&workspaces, "work", "ffff0000", ""),
++        Err(AppError::NotFound(_))
++    ));
++    std::fs::remove_dir_all(&home).expect("clean up");
++}
++
+ /// ADR-003 §5: each read the app's commands make answers what its REST route does
+ #[test]
+ fn each_command_answers_what_its_rest_route_does() {
+@@ -368,6 +396,11 @@ fn expected_answers(
+             with(json!({"path": "README.md"})),
+             document_of(workspaces, "work", "abcd1234", "README.md", None).expect("document"),
+         ),
++        (
++            "project_documents",
++            with(json!({"q": "read"})),
++            documents_of(workspaces, "work", "abcd1234", "read").expect("documents"),
++        ),
+         (
+             "project_reviews",
+             with(json!({"filters": {}})),
+@@ -497,6 +530,7 @@ fn the_main_windows_capability_lets_it_call_the_commands() {
+             claims,
+             worktrees,
+             document,
++            project_documents,
+             file,
+             logo,
+             project_reviews,
+diff --git a/app/src-tauri/src/lib.rs b/app/src-tauri/src/lib.rs
+index 7cace26d..73330ac7 100644
+--- a/app/src-tauri/src/lib.rs
++++ b/app/src-tauri/src/lib.rs
+@@ -21,9 +21,9 @@ use session::{reload_window, restored_tabs, save_tabs};
+ 
+ use commands::{
+     AppState, agents_status, claims, connect_agents, document, file, list_projects,
+-    list_workspaces, logo, project_stats, project_tasks, search, subscribe_links,
+-    subscribe_project, subscribe_working_copy, subscribe_workspace, unsubscribe, version,
+-    worktrees,
++    list_workspaces, logo, project_documents, project_stats, project_tasks, search,
++    subscribe_links, subscribe_project, subscribe_working_copy, subscribe_workspace, unsubscribe,
++    version, worktrees,
+ };
+ use commands::{add_inbox_item, decide_inbox_item, edit_inbox_item, project_inbox};
+ use commands::{
+@@ -86,6 +86,7 @@ pub fn commands() -> tauri_specta::Builder<tauri::Wry> {
+         update_review_draft,
+         remove_review_draft,
+         project_inbox,
++        project_documents,
+         add_inbox_item,
+         edit_inbox_item,
+         decide_inbox_item,
+diff --git a/crates/atm-api/src/routes/documents.rs b/crates/atm-api/src/routes/documents.rs
+index 5979324e..2647ac1b 100644
+--- a/crates/atm-api/src/routes/documents.rs
++++ b/crates/atm-api/src/routes/documents.rs
+@@ -24,6 +24,11 @@ pub(super) fn get_document(
+ ) -> Response {
+     let path = parameter(query, "path");
+     let at = parameter(query, "at");
++    // No path (and no revision, which names a document): the project's documents (ATM-765, docs/documents-design.md
++    // §5)
++    if path.is_empty() && at.is_empty() {
++        return list_documents(project, &parameter(query, "q"), request);
++    }
+     if !at.is_empty() {
+         // A full object ID only, as a round records its sides (ATM-671, audit H6): never a name or an expression git
+         // would work out (`:/<regex>` searches every commit's message)
+@@ -66,6 +71,26 @@ pub(super) fn get_document(
+     }
+ }
+ 
++/// `GET …/projects/<p>/documents` without `path` (`?q=` names some: titles and paths): the project's documents, its
++/// submodules, and how many more there were past the cap (`{documents, submodules, more}`). The `ETag` is what the
++/// listing is made from (the files git lists, their versions, the commit) and the query, so the page's poll gets a 304
++/// without the listing being made again; a project without git isn't tagged.
++fn list_documents(project: &dyn ProjectSource, q: &str, request: &HeaderMap) -> Response {
++    let tag = match project.documents_stamp() {
++        Ok(stamp) => stamp.map(|stamp| etag(&json!(["documents", stamp, q]))),
++        Err(e) => return error_response(&e),
++    };
++    if let Some(tag) = &tag
++        && unchanged(request, tag)
++    {
++        return not_modified(tag, &[]);
++    }
++    match project.documents(q) {
++        Ok(listing) => ok_json(&listing, tag.as_deref()),
++        Err(e) => error_response(&e),
++    }
++}
++
+ /// What a file at a full object ID is sent with: this browser only, for a year, never asked again. Kept per atm
+ /// version (ATM-672, audit H9): the page asks for it with its version (`&v=`, `lib/api/http.ts`), so another atm's
+ /// answer is another address, and the tag names the version too
+@@ -308,19 +333,114 @@ mod tests {
+         }
+     }
+ 
+-    /// No path, or one the project doesn't have: atm-docs is asked, and says no
++    /// A path the project doesn't have: atm-docs is asked, and says no
+     #[test]
+-    fn no_path_or_an_unknown_one_is_atm_docs_to_refuse() {
+-        for (query, path) in [
++    fn an_unknown_path_is_atm_docs_to_refuse() {
++        let (project, calls) = bound(fake(PATH, Ok(file((1, 1))), None));
++        let answer = answer(get_document(project.as_ref(), "path=gone.md", &plain()));
++        assert_eq!(answer.status, StatusCode::NOT_FOUND);
++        assert_eq!(calls.taken(), [Call::FileVersion("gone.md".into())]);
++    }
++
++    /// ATM-765: no path (none, blank, or other parameters only) is the project's documents, atm-lib's listing as it
++    /// is, for the query given (decoded), tagged by its stamp and the query
++    #[test]
++    fn no_path_is_the_listing_of_the_query_tagged_by_its_stamp() {
++        for (query, q) in [
+             ("", ""),
+             ("path=", ""),
+             ("other=x", ""),
+-            ("path=gone.md", "gone.md"),
++            ("q=read+me", "read me"),
++            ("path=&q=%2Fdocs", "/docs"),
+         ] {
+-            let (project, calls) = bound(fake(PATH, Ok(file((1, 1))), None));
++            let (project, calls) = bound(FakeProject::default());
+             let answer = answer(get_document(project.as_ref(), query, &plain()));
+-            assert_eq!(answer.status, StatusCode::NOT_FOUND, "{query}");
+-            assert_eq!(calls.taken(), [Call::FileVersion(path.into())], "{query}");
++            assert_eq!(answer.status, StatusCode::OK, "{query}");
++            assert_eq!(
++                answer.json(),
++                json!({"documents": [{"path": "README.md", "title": "Read me"}], "submodules": [], "more": 0}),
++                "{query}"
++            );
++            assert_eq!(answer.header("content-type"), "application/json");
++            assert_eq!(
++                answer.tag(),
++                etag(&json!(["documents", "s1", q])),
++                "{query}"
++            );
++            assert_eq!(
++                calls.taken(),
++                [Call::DocumentsStamp, Call::Documents(q.into())],
++                "{query}"
++            );
++        }
++    }
++
++    /// Asked again with its tag: a 304 without the listing being made, until the stamp or the query changes
++    #[test]
++    fn the_listing_is_a_304_without_being_made_until_its_stamp_or_query_changes() {
++        let (project, calls) = bound(FakeProject::default());
++        let tag = answer(get_document(project.as_ref(), "q=a", &plain())).tag();
++        calls.taken();
++        let again = answer(get_document(project.as_ref(), "q=a", &having(&tag)));
++        assert_eq!(again.status, StatusCode::NOT_MODIFIED);
++        assert_eq!(again.body, b"");
++        assert_eq!(again.tag(), tag);
++        assert_eq!(calls.taken(), [Call::DocumentsStamp]);
++        // Another query: the listing
++        assert_eq!(
++            answer(get_document(project.as_ref(), "q=b", &having(&tag))).status,
++            StatusCode::OK
++        );
++        // The documents changed: the listing
++        let (moved, _) = bound(FakeProject {
++            documents_stamp: Ok(Some("s2".into())),
++            ..FakeProject::default()
++        });
++        assert_eq!(
++            answer(get_document(moved.as_ref(), "q=a", &having(&tag))).status,
++            StatusCode::OK
++        );
++    }
++
++    /// Without git there is no stamp: the listing, untagged, every time
++    #[test]
++    fn a_listing_without_a_stamp_is_never_tagged() {
++        let (project, calls) = bound(FakeProject {
++            documents_stamp: Ok(None),
++            ..FakeProject::default()
++        });
++        let first = answer(get_document(project.as_ref(), "", &having("\"any\"")));
++        assert_eq!(first.status, StatusCode::OK);
++        assert_eq!(first.tag(), "");
++        assert_eq!(
++            calls.taken(),
++            [Call::DocumentsStamp, Call::Documents(String::new())]
++        );
++    }
++
++    /// What atm-lib refuses, for the stamp or the listing (a query too long is its `Invalid`): its status, no tag
++    #[test]
++    fn a_listing_atm_lib_refuses_is_its_status() {
++        for (error, status) in refusals() {
++            let (stamp_refused, calls) = bound(FakeProject {
++                documents_stamp: Err(error.clone()),
++                ..FakeProject::default()
++            });
++            let answer_ = answer(get_document(stamp_refused.as_ref(), "", &plain()));
++            assert_eq!(answer_.status, status, "{error}");
++            assert_eq!(answer_.json(), json!({"error": error.to_string()}));
++            assert_eq!(
++                calls.taken(),
++                [Call::DocumentsStamp],
++                "the listing isn't made"
++            );
++            let (listing_refused, _) = bound(FakeProject {
++                documents: Err(error.clone()),
++                ..FakeProject::default()
++            });
++            let answer_ = answer(get_document(listing_refused.as_ref(), "q=x", &plain()));
++            assert_eq!(answer_.status, status, "{error}");
++            assert_eq!(answer_.tag(), "", "{error}");
+         }
+     }
+ 
+diff --git a/crates/atm-api/src/routes/source.rs b/crates/atm-api/src/routes/source.rs
+index 5ebbfd33..d4b369ca 100644
+--- a/crates/atm-api/src/routes/source.rs
++++ b/crates/atm-api/src/routes/source.rs
+@@ -91,6 +91,17 @@ pub trait ProjectSource {
+     /// # Errors
+     /// As [`ProjectSource::file_version`].
+     fn document(&self, path: &str) -> Result<Value>;
++    /// Its documents, for the Documents page (ATM-765): those `query` names (titles and paths), at most 500, with its
++    /// submodules and how many more there were (`{documents, submodules, more}`).
++    ///
++    /// # Errors
++    /// A project that can't be opened; a query longer than 200 characters (`Invalid`).
++    fn documents(&self, query: &str) -> Result<Value>;
++    /// What its documents' listing is made from, for its `ETag`: none without git (then it isn't tagged).
++    ///
++    /// # Errors
++    /// A project that can't be opened.
++    fn documents_stamp(&self) -> Result<Option<String>>;
+     /// The image at `path`, and its content type.
+     ///
+     /// # Errors
+@@ -352,6 +363,14 @@ impl ProjectSource for Member {
+         Member::document(self, path)
+     }
+ 
++    fn documents(&self, query: &str) -> Result<Value> {
++        Member::documents(self, query)
++    }
++
++    fn documents_stamp(&self) -> Result<Option<String>> {
++        Member::documents_stamp(self)
++    }
++
+     fn image(&self, path: &str) -> Result<(Vec<u8>, &'static str)> {
+         Member::image(self, path)
+     }
+diff --git a/crates/atm-api/src/routes/test_support.rs b/crates/atm-api/src/routes/test_support.rs
+index 75851f59..a063a758 100644
+--- a/crates/atm-api/src/routes/test_support.rs
++++ b/crates/atm-api/src/routes/test_support.rs
+@@ -41,6 +41,8 @@ pub(super) enum Call {
+     FileVersion(String),
+     Head,
+     Document(String),
++    Documents(String),
++    DocumentsStamp,
+     Image(String),
+     DocumentAt(String, String),
+     ImageAt(String, String),
+@@ -163,6 +165,10 @@ pub(super) struct FakeProject {
+     pub inbox: Result<Value>,
+     /// What a change of its inbox answers (the item); an error refuses to open the project as the user
+     pub inbox_changes: Result<Result<Value>>,
++    /// What listing its documents answers (ATM-765)
++    pub documents: Result<Value>,
++    /// What its documents' listing is made from: none without git
++    pub documents_stamp: Result<Option<String>>,
+ }
+ 
+ impl Default for FakeProject {
+@@ -185,6 +191,10 @@ impl Default for FakeProject {
+             live_stamp: Ok(None),
+             inbox: Ok(json!({"items": [], "created": 0, "discarded": 0, "injected": 0})),
+             inbox_changes: Ok(Ok(json!({"id": "IN-1", "state": "created"}))),
++            documents: Ok(
++                json!({"documents": [{"path": "README.md", "title": "Read me"}], "submodules": [], "more": 0}),
++            ),
++            documents_stamp: Ok(Some("s1".into())),
+         }
+     }
+ }
+@@ -387,6 +397,16 @@ impl ProjectSource for Bound<FakeProject> {
+         self.file(path)?.document
+     }
+ 
++    fn documents(&self, query: &str) -> Result<Value> {
++        self.calls.note(Call::Documents(query.into()));
++        self.fake.documents.clone()
++    }
++
++    fn documents_stamp(&self) -> Result<Option<String>> {
++        self.calls.note(Call::DocumentsStamp);
++        self.fake.documents_stamp.clone()
++    }
++
+     fn document_at(&self, path: &str, revision: &str) -> Result<Value> {
+         self.calls
+             .note(Call::DocumentAt(path.into(), revision.into()));
+diff --git a/dashboard/src/lib/api/ipc.ts b/dashboard/src/lib/api/ipc.ts
+index cae3b2cc..28857a31 100644
+--- a/dashboard/src/lib/api/ipc.ts
++++ b/dashboard/src/lib/api/ipc.ts
+@@ -103,6 +103,9 @@ function projectCall(workspace: string, project: string, route: string[], query:
+       };
+     }
+     case 'documents':
++      // No path (and no revision): the project's documents (ATM-765), as the route answers then
++      if (!query.get('path') && !query.get('at'))
++        return { command: 'project_documents', args: { ...at, q: query.get('q') || undefined } };
+       return { command: 'document', args: { ...at, path: query.get('path') ?? '', at: query.get('at') || undefined } };
+     case 'files':
+       return {
+diff --git a/dashboard/tests/unit/ipc.test.ts b/dashboard/tests/unit/ipc.test.ts
+index 504dd972..38be67b2 100644
+--- a/dashboard/tests/unit/ipc.test.ts
++++ b/dashboard/tests/unit/ipc.test.ts
+@@ -211,13 +211,23 @@ describe('the IPC transport (T-457)', () => {
+     expect(filters('?release=&type=')).toMatchObject({ release: undefined, type: undefined });
+   });
+ 
+-  it('a document or file route without a path asks for the empty one (the command refuses it)', () => {
+-    expect(callFor('/api/v1/projects/p1/documents')!.args).toEqual({
+-      workspace: 'default',
+-      project: 'p1',
+-      path: '',
+-      at: undefined,
++  it('the documents route without a path is the listing (ATM-765), with its query; with a revision, a document', () => {
++    expect(callFor('/api/v1/projects/p1/documents')).toEqual({
++      command: 'project_documents',
++      args: { workspace: 'default', project: 'p1', q: undefined },
+     });
++    expect(callFor('/api/v2/workspaces/w/projects/p1/documents?path=&q=read%20me')).toEqual({
++      command: 'project_documents',
++      args: { workspace: 'w', project: 'p1', q: 'read me' },
++    });
++    // A revision names a document: the command refuses its empty path, as the route does
++    expect(callFor('/api/v1/projects/p1/documents?at=3fa1')).toEqual({
++      command: 'document',
++      args: { workspace: 'default', project: 'p1', path: '', at: '3fa1' },
++    });
++  });
++
++  it('a file route without a path asks for the empty one (the command refuses it)', () => {
+     expect(callFor('/api/v1/projects/p1/files')!.args.path).toBe('');
+     expect(callFor('/api/search')!.args.q).toBe('');
+     expect(callFor('/api/v2/workspaces/w/search')!.args.q).toBe('');
+diff --git a/docs/multi-project-api.md b/docs/multi-project-api.md
+index 0f7babbe..190e5ca9 100644
+--- a/docs/multi-project-api.md
++++ b/docs/multi-project-api.md
+@@ -30,6 +30,7 @@ parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev
+ | `GET /p/<id>/logo` | that project's logo image (§2.3) | yes |
+ | `GET /api/v1/projects/<id>/tasks` | that project's tasks, each with what atm derives for it (§2.5) | yes |
+ | `GET /api/v1/projects/<id>/documents?path=<p>` | a file of that project, for the document viewer (§2.6); `&at=<rev>` as a commit or tree has it | yes (with `at`, only at a full object ID, kept by the browser) |
++| `GET /api/v1/projects/<id>/documents` (no `path`; `?q=`) | the project's documents, for the Documents page (§2.6, ATM-765) | yes |
+ | `GET /api/v1/projects/<id>/files?path=<p>` | an image file of that project, its bytes (§2.6) | yes |
+ | `GET /api/v1/projects/<id>/reviews?q=&status=&…` | that project's code reviews (§2.9) | no |
+ | `GET /api/v1/projects/<id>/reviews/<CR>?round=&against=` | a review's page for one view of it (§2.9) | no |
+@@ -40,6 +41,7 @@ parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev
+ | `GET /api/v2/workspaces/<w>/search?q=<text>` | the tasks matching a search, in its projects (§2.4) | no |
+ | `GET /api/v2/workspaces/<w>/projects/<id>/tasks` | as `api/v1/projects/<id>/tasks`, in that workspace | yes |
+ | `GET /api/v2/workspaces/<w>/projects/<id>/documents?path=`, `files?path=` | as the v1 file routes (§2.6) | yes |
++| `GET /api/v2/workspaces/<w>/projects/<id>/documents` (no `path`; `?q=`) | as v1's documents listing (§2.6) | yes |
+ | `GET /api/v2/workspaces/<w>/projects/<id>/claims`, `worktrees`, `logo` | as `/p/<id>/claims.json`, `worktrees.json`, `logo` | yes |
+ | `GET /api/v2/workspaces/<w>/projects/<id>/reviews`, `reviews/<CR>` | as the v1 review routes (§2.9) | no |
+ | `POST`, `PATCH`, `PUT` `/api/v2/workspaces/<w>/projects/<id>/reviews/…` | a change to that project's code reviews, from atm's own page (§2.9) | no |
+@@ -291,6 +293,14 @@ reads the working copy through the version control. `path` is relative to the pr
+   With `&at=<revision>` (ATM-689: a review's image file, its old and new sides), the image as that commit or tree has
+   it, through `documents?…&at=`'s checks and then the image's; kept as `documents?…&at=` is at a full object ID
+   (tagged by the revision and the path, `immutable`), neither tagged nor kept at any other revision.
++- `documents` without `path` (and without `at`; ATM-765, docs/documents-design.md §5) answers the project's documents,
++  for the Documents page: `{documents: [{path, title, bytes, modified_at, tracked}], submodules: [{path,
++  checked_out}], more}`. Its Markdown files (`*.md`, `*.markdown`) that git lists, tracked or new (`tracked` false),
++  never one git ignores, in `.git` or `.agentic-task-manager`, or reached through a symlink; a submodule's documents
++  among them by their path from the project's root; at most 500, `more` saying how many were left out. `?q=` (at most
++  200 characters, else `400`) keeps those whose title or path holds it, before the cap. The ETag is what the listing is
++  made from (the files git lists, their versions, the commit) and the query; a project outside git has none. Read-only,
++  answered by atm-docs' `list_documents` through atm-lib, as the app's `project_documents` command (I27).
+ - Refused: a malformed path (`..`, absolute, empty parts, a backslash, over 512 characters) `400`; git's or atm's own
+   folder (`.git`, `.agentic-task-manager`), an environment file (`.env`, `.env.local`; not `.env.example`), a key file
+   (`*.pem`, `id_rsa*`, …) or one git ignores `403` (other hidden files, `.github/` or `.gitignore`, are shown: CR-3); a missing file, or one reached through a
+diff --git a/docs/security-architecture.md b/docs/security-architecture.md
+index a39a9aaf..f5a1ea5c 100644
+--- a/docs/security-architecture.md
++++ b/docs/security-architecture.md
+@@ -83,7 +83,7 @@ with the task that adds it.
+ | #   | Invariant                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Enforced by                                                                                                                                             |
+ | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+ | I10 | **Loopback only, matching Host**: the server binds 127.0.0.1 and refuses any other Host header (DNS rebinding)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `serve.test.mjs` "a request for another Host is refused"                                                                                                |
+-| I11 | **Nothing changes state over HTTP but a project's reviews and its inbox, from atm's own page** (the inbox, ATM-761: `POST …/projects/<p>/inbox` `{text}`, `PATCH …/inbox/<IN>` `{text}`, `POST …/inbox/<IN>/decisions` `{decision: discarded, reason}` or `{decision: restored}`, v2's paths only; no route injects an item, an agent's `atm inbox inject` does; behind exactly the review routes' checks below, each body an object read with `deny_unknown_fields`, acting as the user, so atm-lib's refusal of an agent adding or restoring holds; its read `GET …/inbox?state=&archived=`, v2's and v1's, with an `ETag`); and no other site's page has the server read for it (ATM-671: reads write `recent.json` and run git): a GET or HEAD but the page itself and `/assets/` is refused (403) when the browser says it comes from another site (`Sec-Fetch-Site: cross-site`) or its `Origin` isn't on this machine: GET and HEAD everywhere, and POST, PATCH, PUT and DELETE only on the review routes (ATM-572, docs/code-review-design.md §3.12: `POST …/projects/<p>/reviews`, `PATCH …/reviews/<CR>`, `PUT …/reviews/<CR>/tasks`, `POST …/reviews/<CR>/decisions`, `POST …/reviews/<CR>/comments`, `PATCH …/comments/<c>`, `POST …/comments/<c>/replies`, `POST …/reviews/<CR>/pokes` (ATM-611: a review-level comment marked as a poke, with the same checks; an agent's identity is refused), `POST …/reviews/<CR>/drafts`, `PATCH …/drafts/<d>` and `DELETE …/drafts/<d>` (ATM-612: the user's drafts, written to their own state folder's `drafts/`, a file per project, review and person, **never to the repository or the review's folder**, so no other person, no agent and no commit sees them until a decision sends them as the user's comments; DELETE only there, with the same checks and an empty JSON body; an agent's identity is refused; their read, `GET …/reviews/<CR>/drafts`, and the review's page answer the asking user's drafts only)). Each such request must carry the Host check (I10), an `Origin` that is the server's own, this start's session token (random, 244 bits, in the page atm serves as `<meta name="atm-session">`, which another site can't read) in `X-Atm-Session`, and a JSON body (at most 1 MB; a plain form can't send one); no CORS preflight is answered (OPTIONS is 405), so no other site's page can send the header. Each route is one atm-lib call (`review_requests`), acting as the user at the machine (their git name: never an agent's identity, whatever environment started the server), each body read with `deny_unknown_fields`, texts at most 100,000 characters, files inside the repository, revisions resolved to commits before git sees them (never an option); a review's decisions keep its rules (its author can't decide it, I23). The one other exception is a choice of view (ADR-003 §5, T-456): `api/v2/workspaces/<w>/projects` records `<w>` as the last opened workspace in the state folder's `recent.json` (only a workspace that exists, its ID checked as a file name, written under the state folder's lock and only when it changes; never task data). The v2 routes (`api/v2/workspaces`, and per workspace `…/<w>/projects`, `…/<w>/search` and `…/<w>/projects/<p>/tasks | documents                                                                                                                                               | files | claims | worktrees | logo | reviews | reviews/<CR>`) are the v1 routes below for any workspace, through the same atm-lib reads with the same checks; an unknown workspace or project is 404. The v1 routes: the page, `api/projects`, `api/search`(reads every project's`tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), a project's `claims.json`, `worktrees.json`and`logo`(computed through atm-lib; the task files themselves are no longer served as stored, T-374),`api/v1/projects/<id>/tasks`(a registered project's tasks through atm-lib, read-only: the same Host check, the size limit, and the task folder's symlink checks of`find_paths`, which refuse the whole project; filters are query parameters, compared, never run or used as paths, T-364), `/assets/…`(atm's own files the page loads, the CompMD runtime, its sandbox's frame documents and the Mermaid pack:`.js`, `.wasm`and`.html`only, embedded in the binary from the build's`dashboard/dist/assets/`, named by plain segments; readable cross-origin, a frame document sandboxed, T-284, T-285; one policy for every answer there, CompMD's bundle and the 404s included: `nosniff`, CORP cross-origin, `Access-Control-Allow-Origin: *`, HEAD answered as GET, ATM-672), `api/v1/projects/<id>/reviews`and`…/reviews/<CR>`(a project's code reviews and a review's page, read through atm-lib as the user, ATM-574),`api/v1/projects/<id>/documents?path=`(with`&at=<rev>`: as a commit or tree has it, the revision resolved before git sees it, the same path checks, ATM-574; kept by the browser per atm version, its address and tag naming it, ATM-672) and `…/files?path=`(a project's file for the document viewer, through atm-lib, T-392: a relative, normalized path, never in `.git` or `.agentic-task-manager`, not an environment file (`.env`, `.env.local`, …; `.env.example`, `.sample` and `.template` are shown), not a key file, not a file git ignores; other hidden files, `.github/` or `.gitignore`, are shown (ATM-598, CR-3) (in a git submodule, the submodule's own repository decides, T-408; any git error refuses the file), under 1 MB (5 MB for an image), reached through no symlink;`files`only an image whose bytes match its type, sandboxed; `files` with `&at=<rev>` too (a review's image file's sides, ATM-689): the image as that commit or tree has it, through the same checks as `documents?…&at=` and then the image's),`whoami`and`/_app/version.json` (the page's own version and nothing else, for SvelteKit's check for a new deployment, T-495) | `serve.test.mjs` "inbox (ATM-761)…" (each route as the user; refused without the token, with another, from another origin, as a form, with an unknown field, as a list, as an injection, too large; v1 takes no change), atm-api's `routes::inbox` tests; "review changes (ATM-572)…" (each route; refused without the token, with another, from another origin, as a form, with an unknown field; no preflight answered; ATM-612's drafts kept in the state folder, not the repository, a DELETE refused without the token), "review reads (ATM-574)…" (read-only; a revision that is an option or no object refused); atm-api's `routes` unit tests (each route on a fake atm-lib), "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "api/search", "api/v1/projects/<id>/tasks", "/assets/ serves the CompMD runtime atm embeds…", "a project's files for the document viewer…", "files in a git submodule…"; `crates/atm-docs/src/lib.rs`'s tests (moved from atm-lib, ATM-570; a file at a revision passes the same checks, its revision never an option for git) |
++| I11 | **Nothing changes state over HTTP but a project's reviews and its inbox, from atm's own page** (the inbox, ATM-761: `POST …/projects/<p>/inbox` `{text}`, `PATCH …/inbox/<IN>` `{text}`, `POST …/inbox/<IN>/decisions` `{decision: discarded, reason}` or `{decision: restored}`, v2's paths only; no route injects an item, an agent's `atm inbox inject` does; behind exactly the review routes' checks below, each body an object read with `deny_unknown_fields`, acting as the user, so atm-lib's refusal of an agent adding or restoring holds; its read `GET …/inbox?state=&archived=`, v2's and v1's, with an `ETag`); and no other site's page has the server read for it (ATM-671: reads write `recent.json` and run git): a GET or HEAD but the page itself and `/assets/` is refused (403) when the browser says it comes from another site (`Sec-Fetch-Site: cross-site`) or its `Origin` isn't on this machine: GET and HEAD everywhere, and POST, PATCH, PUT and DELETE only on the review routes (ATM-572, docs/code-review-design.md §3.12: `POST …/projects/<p>/reviews`, `PATCH …/reviews/<CR>`, `PUT …/reviews/<CR>/tasks`, `POST …/reviews/<CR>/decisions`, `POST …/reviews/<CR>/comments`, `PATCH …/comments/<c>`, `POST …/comments/<c>/replies`, `POST …/reviews/<CR>/pokes` (ATM-611: a review-level comment marked as a poke, with the same checks; an agent's identity is refused), `POST …/reviews/<CR>/drafts`, `PATCH …/drafts/<d>` and `DELETE …/drafts/<d>` (ATM-612: the user's drafts, written to their own state folder's `drafts/`, a file per project, review and person, **never to the repository or the review's folder**, so no other person, no agent and no commit sees them until a decision sends them as the user's comments; DELETE only there, with the same checks and an empty JSON body; an agent's identity is refused; their read, `GET …/reviews/<CR>/drafts`, and the review's page answer the asking user's drafts only)). Each such request must carry the Host check (I10), an `Origin` that is the server's own, this start's session token (random, 244 bits, in the page atm serves as `<meta name="atm-session">`, which another site can't read) in `X-Atm-Session`, and a JSON body (at most 1 MB; a plain form can't send one); no CORS preflight is answered (OPTIONS is 405), so no other site's page can send the header. Each route is one atm-lib call (`review_requests`), acting as the user at the machine (their git name: never an agent's identity, whatever environment started the server), each body read with `deny_unknown_fields`, texts at most 100,000 characters, files inside the repository, revisions resolved to commits before git sees them (never an option); a review's decisions keep its rules (its author can't decide it, I23). The one other exception is a choice of view (ADR-003 §5, T-456): `api/v2/workspaces/<w>/projects` records `<w>` as the last opened workspace in the state folder's `recent.json` (only a workspace that exists, its ID checked as a file name, written under the state folder's lock and only when it changes; never task data). The v2 routes (`api/v2/workspaces`, and per workspace `…/<w>/projects`, `…/<w>/search` and `…/<w>/projects/<p>/tasks | documents                                                                                                                                               | files | claims | worktrees | logo | reviews | reviews/<CR>`) are the v1 routes below for any workspace, through the same atm-lib reads with the same checks; an unknown workspace or project is 404. The v1 routes: the page, `api/projects`, `api/search`(reads every project's`tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), a project's `claims.json`, `worktrees.json`and`logo`(computed through atm-lib; the task files themselves are no longer served as stored, T-374),`api/v1/projects/<id>/tasks`(a registered project's tasks through atm-lib, read-only: the same Host check, the size limit, and the task folder's symlink checks of`find_paths`, which refuse the whole project; filters are query parameters, compared, never run or used as paths, T-364), `/assets/…`(atm's own files the page loads, the CompMD runtime, its sandbox's frame documents and the Mermaid pack:`.js`, `.wasm`and`.html`only, embedded in the binary from the build's`dashboard/dist/assets/`, named by plain segments; readable cross-origin, a frame document sandboxed, T-284, T-285; one policy for every answer there, CompMD's bundle and the 404s included: `nosniff`, CORP cross-origin, `Access-Control-Allow-Origin: *`, HEAD answered as GET, ATM-672), `api/v1/projects/<id>/reviews`and`…/reviews/<CR>`(a project's code reviews and a review's page, read through atm-lib as the user, ATM-574),`api/v1/projects/<id>/documents` without `path` (ATM-765: the project's documents' listing for the Documents page, read-only through atm-lib (atm-docs' `list_documents`): only the Markdown files git lists, tracked or new, never one git ignores, in `.git` or `.agentic-task-manager`, or through a symlink, git run with literal pathspecs (I7); at most 500, `?q=` at most 200 characters, compared as text; tagged by what the listing is made from), `api/v1/projects/<id>/documents?path=`(with`&at=<rev>`: as a commit or tree has it, the revision resolved before git sees it, the same path checks, ATM-574; kept by the browser per atm version, its address and tag naming it, ATM-672) and `…/files?path=`(a project's file for the document viewer, through atm-lib, T-392: a relative, normalized path, never in `.git` or `.agentic-task-manager`, not an environment file (`.env`, `.env.local`, …; `.env.example`, `.sample` and `.template` are shown), not a key file, not a file git ignores; other hidden files, `.github/` or `.gitignore`, are shown (ATM-598, CR-3) (in a git submodule, the submodule's own repository decides, T-408; any git error refuses the file), under 1 MB (5 MB for an image), reached through no symlink;`files`only an image whose bytes match its type, sandboxed; `files` with `&at=<rev>` too (a review's image file's sides, ATM-689): the image as that commit or tree has it, through the same checks as `documents?…&at=` and then the image's),`whoami`and`/_app/version.json` (the page's own version and nothing else, for SvelteKit's check for a new deployment, T-495) | `serve.test.mjs` "a project's documents' listing (ATM-765)…" (only the files git lists, not an ignored one or one through a symlink, its ETag, refused from another site, read-only), atm-api's `routes::documents` listing tests; `serve.test.mjs` "inbox (ATM-761)…" (each route as the user; refused without the token, with another, from another origin, as a form, with an unknown field, as a list, as an injection, too large; v1 takes no change), atm-api's `routes::inbox` tests; "review changes (ATM-572)…" (each route; refused without the token, with another, from another origin, as a form, with an unknown field; no preflight answered; ATM-612's drafts kept in the state folder, not the repository, a DELETE refused without the token), "review reads (ATM-574)…" (read-only; a revision that is an option or no object refused); atm-api's `routes` unit tests (each route on a fake atm-lib), "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "api/search", "api/v1/projects/<id>/tasks", "/assets/ serves the CompMD runtime atm embeds…", "a project's files for the document viewer…", "files in a git submodule…"; `crates/atm-docs/src/lib.rs`'s tests (moved from atm-lib, ATM-570; a file at a revision passes the same checks, its revision never an option for git) |
+ | I12 | **Only the registered projects' data is served**; never git's or atm's own folders, in any case (`.GIT`, and Windows' `.git.`), a logo neither, nor one through a symbolic link, and a logo that can't be read is a 404; a file at a revision is named by a full object ID only (ATM-671): their task data, read from regular files only, never through a symlink (a task folder with a linked file is refused whole, checked on every request), and, for the document viewer, files of their working copy under the checks of I11, never a hidden, ignored or key file, nothing outside the project (a git submodule's checkout is inside it; a file in it is ignored by the submodule's own rules)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "a project's files for the document viewer…" |
+ | I13 | **Every response has `nosniff` and CORP same-origin, but `/assets/`'s, which are `nosniff`, CORP cross-origin and readable from anywhere, each one, a refusal too (I11, ATM-672); a response that can't be built is a bare 500 with them, never a 200 without; the page has the strict CSP** (own scripts by hash, and the CompMD runtime from the asset folder only, `http://<the page's host>/assets/compmd/`, which may compile WebAssembly, `'wasm-unsafe-eval'`; never `'self'`, `'unsafe-eval'` or inline scripts; frames only CompMD's sandbox frames from the same folder, `frame-src`; `connect-src 'self'`, `frame-ancestors 'none'`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `serve.test.mjs` "security headers"; `dashboard/tests/e2e/security.spec.ts`; `security-headers.test.ts`                                                 |
+ 
+@@ -111,7 +111,7 @@ with the task that adds it.
+ | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+ | I25 | **Only the window's own page calls the app, and only its commands**: the main window's capability allows exactly the commands in `build.rs`'s manifest, one permission each, no core or plugin API and no remote URL; a page from anywhere else, CompMD's sandbox frames included, is refused. Tauri counts every scheme the app registers as local, so the capability alone covers `compmd:` and `atm:` too: the app's invoke handler (`navigation::guarded`) answers only a call whose `Origin` is the app's page (ATM-677). Every webview loads only the app's page, CompMD's frames, atm's files and `about:` (`navigation::plugin`'s navigation guard, ATM-677). The capability covers `main` and the windows the app opens, `window-<n>` (T-511), and no other label. A command about a window (`set_title`, the subscriptions, `unsubscribe`, `subscribe_links`) acts on the window that calls it, never on one it names; `open_window` takes only one of the dashboard's pages, checked as a deep link is (I28), as do `save_tabs` and the windows' file the app reads at the start (T-518); `open_url` opens outside the app only an `https:` or `http:` URL with a host or a `mailto:` one, and the opener plugin's own commands are refused (T-551)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `app/src-tauri/src/lib.rs` `the_capability_allows_exactly_the_apps_commands`, `the_main_windows_capability_lets_it_call_the_commands`, `a_window_the_app_opens_has_the_main_windows_capability_and_no_other`, `the_window_opens_links_only_through_open_url`, `a_call_from_compmds_frames_is_refused_though_the_capability_covers_it`; `navigation.rs`'s tests (the origins); `external.rs`'s tests (the URL check); `windows.rs`'s tests (`open_window`'s check); `session.rs`'s (the file and the tabs checked); `commands.rs`'s (a window ends only its own subscriptions)                                                                                                                                                                         |
+ | I26 | **The window's page has the server's strict CSP** (I13): `default-src 'none'`, scripts only the bundle's hashes and two folders, by path, with `'wasm-unsafe-eval'`: atm's CompMD build on the app's `atm:` scheme (`atm://localhost/assets/compmd/`) and CompMD's frames (`compmd://localhost/frames/`), each also in its `http://….localhost` form for Windows; never `blob:`, `data:` or `'self'`; frames only CompMD's origin; images only the app's own or `data:` (the app's logos come as `data:`, T-457); connections only to Tauri's IPC and the same two folders; `frame-ancestors 'none'`; `freezePrototype`, no global Tauri object. Tauri doesn't modify `style-src` (`dangerousDisableAssetCspModification: ["style-src"]`): its nonce made `'unsafe-inline'` ignored, the same allowance the server's policy makes. Debug builds use `devCsp`, the same policy plus only the CLI's live-reload socket (`ws://127.0.0.1:1430/__tauri_cli`). **Two schemes are entry points** (ADR-006, T-524), which any page in the webview can request: **`compmd:`**, CompMD's plugin (`tauri-plugin-compmd`, crates.io, pinned), serving the bundle the dashboard's build wrote and the app's `build.rs` embedded (the frames under their hash, the packs by their place) by CompMD's serving contract (`compmd-host`'s `respond`: `GET` only, a `404` with why for anything else, the manifest included, every file sandboxed); and **`atm:`**, the app's own (`app/src-tauri/src/assets.rs`), serving only `compmd.js` and its `.wasm` from the dashboard's CompMD build (no HTML, no file reached through a symlink), by exact path of plain segments, `GET` and `HEAD` only, every refusal a `404` or `405` with its reason, logged, with `atm serve`'s headers for those files (I11: readable cross-origin, `nosniff`). A pack's module loads in a frame by its place, checked against the `sha384` the bundle's manifest pins; the page never fetches one. `atm:` is also the deep links' scheme (T-459), but no asset address opens a page. Neither is IPC: a page or frame on them can't call the app's commands (I25) | `the_windows_csp_is_strict` (devCsp in step); `the_pages_compmd_files_come_from_atms_scheme_as_atm_serve_sends_them` (`atm:` against `tests/scripts/compmd-host-headers.json`'s page rows, whose bundle rows `serve.test.mjs` checks `atm serve`'s `respond` against); `assets.rs`'s tests (refusals, no deep link); `the_main_windows_capability_lets_it_call_the_commands` (refused from `compmd:` and `atm:` in both forms); `the_page_is_served_with_a_policy_it_works_under`; `compmd.test.ts` (the sandbox's options, the modules' hashes); the e2e `cspGuard` on `app.spec.ts`, and its diagram drawn from the plugin's origin |
+-| I27 | **The app's reads are atm serve's**: each command answers what its REST route does, through the same atm-lib call with the same checks (I11, I12), the reviews' reads among them (`project_reviews`, `project_review`, `document` with `at`; ATM-574); the commands write nothing but the last opened workspace (`list_projects`, as its route), on the user's click only the skills (`connect_agents`, through `atm agents install`'s code: a harness atm knows, nothing replaced that atm didn't write), and, on the user's action in the page only, a project's reviews (ATM-572: `create_review`, `close_review`, `set_review_tasks`, `submit_review_decision`, `add_review_comment`, `update_review_comment`, `reply_to_review_comment`, each its REST route's atm-lib call, as the user) and its inbox (ATM-761: `project_inbox` reads it; `add_inbox_item`, `edit_inbox_item`, `decide_inbox_item`, each its REST route's atm-lib call, as the user; no command injects); CompMD's frames, which show the comments, still call nothing (I25)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `each_command_answers_what_its_rest_route_does`; `the_main_windows_capability_lets_it_call_the_commands` (the review commands reach atm-lib and refuse a page from anywhere else); `the_inbox_commands_answer_what_the_page_reads_and_only_from_the_apps_page` (ATM-761); `app.spec.ts` "Connect your agents" (opening the dialog only reads); atm-lib's `agents.rs` tests                                                                                                                                                                                                                                                                                                                                                   |
++| I27 | **The app's reads are atm serve's**: each command answers what its REST route does, through the same atm-lib call with the same checks (I11, I12), the reviews' reads among them (`project_reviews`, `project_review`, `document` with `at`; ATM-574), and the documents' listing (`project_documents`, ATM-765); the commands write nothing but the last opened workspace (`list_projects`, as its route), on the user's click only the skills (`connect_agents`, through `atm agents install`'s code: a harness atm knows, nothing replaced that atm didn't write), and, on the user's action in the page only, a project's reviews (ATM-572: `create_review`, `close_review`, `set_review_tasks`, `submit_review_decision`, `add_review_comment`, `update_review_comment`, `reply_to_review_comment`, each its REST route's atm-lib call, as the user) and its inbox (ATM-761: `project_inbox` reads it; `add_inbox_item`, `edit_inbox_item`, `decide_inbox_item`, each its REST route's atm-lib call, as the user; no command injects); CompMD's frames, which show the comments, still call nothing (I25)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `each_command_answers_what_its_rest_route_does`; `the_main_windows_capability_lets_it_call_the_commands` (the review commands reach atm-lib and refuse a page from anywhere else); `the_inbox_commands_answer_what_the_page_reads_and_only_from_the_apps_page` (ATM-761); `app.spec.ts` "Connect your agents" (opening the dialog only reads); atm-lib's `agents.rs` tests                                                                                                                                                                                                                                                                                                                                                   |
+ | I28 | **A deep link is an address, never a request**: an `atm://` link becomes a dashboard address only when its path is one of the dashboard's pages, without `.`/`..`, empty segments, a fragment or other characters (4 KB at most), and the page navigates to it only if it is one of its pages; nothing is fetched, read or run because of a link                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `app/src-tauri/src/links.rs`'s tests; `tests/unit/links.test.ts`; `app.spec.ts` "deep links"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+ | I29 | **The app users run is the reviewed build, with one `atm` on PATH**: the DMG is built on a `v*` tag in the release workflow's `app-macos` job (read-only token, the dashboard built from the lockfile first), signed and notarized (the app and its bundled CLI by Tauri's bundler, the DMG by `notarize-dmg.sh`, stapled), its checksum in `SHA256SUMS`; an update the app installs (T-483) is the same job's build, its archive signed with the updater key and checked against the key built into the app, on the user's click only; the cask links the app's own CLI, and its caveats say to uninstall the formula first (a cask can declare conflicts only with casks); it installs nothing into agent harnesses                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `release.yml` (`ci-workflow.test.ts`'s checks of every workflow); `packaging.test.mjs` "the Homebrew cask…"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+ 
+diff --git a/tests/scripts/serve.test.mjs b/tests/scripts/serve.test.mjs
+index 2ee8b844..25fe27e3 100644
+--- a/tests/scripts/serve.test.mjs
++++ b/tests/scripts/serve.test.mjs
+@@ -860,7 +860,6 @@ describe('serve', () => {
+       ['../outside.md', 400],
+       ['/etc/passwd', 400],
+       ['docs/../docs/x.md', 400],
+-      ['', 400],
+     ];
+     for (const [file, status] of refusals) {
+       const r = await get('documents', file);
+@@ -868,12 +867,88 @@ describe('serve', () => {
+       const answer = await r.json();
+       assert.ok(answer.error && !answer.document, file);
+     }
++    // No path: for documents the listing (ATM-765, the next test); for files a bad path
++    assert.equal((await get('files', '')).status, 400);
+     assert.equal((await fetch(`http://localhost:${port}/api/v1/projects/nope/documents?path=docs/x.md`)).status, 404);
+     // Read-only, like every route
+     assert.equal((await fetch(`${base}/documents?path=docs/x.md`, { method: 'POST' })).status, 405);
+     atm(['service', 'stop'], root);
+   });
+ 
++  test("a project's documents' listing (ATM-765): its Markdown files git has, read-only, tagged, refused from other sites", async () => {
++    const atmHome = home();
++    const atm = atmIn(atmHome);
++    const root = project(
++      { meta: { id: 'list0001', project: 'Listing' }, tasks: [] },
++      {
++        'README.md': '# Read me\n',
++        'docs/design.md': '# The design\n\nBody.\n',
++        'docs/notes.markdown': 'No heading here.\n',
++        'src/app.ts': 'export const a = 1;\n',
++        '.gitignore': 'secrets/\n',
++        'secrets/hidden.md': '# Ignored\n',
++      },
++    );
++    git(['add', 'README.md', 'docs/design.md', '.gitignore'], root);
++    git(['commit', '-q', '-m', 'docs'], root);
++    // A folder that is a symlink to outside the project: nothing under it is listed
++    const elsewhere = tempDir('atm-elsewhere-');
++    cleanups.push(() => removeDir(elsewhere));
++    fs.writeFileSync(path.join(elsewhere, 'outside.md'), '# outside');
++    fs.symlinkSync(elsewhere, path.join(root, 'linked'));
++    assert.equal(atm(['workspace', 'add-project'], root).code, 0);
++    const port = ports();
++    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
++    const v1 = `http://localhost:${port}/api/v1/projects/list0001/documents`;
++    const v2 = `http://localhost:${port}/api/v2/workspaces/default/projects/list0001/documents`;
++
++    // The Markdown files git has, tracked or new; not the ignored one, nor one through the symlink, nor code
++    const first = await fetch(v1);
++    assert.equal(first.status, 200);
++    assert.match(first.headers.get('content-type'), /application\/json/);
++    const listing = await first.json();
++    const shown = Object.fromEntries(listing.documents.map((d) => [d.path, [d.title, d.tracked]]));
++    assert.deepEqual(shown, {
++      'README.md': ['Read me', true],
++      'docs/design.md': ['The design', true],
++      'docs/notes.markdown': [shown['docs/notes.markdown']?.[0] ?? null, false],
++    });
++    assert.deepEqual([listing.submodules, listing.more], [[], 0]);
++    // v2's route is the same listing
++    const fromV2 = await (await fetch(v2)).json();
++    assert.deepEqual(fromV2.documents, listing.documents);
++
++    // Unchanged: a 304; a new document: the listing again
++    const tag = first.headers.get('etag');
++    assert.ok(tag);
++    assert.equal((await fetch(v1, { headers: { 'If-None-Match': tag } })).status, 304);
++    fs.writeFileSync(path.join(root, 'docs/later.md'), '# Later\n');
++    const changed = await fetch(v1, { headers: { 'If-None-Match': tag } });
++    assert.equal(changed.status, 200);
++    assert.ok((await changed.json()).documents.some((d) => d.path === 'docs/later.md'));
++
++    // A query names some, by title or path; one too long is refused
++    const found = await (await fetch(`${v1}?q=design`)).json();
++    assert.deepEqual(
++      found.documents.map((d) => d.path),
++      ['docs/design.md'],
++    );
++    assert.equal((await fetch(`${v1}?q=${'x'.repeat(201)}`)).status, 400);
++
++    // ATM-671's rule: a read another site's page sends is refused; atm's own page's is not
++    for (const [headers, status] of [
++      [{ 'Sec-Fetch-Site': 'cross-site' }, 403],
++      [{ Origin: 'https://evil.example' }, 403],
++      [{ 'Sec-Fetch-Site': 'same-origin' }, 200],
++    ]) {
++      assert.equal((await fetch(v1, { headers })).status, status, JSON.stringify(headers));
++    }
++    // Registered projects only; read-only
++    assert.equal((await fetch(`http://localhost:${port}/api/v1/projects/nope/documents`)).status, 404);
++    assert.equal((await fetch(v1, { method: 'POST' })).status, 405);
++    atm(['service', 'stop'], root);
++  });
++
+   test('files in a git submodule: its own ignore rules decide, and the document names its repository (T-408)', async () => {
+     const atmHome = home();
+     const atm = atmIn(atmHome);

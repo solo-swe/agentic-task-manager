@@ -19,9 +19,13 @@
   const merged = $derived(mergedTasks(sources));
   // A colour per project, in the sources' order: the same as the Progress tab's velocity (T-328 review)
   const colorOf = $derived(new Map(sources.map((s, i) => [s.project.id, phaseColor(i)])));
+  // The pill's: the task files' tasks alone (ATM-739), each project's `live`
+  const liveByProject = $derived(projectTasks(mergedTasks(sources.map((s) => ({ ...s, tasks: s.live ?? s.tasks })))));
   const source = $derived({
     ...merged,
     byProject: projectTasks(merged),
+    liveByProject,
+    archived: sources.some((s) => (s.archived?.length ?? 0) > 0),
     projects: sources.map((s) => ({ name: s.project.name, color: colorOf.get(s.project.id)! })),
     of: projectOfWorker,
   });

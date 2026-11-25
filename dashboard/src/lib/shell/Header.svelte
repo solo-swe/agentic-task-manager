@@ -6,6 +6,9 @@
   import Filters from '../tasks/Filters.svelte';
   import NeedsYouMenu from './NeedsYouMenu.svelte';
   import ActivityWidget from '../progress/ActivityWidget.svelte';
+  import BoardSearch from '../overview/BoardSearch.svelte';
+  import ReviewSearch from '../reviews/ReviewSearch.svelte';
+  import { offeredReviewSearch } from '../reviews/search.svelte';
   import OverviewActivity from '../overview/OverviewActivity.svelte';
   import ProgressWidget from '../progress/ProgressWidget.svelte';
   import TitleBar from './TitleBar.svelte';
@@ -48,12 +51,19 @@
   // As atm says each task needs you (ATM-717: `derived.needs_you`)
   const needYou = $derived(needsYouItems(dashboard.tasks, reviewsNeedingYou));
   const present = $derived(dashboard.projects.filter((p) => !p.missing));
+  // All projects' Board or List: the pages its search searches (ATM-737)
+  const onAllTasks = $derived(
+    route.page === 'overview' && (dashboard.overviewTab === 'board' || dashboard.overviewTab === 'list'),
+  );
+  // A reviews list's search, while one is shown (a project's Code Reviews, All's): the title bar's (ATM-738)
+  const reviewSearch = $derived(offeredReviewSearch());
 </script>
 
 <!-- A project's search and Filters, and its Progress and Activity pills: the browser's title bar has them together, the
      app's in two places (search and Filters before the tabs) -->
 {#snippet projectSearch()}
-  <Filters />
+  <!-- On the Code Reviews tab its list's search instead (ATM-738): one search where a page's search is, the page's own -->
+  {#if reviewSearch}<ReviewSearch offered={reviewSearch} />{:else}<Filters />{/if}
 {/snippet}
 {#snippet projectPills()}
   <ProgressWidget />
@@ -68,18 +78,25 @@
     </div>
   {/if}
 {/snippet}
+<!-- All projects' search where a project's search is: on the pages that search every project's tasks (the Board and
+     the List, ATM-737), and on Code Reviews its list's (ATM-738); and its activity -->
+{#snippet overviewSearch()}
+  {#if onAllTasks}<BoardSearch />{:else if reviewSearch}<ReviewSearch offered={reviewSearch} />{/if}
+{/snippet}
+{#snippet overviewPills()}
+  <!-- Every project's activity together (T-328) -->
+  {#if dashboard.route.page === 'overview'}<OverviewActivity />{/if}
+{/snippet}
 {#snippet overviewCharts()}
   {#if dashboard.route.page === 'overview'}
-    <!-- Every project's activity together (T-328) -->
-    <div class="topbar-charts">
-      <OverviewActivity />
-    </div>
+    <div class="topbar-charts">{@render overviewSearch()}{@render overviewPills()}</div>
   {/if}
 {/snippet}
 
-<!-- The atm app's own title bar (T-513): the window's, its tabs; at its right end the workspace picker, the overview's
-     activity and the ⋯; inside the tab, the subtitle line, a project's search and Filters before it (Hakan) and its
-     Progress and Activity at its right end: they are the tab's project's (T-530) -->
+<!-- The atm app's own title bar (T-513): the window's, its tabs; at its right end the workspace picker and the ⋯;
+     inside the tab, the subtitle line, a project's search and Filters before it (Hakan), and at its right end the
+     tab's pills: a project's Progress and Activity (T-530), All projects' activity (ATM-736). They are the tab's
+     scope's, not the window's -->
 {#snippet tabSearch()}
   {#if dashboard.loaded}{@render projectSearch()}{/if}
 {/snippet}
@@ -88,7 +105,6 @@
 {/snippet}
 {#snippet appEnd()}
   <WorkspaceSelector />
-  {#if !onProject}{@render overviewCharts()}{/if}
   <SettingsMenu />
 {/snippet}
 {#if inApp}<AppTitleBar {title} end={appEnd} />{/if}
@@ -127,7 +143,14 @@
     {/snippet}
   </TitleBar>
 {:else}
-  <TitleBar {title} selector={dashboard.projects.length > 0} inTab={inApp} charts={overviewCharts}>
+  <TitleBar
+    {title}
+    selector={dashboard.projects.length > 0}
+    inTab={inApp}
+    charts={overviewCharts}
+    lead={inApp && (onAllTasks || reviewSearch) ? overviewSearch : undefined}
+    trail={inApp && route.page === 'overview' ? overviewPills : undefined}
+  >
     {#snippet subtitle()}
       {#if !dashboard.projectsLoaded}
         Loading projects…

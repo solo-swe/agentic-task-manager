@@ -1,0 +1,42 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "b2413ea98495893ac5b9bdb7cdc4d1e505e55a5c",
+    "head": "1aa1d8f3699d7c59a3973f5fb1fa087222680ed8"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/app.css",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/graph/DepGraph.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/graph/placeholder.ts",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/graph-zoom.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/performance.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/placeholder.test.ts",
+      "status": "added",
+      "binary": false
+    }
+  ],
+  "by": "claude:ba530ebb",
+  "at": "2026-11-24T16:32:20Z"
+}

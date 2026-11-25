@@ -1,0 +1,469 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 626dcd6a..6a073ee7 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -4,6 +4,98 @@ All notable changes to atm and its task dashboard. The format follows
+ [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
+ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0, with the Claude Code plugin).
+ 
++## [0.44.0] - 2026-11-24
++
++The sprint *Sidebar overhaul*: the app's sidebar becomes a scope selector (All, or a project) with six items, each
++opening its own tab (Overview, Inbox, Tasks, Code Reviews, Documents, Analysis); the webapp shows the same items as its
++tabs. Two new pages, the Inbox and Documents; the review page's fixes; the app's memory growth found and its reloads
++made small; a faster start; CompMD 0.10.0.
++
++### Added
++- **The app's sidebar by scope and item** (ATM-728, ATM-751, ATM-753; `docs/sidebar-overhaul-design.md`): a scope
++  selector (All, then the workspace's projects with logo, progress and needs-you badge) and the scope's items, with
++  Inbox's open count and Code Reviews' waiting-on-you count. An item always opens a new tab beside the active one
++  (⌘-click or a middle click in the background). The title bar loses its project chooser and view tabs; the webapp
++  keeps the chooser.
++- **The page by item** (ATM-752, ATM-778): the webapp's tabs are the items (six for a project, four for All); Tasks has
++  Board · List · Dependencies, Analysis has Progress · Agents, as sub-tabs. All gains a List over every project's tasks.
++  In the app only the sub-tabs show. Kanban is now *Board* and Graph *Dependencies*; their addresses are unchanged.
++  `/projects/<id>` opens the project's Overview, no longer the Board.
++- **The hidden sidebar is a rail of icons** (ATM-771): the scope and the items with their badges; a hover or the
++  keyboard's focus shows the whole sidebar over the page.
++- **Tab titles** `<scope> - <item>` with the item's icon (ATM-754): `ATM - Tasks`, `All - Code Reviews`; a review or a
++  document names itself (`ATM - CR-134`).
++- **The new tab's chooser** (ATM-755): + , File ▸ New Tab and ⌘T open `/new`, scopes and their items in two columns,
++  driven by the keys too; a choice opens in the tab, and Back returns to the chooser.
++- **The Inbox** (ATM-759 to ATM-763, ATM-772, ATM-773; `docs/inbox-design.md`): raw input to triage later, without
++  interrupting agents. Items are `created`, `discarded` (with a reason) or `injected` (with the tasks they became),
++  in `.agentic-task-manager/inbox.json` (taken by the merge driver) and archived with `atm db archive`.
++  - `atm inbox add | edit | list | show | discard | inject | restore`, `atm db unarchive IN-3`; `atm project status`
++    counts the open items; `atm vcs commit` takes `inbox.json` with `tasks.json`. Tasks made from an item get
++    `from: ["IN-…"]`.
++  - REST routes (`GET`, `POST …/inbox`, `PATCH …/inbox/<IN>`, `POST …/inbox/<IN>/decisions`) behind the review
++    routes' guards, and the app's `project_inbox`, `add_inbox_item`, `edit_inbox_item`, `decide_inbox_item`. No route
++    injects.
++  - The Inbox page: a quick-add box, the Open · Discarded · Injected · All filter in the address, each item's actions,
++    the tasks of an injected item with their statuses.
++  - The `/atm-triage-inbox` skill: proposes what each open item becomes, and on the user's word makes the tasks
++    through `/atm-create-tasks` and injects or discards the item.
++  - `atm inbox add --project <key or ID>`: an agent leaves an item in another registered project's inbox, recorded as
++    `from_project`; an agent can't add to its own. `atm inbox list --project … [--mine]` and `atm inbox show IN-3
++    --project …` (or `KEY:IN-3`) read it back, with `task_states`, the injected tasks' statuses.
++- **Documents** (ATM-764 to ATM-766; `docs/documents-design.md`): the project's Markdown files that git lists (tracked
++  or new, submodules too, never ignored ones), in a tree or by last change, searched in the header line, each opening in
++  the viewer over the page. `GET …/projects/<id>/documents` without `path` lists them (at most 500, `?q=`, an `ETag`);
++  the app's `project_documents`.
++- **A project's Overview links into the Board and the List** (ATM-756): a sprint or the backlog opens the Board on it,
++  a count by status the List filtered by it.
++- **All reviews: a project filter** (ATM-757), in the address (`?projects=atm,compmd`).
++- **The diff view's Final layout** (ATM-731): the file after the change, with no diff marks; comments stay on their
++  lines.
++- **A badge for what's new in the review in view** (ATM-733): a new comment, reply or round, where it happened, until
++  seen.
++- **The review page's heading starts with its task** (ATM-779): `[ATM-1] CR-15 Title`, the task a link; in the app, no
++  back link (the title bar's Back is there).
++
++### Changed
++- **An agent's review is a code review** (ATM-770): an agent's `atm task state <id> in_review` is refused without a
++  review open on the task, naming `atm review create` or `atm review round`; `atm doctor` warns of a task in review that
++  no review waits on. A person's moves and decisions are unchanged.
++- **The app's reloads carry only what changed** (ATM-734, ATM-767 to ATM-769; `docs/memory-growth-analysis.md`): the
++  page grew with every reload in WebKit. Now a lease renewal reloads nothing, a change reloads only its part (tasks,
++  claims, reviews), an unchanged answer comes back as *unchanged* with no body (as a `304`), and an answer is parsed
++  once, not turned back into text.
++- **The app's start** (ATM-776, ATM-777): nothing is drawn before the page is known, from the projects kept at the last
++  start; only the active tab loads; the project's data comes before the project list; projects are listed side by side
++  (`list_projects` cold 1.5 s → 0.7 s, a board's tasks 2.8 s → 1.5 s). The first switch to another project's tab loads
++  its data first.
++- **The All-projects activity pill, search and the Reviews search sit inside their tab** (ATM-736 to ATM-738), placed
++  as the project's search is.
++- **CompMD 0.10.0** (ATM-780): a review opens about twice as fast (first drawn 400 → 201 ms in Chromium, 401 → 235 ms
++  in WebKit); `docs/agent/compmd-llms.txt` is its guide at `v0.10.0`.
++- **The release's signing step compiles nothing** (ATM-749): in 0.43.0 it recompiled atm-app with the signing secrets
++  present; it now fails if anything compiles.
++
++### Fixed
++- **The Code Reviews list** reads each working copy's reviews once, not the whole folder per review (ATM-775): for
++  this repo's 166 reviews, 166 reads instead of about 27,000.
++- **A code review's tabs keep the diff's position** (ATM-730), and **an unsent comment or reply survives** an agent's
++  comment arriving (ATM-732).
++- **The Activity pill shows the same chart every time** (ATM-739): it charts the task file alone, not the archive some
++  views had loaded.
++- **The app's scope chooser opens under its button**, over the window, not below its bottom (ATM-774).
++- The document viewer's contents box sits in its corner (ATM-729); the zoomed-out dependency graph's nodes show
++  placeholder lines for their text (ATM-735).
++- A refresh tick skipped while a load is out is done once the load is over (ATM-781).
++
++### Developer
++- Flaky e2e tests fixed (ATM-742, ATM-781): the graph's keys once it takes them, the long review's nodes counted once
++  settled, no fixed dates, tests waiting for CompMD's drawing; the whole suite passes on one worker.
++- `cargo build`'s dependencies are optimized in the dev profile (`opt-level = 2`); atm-lib's `par_map` lists projects in
++  parallel.
++- Designs: `docs/sidebar-overhaul-design.md`, `docs/inbox-design.md`, `docs/documents-design.md`,
++  `docs/memory-growth-analysis.md`, `docs/fresh-session-loop.md` (ATM-740's evaluation; not built).
++
+ ## [0.43.0] - 2026-11-23
+ 
+ The sprint *Audit and tabs*: the codebase audit's findings fixed (security, the review store, the CLI, the server,
+diff --git a/Cargo.lock b/Cargo.lock
+index 556489fc..69928628 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -259,7 +259,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "atm-api"
+-version = "0.43.0"
++version = "0.44.0"
+ dependencies = [
+  "atm-common",
+  "atm-lib",
+@@ -272,7 +272,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "atm-app"
+-version = "0.43.0"
++version = "0.44.0"
+ dependencies = [
+  "atm-api",
+  "atm-common",
+@@ -295,7 +295,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "atm-cli"
+-version = "0.43.0"
++version = "0.44.0"
+ dependencies = [
+  "anstream",
+  "anstyle",
+@@ -312,7 +312,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "atm-common"
+-version = "0.43.0"
++version = "0.44.0"
+ dependencies = [
+  "dirs",
+  "jiff",
+@@ -323,7 +323,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "atm-db"
+-version = "0.43.0"
++version = "0.44.0"
+ dependencies = [
+  "atm-common",
+  "atm-fs",
+@@ -334,7 +334,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "atm-docs"
+-version = "0.43.0"
++version = "0.44.0"
+ dependencies = [
+  "atm-common",
+  "atm-fs",
+@@ -344,7 +344,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "atm-fs"
+-version = "0.43.0"
++version = "0.44.0"
+ dependencies = [
+  "atm-common",
+  "notify",
+@@ -356,7 +356,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "atm-lib"
+-version = "0.43.0"
++version = "0.44.0"
+ dependencies = [
+  "atm-common",
+  "atm-db",
+@@ -370,7 +370,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "atm-review"
+-version = "0.43.0"
++version = "0.44.0"
+ dependencies = [
+  "atm-common",
+  "atm-fs",
+@@ -383,7 +383,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "atm-vcs"
+-version = "0.43.0"
++version = "0.44.0"
+ dependencies = [
+  "atm-common",
+  "serde_json",
+diff --git a/Cargo.toml b/Cargo.toml
+index 89bc4ee5..62e6e3ac 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -9,7 +9,7 @@ resolver = "3"
+ # atm's version, the one source (T-477): the dashboard is stamped with it, and CHANGELOG.md and WHATS-NEW.md need an
+ # entry for it (dashboard/scripts/check-versions.mjs). The dashboard's About dialog shows the description, the author,
+ # the licence and the repository
+-version = "0.43.0"
++version = "0.44.0"
+ description = "File-based task management for agentic development. Decompose requirements into tasks, execute them in loops, and watch progress on a live HTML dashboard."
+ authors = ["Hakan Serce <hakanserce@gmail.com>"]
+ edition = "2024"
+diff --git a/WHATS-NEW.md b/WHATS-NEW.md
+index d43ed3a7..6cdc9e7c 100644
+--- a/WHATS-NEW.md
++++ b/WHATS-NEW.md
+@@ -2,6 +2,16 @@
+ 
+ The short version, for people using atm. The full list of changes, for developers, is in CHANGELOG.md.
+ 
++## [0.44.0] - 2026-11-24
++
++- In the app, the sidebar picks a project (or all of them) and lists what to open for it, from Overview to Analysis,
++  each in its own tab.
++- A new Inbox: jot an idea down without interrupting your agents, then sort it into tasks later with an agent's help.
++- A new Documents page lists your project's Markdown files, to find and read any of them.
++- The app starts faster, shows the right page from the start, and no longer grows in memory while agents work.
++- Reviews open about twice as fast, keep your place and your unsent comment, and can show a file as it is after the
++  change.
++
+ ## [0.43.0] - 2026-11-23
+ 
+ - In the app, each tab remembers where you have been: Back and Forward, and the arrows in the title bar, go through
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/agents-agents-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/agents-agents-linux.png
+index 1ae2c3b6..a77b88c6 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/agents-agents-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/agents-agents-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/agents-agents-zoomed-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/agents-agents-zoomed-linux.png
+index 1c718525..12931e24 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/agents-agents-zoomed-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/agents-agents-zoomed-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/all-projects-board-dark-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/all-projects-board-dark-linux.png
+index cb95efd5..1f2da1fe 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/all-projects-board-dark-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/all-projects-board-dark-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/all-projects-board-grouped-dark-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/all-projects-board-grouped-dark-linux.png
+index 5239f6c2..2ff131d3 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/all-projects-board-grouped-dark-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/all-projects-board-grouped-dark-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/all-projects-board-grouped-light-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/all-projects-board-grouped-light-linux.png
+index 0fe579e5..87ebd657 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/all-projects-board-grouped-light-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/all-projects-board-grouped-light-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/all-projects-board-light-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/all-projects-board-light-linux.png
+index a1ba94f2..d694c18d 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/all-projects-board-light-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/all-projects-board-light-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/edge-cases-graph-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/edge-cases-graph-linux.png
+index b921619c..961d4e4d 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/edge-cases-graph-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/edge-cases-graph-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/empty-graph-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/empty-graph-linux.png
+index 7b27f212..38d62e92 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/empty-graph-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/empty-graph-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/kanban-kanban-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/kanban-kanban-linux.png
+index 8c6b08f7..6cf2090b 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/kanban-kanban-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/kanban-kanban-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/large-90-graph-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/large-90-graph-linux.png
+index d4a73720..88ab1fef 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/large-90-graph-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/large-90-graph-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/light-agents-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/light-agents-linux.png
+index e40ec1b7..c1759804 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/light-agents-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/light-agents-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/light-kanban-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/light-kanban-linux.png
+index ca979d6e..230e1ec7 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/light-kanban-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/light-kanban-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/light-large-90-graph-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/light-large-90-graph-linux.png
+index 9adab606..a194d3ae 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/light-large-90-graph-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/light-large-90-graph-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/light-progress-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/light-progress-linux.png
+index 63d40fe4..788b5b81 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/light-progress-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/light-progress-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/light-standard-page-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/light-standard-page-linux.png
+index 65d632e2..6e80a603 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/light-standard-page-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/light-standard-page-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/list-by-sprint-dark-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/list-by-sprint-dark-linux.png
+index 92a5c1e6..48479fc4 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/list-by-sprint-dark-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/list-by-sprint-dark-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/list-by-sprint-light-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/list-by-sprint-light-linux.png
+index 09f72ff7..ce3fda78 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/list-by-sprint-light-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/list-by-sprint-light-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/progress-progress-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/progress-progress-linux.png
+index e8d44bc0..e5f69727 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/progress-progress-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/progress-progress-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/projects-overview-dark-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/projects-overview-dark-linux.png
+index 07349ac0..a3cc0214 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/projects-overview-dark-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/projects-overview-dark-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/projects-overview-light-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/projects-overview-light-linux.png
+index 3922d4d7..30b45b6a 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/projects-overview-light-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/projects-overview-light-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/projects-overview-narrow-dark-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/projects-overview-narrow-dark-linux.png
+index 4587da07..1db7411c 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/projects-overview-narrow-dark-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/projects-overview-narrow-dark-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/projects-overview-narrow-light-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/projects-overview-narrow-light-linux.png
+index 26459bad..57fa46b1 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/projects-overview-narrow-light-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/projects-overview-narrow-light-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/standard-graph-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/standard-graph-linux.png
+index 47f2ad72..78ad3389 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/standard-graph-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/standard-graph-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/standard-kanban-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/standard-kanban-linux.png
+index 2a228e5c..29944df6 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/standard-kanban-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/standard-kanban-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/standard-page-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/standard-page-linux.png
+index 2abc1733..c5208526 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/standard-page-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/standard-page-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-ayu-dark-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-ayu-dark-linux.png
+index 881cff1e..714f6da1 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-ayu-dark-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-ayu-dark-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-ayu-light-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-ayu-light-linux.png
+index 9ec856f3..88c3a763 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-ayu-light-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-ayu-light-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-catppuccin-dark-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-catppuccin-dark-linux.png
+index b64191d6..41856ba5 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-catppuccin-dark-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-catppuccin-dark-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-catppuccin-light-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-catppuccin-light-linux.png
+index cf970a33..726ce5f8 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-catppuccin-light-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-catppuccin-light-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-gruvbox-dark-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-gruvbox-dark-linux.png
+index fd7d1f91..686fb4dd 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-gruvbox-dark-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-gruvbox-dark-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-gruvbox-light-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-gruvbox-light-linux.png
+index 45f53684..89ea283c 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-gruvbox-light-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-gruvbox-light-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-hand-drawn-dark-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-hand-drawn-dark-linux.png
+index cab46629..4a44deac 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-hand-drawn-dark-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-hand-drawn-dark-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-hand-drawn-light-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-hand-drawn-light-linux.png
+index f6125438..942ef341 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-hand-drawn-light-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-hand-drawn-light-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-high-contrast-dark-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-high-contrast-dark-linux.png
+index 1edf1934..c0daedd5 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-high-contrast-dark-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-high-contrast-dark-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-high-contrast-light-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-high-contrast-light-linux.png
+index a1f66423..a7e36ed9 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-high-contrast-light-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-high-contrast-light-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-night-owl-dark-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-night-owl-dark-linux.png
+index f45b4f37..0c843a18 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-night-owl-dark-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-night-owl-dark-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-night-owl-light-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-night-owl-light-linux.png
+index 7a8faa2d..d46d39b9 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-night-owl-light-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-night-owl-light-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-noctis-dark-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-noctis-dark-linux.png
+index 6b0c5789..d2c45096 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-noctis-dark-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-noctis-dark-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-noctis-light-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-noctis-light-linux.png
+index ca54dd8a..a31f25fa 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-noctis-light-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-noctis-light-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-nord-dark-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-nord-dark-linux.png
+index 57981959..c42c5fc1 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-nord-dark-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-nord-dark-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-nord-light-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-nord-light-linux.png
+index 4b2f7c70..98ff520a 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-nord-light-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-nord-light-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-solarized-dark-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-solarized-dark-linux.png
+index 990de705..e9e6cc52 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-solarized-dark-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-solarized-dark-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-solarized-light-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-solarized-light-linux.png
+index a9d2ca5f..6b1d0763 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-solarized-light-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-solarized-light-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-sticky-notes-dark-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-sticky-notes-dark-linux.png
+index 2587009c..b5822fec 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-sticky-notes-dark-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-sticky-notes-dark-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-sticky-notes-light-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-sticky-notes-light-linux.png
+index 905883bd..f1dee4ab 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-sticky-notes-light-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-sticky-notes-light-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-sublime-material-dark-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-sublime-material-dark-linux.png
+index b93b4185..d4eeaa0a 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-sublime-material-dark-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-sublime-material-dark-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-sublime-material-light-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-sublime-material-light-linux.png
+index 5ba5f728..37e478bc 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-sublime-material-light-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-sublime-material-light-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-tokyo-night-dark-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-tokyo-night-dark-linux.png
+index c5fb5558..2491fdb5 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-tokyo-night-dark-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-tokyo-night-dark-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-tokyo-night-light-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-tokyo-night-light-linux.png
+index 0f756642..f28ba7c9 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-tokyo-night-light-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/theme-tokyo-night-light-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/update-notice-dark-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/update-notice-dark-linux.png
+index fa9a64ea..67775413 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/update-notice-dark-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/update-notice-dark-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/update-notice-light-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/update-notice-light-linux.png
+index cd2c9752..e55004b4 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/update-notice-light-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/update-notice-light-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-dark-about-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-dark-about-linux.png
+index 51830f87..f00b00a8 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-dark-about-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-dark-about-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-dark-help-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-dark-help-linux.png
+index bff3bbf2..3f4adbf2 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-dark-help-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-dark-help-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-dark-kanban-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-dark-kanban-linux.png
+index 9fbd0889..b465f26a 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-dark-kanban-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-dark-kanban-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-light-about-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-light-about-linux.png
+index 898099ac..1c829239 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-light-about-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-light-about-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-light-detail-blocked-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-light-detail-blocked-linux.png
+index 5f1b5cca..d17dd801 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-light-detail-blocked-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-light-detail-blocked-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-light-help-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-light-help-linux.png
+index 90d0b401..f0675f3e 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-light-help-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-light-help-linux.png differ
+diff --git a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-light-kanban-linux.png b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-light-kanban-linux.png
+index 6298790e..82e0eedf 100644
+Binary files a/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-light-kanban-linux.png and b/dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-light-kanban-linux.png differ
+diff --git a/dashboard/tests/e2e/visual.spec.ts b/dashboard/tests/e2e/visual.spec.ts
+index 776e08b6..eed6ffcc 100644
+--- a/dashboard/tests/e2e/visual.spec.ts
++++ b/dashboard/tests/e2e/visual.spec.ts
+@@ -514,7 +514,8 @@ for (const colorScheme of ['dark', 'light'] as const) {
+ 
+     test(`visual: scope bar (${colorScheme})`, async ({ page, tasksServer }) => {
+       await page.clock.setFixedTime(new Date('2026-04-14T12:00:00Z'));
+-      await openDashboard(page, tasksServer, 'sprints');
++      // The Board's (a project opens on its Overview since ATM-751, which has no scope bar)
++      await openDashboard(page, tasksServer, 'sprints', { tab: 'kanban' });
+       await expect(page.locator('#scope-bar')).toHaveScreenshot(`scope-bar-${colorScheme}.png`);
+     });
+ 
+@@ -543,7 +544,7 @@ for (const colorScheme of ['dark', 'light'] as const) {
+ 
+     test(`visual: scope menu (${colorScheme})`, async ({ page, tasksServer }) => {
+       await page.clock.setFixedTime(new Date('2026-04-14T12:00:00Z'));
+-      await openDashboard(page, tasksServer, 'sprints');
++      await openDashboard(page, tasksServer, 'sprints', { tab: 'kanban' });
+       await page.locator('#scope-trigger').click();
+       await expect(page.locator('#scope-menu')).toHaveScreenshot(`scope-menu-${colorScheme}.png`);
+     });
+diff --git a/docs/security-architecture.md b/docs/security-architecture.md
+index 2bf9c951..17a475a9 100644
+--- a/docs/security-architecture.md
++++ b/docs/security-architecture.md
+@@ -1466,6 +1466,36 @@ differs from 0.9:
+ - **CompMD's guide for agents** is its `spec/llms.txt` at `v0.10.0` (commit `7a06d7e7f071`): the new params and
+   components, nothing about running, fetching or loading; what renders in atm is still `atm-create-tasks`'s list.
+ 
++**Release 0.44.0 (the sprint Sidebar overhaul, released by ATM-750).** The sprint's entry points and fields record their
++invariants in §2 and the entries above as they landed. Together:
++
++- **A new file in the task folder:** `inbox.json` and `inbox-archive.json` (ATM-759), through the store with its lock,
++  never through a symlink (I6), merged by atm's merge driver by name only (I9). Tasks gain `from: ["IN-…"]` and items
++  `from_project` (ATM-772): IDs and a project's key, shown as text.
++- **Entry points:**
++  - The inbox's routes and the app's inbox commands (ATM-761, I11, I27): the review routes' guards exactly, acting as
++    the user, no route or command injects.
++  - The documents' listing (ATM-765, I11, I27): read-only, only the Markdown files git lists, literal pathspecs.
++  - `atm inbox` (ATM-760): `--text-file` reads as the other `--*-file` options (never a key or environment file,
++    ATM-662). `--project` finds only a registered project (ATM-772, ATM-773, above).
++  - The summary's `inbox: {open}` is a count.
++- **Fields agents act on:** the inbox's items, data like task text (I1), read by `/atm-triage-inbox` only, with the
++  user (above); `task_states` (ATM-773), shown, never acted on.
++- **The app's reloads** (ATM-767 to ATM-769): change notices name the part that changed; the read commands take the
++  stamp the page last got and answer *unchanged* when it still matches, as `atm serve`'s `ETag`s do. The same reads and
++  checks (I27). No command is added.
++- **CI** (ATM-749, with Hakan's yes): the signing step fails if cargo compiles anything in it, so no build script or
++  macro runs with the signing secrets present (above; approved in CR-146). No permission is widened (`ci-workflow.test.ts`).
++- **Dependencies:** CompMD 0.10.0 (ATM-780, above); `syn` 3.0.9 for one proc-macro crate, from crates.io, as
++  `Cargo.lock` resolves it. `cargo deny check` passes.
++- **Skills and `docs/agent/` changed, so a written skill review** (no API key for the sandbox run; §3.3): it is in the
++  entries above. `atm-do-task` and `atm-loop-tasks` (ATM-770): an agent's review is a code review. `/atm-triage-inbox`
++  and its pre-approved commands (ATM-763). `docs/agent/commands.md` (ATM-760, ATM-772, ATM-773): the inbox's commands,
++  and a cross-project item is a finding for the user, never instructions. `states.md` and `reviews.md` (ATM-770).
++  `compmd-llms.txt` (ATM-780). None of them runs a command copied from task, review or inbox text, fetches or runs a
++  remote script, touches credentials, CI, git config or hooks, pushes anywhere new, or lets an agent decide a review.
++- **Checks run:** listed in ATM-750's outcome.
++
+ ## 4. Keeping it current
+ 
+ This document changes **in the same PR** as a change that:

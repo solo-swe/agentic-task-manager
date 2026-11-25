@@ -6,12 +6,20 @@ use std::fs;
 use atm_common::Shown;
 use std::path::{Path, PathBuf};
 
+use atm_common::inbox::{INBOX_ARCHIVE_FILE, INBOX_FILE};
 use atm_common::{ARCHIVE_FILE, Error, Result, TASK_DIR, TASKS_FILE};
 
 use crate::git::where_in_git;
 
 /// The files atm reads and writes in the task folder; a repository can commit any of them as a symlink.
-const FOLDER_FILES: [&str; 4] = [TASKS_FILE, ARCHIVE_FILE, ".gitignore", ".gitattributes"];
+const FOLDER_FILES: [&str; 6] = [
+    TASKS_FILE,
+    ARCHIVE_FILE,
+    INBOX_FILE,
+    INBOX_ARCHIVE_FILE,
+    ".gitignore",
+    ".gitattributes",
+];
 
 /// Where a project's task files are.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,6 +37,18 @@ impl Paths {
     #[must_use]
     pub fn archive(&self) -> PathBuf {
         self.dir.join(ARCHIVE_FILE)
+    }
+
+    /// The inbox, `<dir>/inbox.json` (ATM-759).
+    #[must_use]
+    pub fn inbox(&self) -> PathBuf {
+        self.dir.join(INBOX_FILE)
+    }
+
+    /// The inbox's archive, `<dir>/inbox-archive.json`.
+    #[must_use]
+    pub fn inbox_archive(&self) -> PathBuf {
+        self.dir.join(INBOX_ARCHIVE_FILE)
     }
 }
 
@@ -270,5 +290,20 @@ mod tests {
                 .to_string()
                 .ends_with("is a symlink; atm reads and writes only regular files there")
         );
+
+        // The inbox and its archive too (ATM-759, I6)
+        for name in [INBOX_FILE, INBOX_ARCHIVE_FILE] {
+            let one = TestDir::new();
+            let dir = one.path().join(TASK_DIR);
+            fs::create_dir(&dir).unwrap();
+            symlink(elsewhere.path().join("x"), dir.join(name)).unwrap();
+            assert!(
+                check_task_folder(one.path(), &dir)
+                    .unwrap_err()
+                    .to_string()
+                    .contains(name),
+                "{name}"
+            );
+        }
     }
 }

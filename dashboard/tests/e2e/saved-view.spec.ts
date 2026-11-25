@@ -6,6 +6,7 @@ import {
   matchCount,
   openDashboard,
   openFilters,
+  openView,
   test,
 } from './helpers';
 
@@ -19,8 +20,11 @@ const project = (id: string) => {
 };
 
 test.describe('saved view', () => {
-  test('filters, search, tab and Kanban options come back after a reload', async ({ page, tasksServer }) => {
-    await openDashboard(page, tasksServer, project('p1'));
+  test('filters, search and Kanban options come back after a reload; the tab is the address’s', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openDashboard(page, tasksServer, project('p1'), { tab: 'kanban' });
     // Grouping is offered while the board shows several sprints (T-323): all of them, before picking one
     await page.locator('#kanban-group-by-sprint').check();
     await page.locator('#kanban-show-skipped').check();
@@ -31,14 +35,15 @@ test.describe('saved view', () => {
     await closeFilters(page);
     await page.locator('#tab-graph').click();
 
-    await page.goto('/'); // no tab in the address: the saved tab applies, the graph (not the default Kanban)
+    // No tab in the address: the project's Overview, not the tab seen last (ATM-751); the rest of the view is back
+    await page.goto('/');
     await expect(page.locator('.filter-chip')).toHaveText(['Sprint: Phase 1', 'Type: Feature']);
     await expect(page.locator('#task-search')).toHaveValue('user');
     await expect(matchCount(page)).toHaveText('1 of 12 tasks');
-    await expect(page.locator('#tab-graph')).toHaveAttribute('aria-selected', 'true');
-    // The project's address, with the saved tab, and the saved Sprint filter in it too (?sprint=, T-323)
-    await expect(page).toHaveURL(/\/projects\/p1\/graph\?sprint=Phase%201$/);
-    await page.locator('#tab-kanban').click();
+    await expect(page.locator('#item-overview')).toHaveAttribute('aria-selected', 'true');
+    // The project's address, with the saved Sprint filter in it (?sprint=, T-323)
+    await expect(page).toHaveURL(/\/projects\/p1\?sprint=Phase%201$/);
+    await openView(page, 'kanban');
     await expect(page.locator('#kanban-show-skipped')).toBeChecked();
     await openFilters(page);
     await expect(filterButton(page, 'sprint', 'Phase 1')).toHaveClass(/\bactive\b/);
@@ -72,7 +77,7 @@ test.describe('saved view', () => {
     const data = loadFixture('progress');
     data.meta = { ...data.meta, id: 'prog' };
     await openDashboard(page, tasksServer, data);
-    await page.locator('#tab-progress').click();
+    await openView(page, 'progress');
     await page.locator('#sprint-table tbody tr').nth(1).click();
     const focused = await page.locator('#burndown-focus').textContent();
     expect(focused).toMatch(/^Phase \d+$/);
@@ -95,7 +100,7 @@ test.describe('saved view', () => {
 
   test('a #view= link wins over the saved tab', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, project('p1'));
-    await page.locator('#tab-progress').click();
+    await openView(page, 'progress');
     await page.goto('/?view=kanban');
     await page.reload();
     await expect(page.locator('#tab-kanban')).toHaveAttribute('aria-selected', 'true');
@@ -120,14 +125,15 @@ test.describe('saved view', () => {
     await filterButton(page, 'status', 'todo').click();
     await page.locator('#task-search').fill('editor');
     await closeFilters(page);
-    await page.locator('#tab-progress').click();
+    await openView(page, 'progress');
     // In the ⋯ settings menu, apart from Clear filters (T-323)
     await page.locator('#settings-btn').click();
     await page.locator('#reset-view').click();
     await expect(page.locator('#settings-menu')).toHaveCount(0);
     await expect(page.locator('.filter-btn.active')).toHaveCount(0);
     await expect(page.locator('#task-search')).toHaveValue('');
-    await expect(page.locator('#tab-kanban')).toHaveAttribute('aria-selected', 'true');
+    // The default tab: the Overview (ATM-751)
+    await expect(page.locator('#item-overview')).toHaveAttribute('aria-selected', 'true');
     await page.goto('/');
     await expect(matchCount(page)).toHaveText('12 of 12 tasks');
   });

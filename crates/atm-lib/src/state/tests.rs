@@ -212,11 +212,9 @@ fn done_records_the_outcome_and_a_batch_task_waits_for_the_sprint_review() {
     let mut r = task(json!({"id": "T-3", "status": "in_progress", "review": "blocker"}));
     let error = run(&mut r, Command::Done, &options, Some("claude:1")).unwrap_err();
     assert_eq!(error.code(), 2);
-    assert!(
-        error
-            .to_string()
-            .starts_with("T-3 is reviewed (blocker): ask for it with atm task state T-3 in_review")
-    );
+    assert!(error.to_string().starts_with(
+        "T-3 is reviewed (blocker): open its code review with atm review create --task T-3"
+    ));
 }
 
 #[test]

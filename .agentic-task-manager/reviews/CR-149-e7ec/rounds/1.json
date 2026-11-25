@@ -1,0 +1,62 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "c3899bd8a4eb957b4a949808b373146fe51d488f",
+    "head": "0f7c30297198906b3b99b151b011995f80871774"
+  },
+  "files": [
+    {
+      "path": "crates/atm-cli/src/commands.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/commands/db.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/commands/inbox.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/commands/project.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/main.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/code.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/agent/commands.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/security-architecture.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/cli.test.mjs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/scenarios/inbox.json",
+      "status": "added",
+      "binary": false
+    }
+  ],
+  "by": "claude:ba530ebb",
+  "at": "2026-11-24T06:44:19Z"
+}

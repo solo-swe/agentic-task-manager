@@ -1,5 +1,14 @@
 import type { Page } from '@playwright/test';
-import { expect, filterButton, loadFixture, openDashboard, test, type TasksData, openFilters } from './helpers';
+import {
+  expect,
+  filterButton,
+  loadFixture,
+  openDashboard,
+  openView,
+  test,
+  type TasksData,
+  openFilters,
+} from './helpers';
 
 // Expected numbers: tests/fixtures/progress.md (now = 2026-04-06 12:00 UTC; the tests run in UTC, en-US)
 const NOW = new Date('2026-04-06T12:00:00Z');
@@ -11,7 +20,7 @@ const cells = (page: Page, phase: number | string) => row(page, phase).locator('
 async function openProgress(page: Page, tasksServer: Parameters<typeof openDashboard>[1], data: string | TasksData) {
   await page.clock.setFixedTime(NOW);
   await openDashboard(page, tasksServer, data);
-  await page.locator('#tab-progress').click();
+  await openView(page, 'progress');
   await expect(page.locator('#progress')).toBeVisible();
 }
 
@@ -131,7 +140,7 @@ test.describe('Progress tab: sprint table', () => {
     // Phase 4 finished too: three closed sprints
     data.tasks.push({ ...data.tasks.at(-1)!, id: 'T-100', phase: 4 });
     await openProgress(page, tasksServer, data);
-    await page.locator('#tab-kanban').click();
+    await openView(page, 'kanban');
 
     await page.locator('#progress-card').click();
     const panel = page.locator('#progress-panel');
@@ -368,7 +377,7 @@ test.describe('Progress tab: burndown title, info and range (T-240)', () => {
       .poll(async () => (await page.locator('#burndown text.burndown-axis').allTextContents()).join())
       .not.toBe(sinceLabels.join());
     await page.reload();
-    await page.locator('#tab-progress').click();
+    await openView(page, 'progress');
     await expect(page.locator('#burndown-range [aria-pressed="true"]')).toHaveText('All time');
   });
 });

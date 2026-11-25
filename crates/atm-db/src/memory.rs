@@ -19,6 +19,9 @@ pub struct MemoryStore {
     vocabulary: Vocabulary,
     listeners: Listeners,
     here: Here,
+    /// The inbox and its archive (ATM-759)
+    inbox: Value,
+    inbox_archive: Value,
 }
 
 /// Who is told of a memory store's changes: each live subscription's callback, by a number of its own. A clone of the
@@ -97,7 +100,17 @@ impl MemoryStore {
                 worktree: None,
                 branch: None,
             },
+            inbox: atm_common::inbox::empty_inbox(),
+            inbox_archive: atm_common::inbox::empty_inbox(),
         })
+    }
+
+    /// The same store with this inbox and inbox archive (ATM-759).
+    #[must_use]
+    pub fn with_inbox(mut self, inbox: Value, archive: Value) -> Self {
+        self.inbox = inbox;
+        self.inbox_archive = archive;
+        self
     }
 
     /// The same store, as the working copy in this folder, on this branch: so a test can play one worktree of a clone
@@ -181,18 +194,37 @@ impl Store for MemoryStore {
         (0, 0)
     }
 
+    fn inbox(&self, archived: bool) -> Result<Value> {
+        Ok(if archived {
+            self.inbox_archive.clone()
+        } else {
+            self.inbox.clone()
+        })
+    }
+
     fn change(&mut self, change: &mut dyn FnMut(&mut Working) -> Result<()>) -> Result<()> {
         let archive = json!({"meta": {}, "tasks": self.archive});
+        let (inbox, inbox_archive) = (self.inbox.clone(), self.inbox_archive.clone());
         let mut work = Working::new(
             self.document.clone(),
             self.claims_store.clone(),
             self.here.clone(),
             0,
             Box::new(move || Ok(archive.clone())),
+        )
+        .with_inbox(
+            Box::new(move || Ok(inbox.clone())),
+            Box::new(move || Ok(inbox_archive.clone())),
         );
         change(&mut work)?;
         if let Some(archive) = work.changed_archive() {
             self.archive = objects(&archive["tasks"]);
+        }
+        if let Some(inbox) = work.changed_inbox() {
+            self.inbox = inbox.clone();
+        }
+        if let Some(archive) = work.changed_inbox_archive() {
+            self.inbox_archive = archive.clone();
         }
         self.vocabulary = Vocabulary::of_document(&work.document)?;
         self.document = std::mem::take(&mut work.document);

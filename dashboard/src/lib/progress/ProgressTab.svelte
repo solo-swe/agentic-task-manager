@@ -71,11 +71,12 @@
     return Number.isNaN(end) || end >= now ? undefined : end;
   });
   // The slice's figures and where the time went over the burndown's range, atm's (ATM-722, T-242): asked for again
-  // on every load of the project (its stats change) and whenever the slice or the range does
+  // on every load of the project (its stats change) and whenever the slice or the range does; only while the page is
+  // shown (ATM-776: it stays mounted when hidden, and asked atm twice at every start for a page no one saw)
   $effect(() => {
     const project = dashboard.projectId;
     void dashboard.stats;
-    if (!project) return;
+    if (!project || dashboard.tab !== 'progress') return;
     const request = {
       ...(filtered ? { tasks: tasks.map((t) => t.id) } : {}),
       ...(from !== undefined ? { from, to: until ?? now } : {}),

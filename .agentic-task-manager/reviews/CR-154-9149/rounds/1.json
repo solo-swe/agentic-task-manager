@@ -1,0 +1,27 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "7d1950f944d1175c2dcdc8c86fa2c38666b29cae",
+    "head": "7fb923fe636a9cc2a72d1d2cae9d040e49165dc6"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/lib/shell/Header.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/shell/TitleBar.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/app.spec.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:ba530ebb",
+  "at": "2026-11-24T14:36:10Z"
+}

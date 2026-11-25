@@ -2,12 +2,12 @@
 id = "01a20944-376a-717c-b942-73c274b147ca"
 number = 134
 title = "Release 0.43.0"
-status = "open"
+status = "approved"
 tasks = ["ATM-741"]
 author = "claude:0f56a916"
 reviewers = []
 created = 2026-11-23T16:36:35Z
-updated = 2026-11-23T17:34:12Z
+updated = 2026-11-23T21:01:10Z
 +++
 
 The sprint *Audit and tabs* as 0.43.0, on `dev/0.43.0`.

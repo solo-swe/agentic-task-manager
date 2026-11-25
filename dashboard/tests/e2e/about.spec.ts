@@ -30,8 +30,8 @@ test.describe('About', () => {
   test('a tab switch keeps it open', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, 'standard');
     await page.locator('#footer-about').click();
-    await page.locator('#tab-list').evaluate((tab: HTMLElement) => tab.click());
-    await expect(page.locator('#tab-list')).toHaveAttribute('aria-selected', 'true');
+    await page.locator('#item-tasks').evaluate((tab: HTMLElement) => tab.click());
+    await expect(page.locator('#item-tasks')).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator(overlay)).toBeVisible();
   });
 

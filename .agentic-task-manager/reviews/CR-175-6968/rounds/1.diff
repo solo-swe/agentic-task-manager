@@ -1,0 +1,50 @@
+diff --git a/dashboard/src/lib/overview/ProjectsOverview.svelte b/dashboard/src/lib/overview/ProjectsOverview.svelte
+index 22133dab..50acf646 100644
+--- a/dashboard/src/lib/overview/ProjectsOverview.svelte
++++ b/dashboard/src/lib/overview/ProjectsOverview.svelte
+@@ -56,8 +56,8 @@
+ 
+ <!-- On the board, the page doesn't scroll: the board takes the window's height and its columns scroll (T-265) -->
+ <section class="projects-overview" class:on-board={tab === 'board'} id="projects-overview">
+-  {#if !inApp || !dashboard.sidebarOpen}
+-    <!-- In the app the sidebar's items do its job (ATM-753); with the sidebar hidden it is back, until ATM-755 -->
++  {#if !inApp}
++    <!-- The webapp's only: in the app the sidebar's items, its rail and the new tab's chooser do its job (ATM-753) -->
+     <ItemTabs {items} current={item} onselect={selectItem} label="All projects" />
+   {/if}
+   {#if subViews.length > 1}
+diff --git a/dashboard/src/lib/shell/ViewPanel.svelte b/dashboard/src/lib/shell/ViewPanel.svelte
+index 62a2f8bd..0cd34bc5 100644
+--- a/dashboard/src/lib/shell/ViewPanel.svelte
++++ b/dashboard/src/lib/shell/ViewPanel.svelte
+@@ -38,13 +38,12 @@
+   // (state.svelte.ts onNavigate). An item opens on its first view
+   const selectItem = (next: Item) => next !== item && dashboard.selectTab(PROJECT_ITEM_VIEWS[next][0]);
+   const selectView = (next: ViewId) => dashboard.selectTab(next);
+-  // In the app the sidebar's items do the item row's job (ATM-753); with the sidebar hidden, the row is back, until the
+-  // new tab's chooser reaches every page (ATM-755)
+-  const showsItems = $derived(!inApp || !dashboard.sidebarOpen);
++  // The item row is the webapp's only (docs/sidebar-overhaul-design.md §2.3, §5): in the app the sidebar's items do its
++  // job (ATM-753), and with the sidebar hidden its rail (ATM-771) and the new tab's chooser (ATM-755) do
+ </script>
+ 
+ <div class="graph-section" id="graph-section">
+-  {#if showsItems}
++  {#if !inApp}
+     <div class="view-header">
+       <ItemTabs items={ITEMS} current={item} onselect={selectItem} {badges} label="Project" />
+     </div>
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index fe60e531..0e5cc0b4 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -1106,6 +1106,9 @@ test.describe('the dashboard in the atm app', () => {
+     expect(main.x).toBeGreaterThanOrEqual(strip.x + strip.width);
+     await expect(rail.locator('.app-sidebar-rail-item')).toHaveCount(6);
+     await expect(rail.locator('[data-item="tasks"]')).toHaveAttribute('aria-current', 'page');
++    // The rail does the sidebar's job: the page doesn't get the webapp's item row back, only Tasks' sub-tabs
++    await expect(page.locator('.item-tabs')).toHaveCount(0);
++    await expect(page.locator('#tab-kanban')).toBeVisible();
+     // Pointing at it: the whole sidebar over the page, which stays where it is
+     await rail.locator('[data-item="overview"]').hover();
+     await expect(sidebar).toBeVisible();

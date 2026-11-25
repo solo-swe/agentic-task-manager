@@ -1,9 +1,10 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import {
   addressOf,
   expect,
   loadFixture,
   openDashboard,
+  openView,
   projectDocument,
   summary,
   test,
@@ -175,6 +176,15 @@ async function openDiffs(page: Page, tasksServer: TasksServer, rest = '') {
   await openReviews(page, tasksServer, `CR-2${rest}`);
   await page.getByRole('tab', { name: /^Diffs/ }).click();
   await expect(diffOf(page, 'src/a.rs').getByRole('button', { name: 'Line 3', exact: true }).first()).toBeVisible();
+  await drawn(diffOf(page, 'src/a.rs'));
+}
+
+/** CompMD done drawing what `within` holds (ATM-780, ATM-781): until then its lines still move, and a test that measures
+ * a line first and points at it after can point at another. A text that changes (more lines shown) goes back to
+ * `loading` before it is drawn again, so this waits for that drawing too */
+async function drawn(within: Locator) {
+  await expect(within.locator('.compmd[data-compmd="ready"]').first()).toBeAttached();
+  await expect(within.locator('.compmd:not([data-compmd="ready"])')).toHaveCount(0);
 }
 
 test.describe('the reviews tab', () => {
@@ -183,7 +193,7 @@ test.describe('the reviews tab', () => {
     tasksServer,
   }) => {
     await openReviews(page, tasksServer);
-    await expect(page.locator('#tab-reviews')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#item-reviews')).toHaveAttribute('aria-selected', 'true');
     const rows = page.locator('.review-row');
     await expect(rows).toHaveCount(2);
     await expect(rows.first()).toHaveAttribute('data-review', 'CR-2');
@@ -195,7 +205,7 @@ test.describe('the reviews tab', () => {
     await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('?q=names&status=open');
   });
 
-  test('what waits for you (ATM-606): a count on the Reviews tab, and a review answered since you wrote marked', async ({
+  test('what waits for you (ATM-606): a count on the Code Reviews item, and a review answered since you wrote marked', async ({
     page,
     tasksServer,
   }) => {
@@ -203,9 +213,11 @@ test.describe('the reviews tab', () => {
       summary({ needs_you: { review: 0, blocked_on_user: 0, together: 0, code_reviews: 2 }, needs_you_reviews: [] }),
     );
     await openReviews(page, tasksServer);
-    const tab = page.locator('#tab-reviews');
+    const tab = page.locator('#item-reviews');
     await expect(page.locator('#reviews-waiting')).toHaveText('2');
-    await expect(tab).toHaveAccessibleName('Reviews, 2 waiting for you');
+    await expect(tab).toHaveAccessibleName(
+      'Code Reviews, 2 waiting for you: a decision, a round, or an answer to read',
+    );
     // CR-1, decided by nobody yet: answered since you last wrote
     tasksServer.setReviews({
       reviews: [
@@ -231,7 +243,7 @@ test.describe('the reviews tab', () => {
     await page.reload();
     await expect(page.locator('.review-row')).toHaveCount(2);
     await expect(page.locator('#reviews-waiting')).toHaveCount(0);
-    await expect(tab).toHaveAccessibleName('Reviews');
+    await expect(tab).toHaveAccessibleName('Code Reviews');
   });
 
   // ATM-610: unfiltered, the reviews in groups, what waits for you first; a filter shows the plain list
@@ -294,6 +306,33 @@ test.describe('the reviews tab', () => {
     await expect(unreadable).toHaveAttribute('data-unreadable', 'CR-13');
     await expect(unreadable).toHaveText("CR-13 Can't be read no status frozen A newer atm may have written it.");
     await expect(unreadable.getByRole('link')).toHaveCount(0);
+  });
+
+  test('the search is in the title bar, where the tasks’ search is on the other tabs; All’s reviews have it too (ATM-738)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openReviews(page, tasksServer);
+    const search = page.locator('.topbar .topbar-charts .review-search-box');
+    await expect(search).toHaveCount(1);
+    await expect(page.locator('#review-list .review-search')).toHaveCount(0);
+    // One search there, the page's own: not the tasks' search and Filters, which the reviews don't take
+    await expect(page.locator('#task-search, #filters-toggle')).toHaveCount(0);
+    // Before the pills, as the tasks' search is
+    expect((await search.boundingBox())!.x).toBeLessThan((await page.locator('#progress-card').boundingBox())!.x);
+    // "/" focuses it
+    await page.locator('#review-list').click({ position: { x: 1, y: 1 } });
+    await page.keyboard.press('/');
+    await expect(page.getByRole('searchbox', { name: 'Search reviews' })).toBeFocused();
+    // Another tab: the tasks' search is back
+    await openView(page, 'kanban');
+    await expect(page.locator('#task-search')).toHaveCount(1);
+    await expect(search).toHaveCount(0);
+    // All projects' Code Reviews
+    await page.goto('/reviews');
+    await expect(page.locator('#overview-reviews')).toBeVisible();
+    await expect(page.locator('.topbar .review-search-box')).toHaveCount(1);
+    await expect(page.locator('#overview-reviews .review-search')).toHaveCount(0);
   });
 
   test('opens with the last filter chosen, kept in the browser (not the search words); Clear forgets it', async ({
@@ -366,7 +405,7 @@ test.describe('the reviews tab', () => {
       await withReviewedTask(page, tasksServer, 'kanban');
       await page.locator('.kanban-card[data-id="T-004"] .card-review .review-link').click();
       await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
-      await expect(back(page)).toHaveText('Kanban');
+      await expect(back(page)).toHaveText('Board');
       await back(page).click();
       await expect(page.locator('#kanban')).toBeVisible();
       expect(new URL(page.url()).pathname).toBe(`/projects/${tasksServer.projectId}/kanban`);
@@ -402,7 +441,7 @@ test.describe('the reviews tab', () => {
       await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
       await page.keyboard.press('Escape');
       await expect(page.locator('#detail-overlay')).not.toHaveClass(/open/);
-      await expect(back(page)).toHaveText('Kanban');
+      await expect(back(page)).toHaveText('Board');
       await back(page).click();
       await expect(page.locator('#kanban')).toBeVisible();
     });
@@ -568,12 +607,14 @@ test.describe('a review’s page', () => {
     await openReviews(page, tasksServer, 'CR-2');
     await expect(page.locator('#review-window #review-page')).toBeVisible();
     await expect(page).toHaveTitle(/^\S.* CR-2: Review 2$/);
-    await expect(page.locator('#tab-reviews')).toHaveCount(0);
-    await expect(page.locator('.review-project')).not.toBeEmpty();
+    await expect(page.locator('#item-reviews')).toHaveCount(0);
+    // Its task leads the heading, `[T-1] CR-2 …`, a link: the task's key says the project, so the project's isn't said
+    await expect(page.locator('.review-title .review-title-task').first()).toHaveAttribute('href', /task=/);
+    await expect(page.locator('.review-title .review-project')).toHaveCount(0);
     // Back to the list, in the dashboard again
     await page.getByRole('link', { name: 'Reviews', exact: true }).click();
     await expect(page.locator('#review-list')).toBeVisible();
-    await expect(page.locator('#tab-reviews')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#item-reviews')).toHaveAttribute('aria-selected', 'true');
   });
 
   // ATM-593: a task named in a review opens its details over the review, closed back to the review as it was
@@ -958,6 +999,7 @@ test.describe('a review’s page', () => {
       const newSide = view.locator('.diff-pane.diff-new');
       await newSide.getByRole('button', { name: 'Show 2 unchanged lines' }).click();
       await expect(newSide.locator('.doc-gutter-lines [data-line="1"]')).toBeVisible();
+      await drawn(newSide);
       // Each number's text centre less its block's first line of text's (the text, not the block's box)
       const offsets = await newSide.evaluate((side) => {
         const centre = (r: DOMRect) => (r.top + r.bottom) / 2;
@@ -1504,6 +1546,71 @@ test.describe('a review’s page', () => {
     await expect(rows).toHaveCount(5);
   });
 
+  // ATM-730 (Hakan): switching a review's sub-tabs lost the diffs' place; each tab keeps its own, both ways
+  test(
+    'the diffs keep their place across a switch to Overview or Comments and back, and through Back',
+    WEBKIT_TOO,
+    async ({ page, tasksServer }) => {
+      // 30 files, each changing line 21 of 40 (so each card is a few runs tall)
+      const code = { kind: 'code', language: 'rust', line_offset: 1 } as const;
+      const files = Array.from({ length: 30 }, (_, i) => {
+        const path = `src/f${String(i).padStart(2, '0')}.rs`;
+        const patch = `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -18,7 +18,7 @@\n line 18\n line 19\n line 20\n-line 21\n+line 21 changed\n line 22\n line 23\n line 24\n`;
+        tasksServer.setRevisionDocument('base1', projectDocument(path, lines(40), code)).setRevisionDocument(
+          'head3',
+          projectDocument(
+            path,
+            lines(40, (n) => (n === 21 ? 'line 21 changed' : null)),
+            code,
+          ),
+        );
+        return file(path, patch);
+      });
+      await openReviews(page, tasksServer);
+      tasksServer.setReview('CR-2', reviewPage({ chains: [], view: { round: 3, against: null, files } }));
+      await page.goto(reviewPath(tasksServer, '/CR-2'));
+      await page.getByRole('tab', { name: /^Diffs/ }).click();
+      await expect(diffOf(page, 'src/f00.rs').locator('.diff-line').first()).toBeVisible();
+      const pane = page.locator('.review-diffs');
+      // Scrolled part way into a card far down, its diffs drawn
+      await pane.evaluate((el) => (el.scrollTop = el.scrollHeight / 2));
+      await expect(page.locator('.review-file.current')).toBeVisible();
+      await expect.poll(() => page.locator('.diff-view').count()).toBeGreaterThan(2);
+      const place = () =>
+        pane.evaluate((el) => {
+          const top = el.getBoundingClientRect().top;
+          const card = [...el.querySelectorAll<HTMLElement>('.review-file-card')].find(
+            (c) => c.getBoundingClientRect().bottom > top + 1,
+          );
+          return { file: card?.dataset.file, top: Math.round(card!.getBoundingClientRect().top - top) };
+        });
+      await page.waitForTimeout(100);
+      const before = await place();
+      expect(before.file).not.toBe('src/f00.rs');
+      const near = async () => {
+        const now = await place();
+        return now.file === before.file && Math.abs(now.top - before.top) <= 2;
+      };
+      for (const other of [/^Comments/, /^Overview/]) {
+        await page.getByRole('tab', { name: other }).click();
+        await expect(pane).toHaveCount(0);
+        await page.getByRole('tab', { name: /^Diffs/ }).click();
+        await expect.poll(near).toBe(true);
+      }
+      // Back from the Diffs goes to Overview; Forward comes back to the same place
+      await page.goBack();
+      await expect(page.getByRole('tab', { name: /^Overview/ })).toHaveAttribute('aria-selected', 'true');
+      await page.goForward();
+      await expect(page.getByRole('tab', { name: /^Diffs/ })).toHaveAttribute('aria-selected', 'true');
+      await expect.poll(near).toBe(true);
+      // Going to a file still goes to that file, not back to the place kept
+      await page.getByRole('tab', { name: /^Comments/ }).click();
+      await page.getByRole('tab', { name: /^Diffs/ }).click();
+      await page.locator('.review-file-name[data-file="src/f02.rs"]').click();
+      await expect.poll(async () => (await place()).file).toBe('src/f02.rs');
+    },
+  );
+
   test('the file gone to, the round and the round against are the address’s, and are asked of the server', async ({
     page,
     tasksServer,
@@ -1627,6 +1734,32 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect(diffOf(page, 'src/a.rs')).toHaveAttribute('data-mode', 'unified');
   });
 
+  // ATM-731 (Hakan): the file as it is after the change, nothing marked
+  test('Final: each file as it is after the change, whole and unmarked; its chains on their lines; kept for the next page', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openDiffs(page, tasksServer);
+    await page.getByRole('button', { name: 'Final' }).click();
+    const view = diffOf(page, 'src/a.rs');
+    await expect(page.locator('.diff-view[data-mode="final"]')).toHaveCount(3);
+    // src/a.rs after round 3: 41 lines (40, and line 30b added), each numbered once, nothing folded or marked
+    await expect(view.locator('.diff-line')).toHaveCount(41);
+    await expect(view.getByRole('button', { name: /Show \d+ unchanged/ })).toHaveCount(0);
+    for (const marked of ['.diff-removed', '.diff-added', '.diff-changed'])
+      await expect(view.locator(`.diff-line${marked}`), marked).toHaveCount(0);
+    await expect(view.locator('.diff-code.both')).toHaveCount(0);
+    // The chain on LINE 3 (new side) stays under its line, in the file
+    await expect(view.locator('.diff-run + [data-chain="t1"], .diff-run ~ [data-chain="t1"]').first()).toBeVisible();
+    await expect(view.locator('.diff-elsewhere [data-chain="t1"]')).toHaveCount(0);
+    await page.reload();
+    await page.getByRole('tab', { name: /^Diffs/ }).click();
+    await expect(diffOf(page, 'src/a.rs')).toHaveAttribute('data-mode', 'final');
+    // The Layout group's three, Final pressed
+    await expect(page.getByRole('group', { name: 'Layout' }).getByRole('button')).toHaveCount(3);
+    await expect(page.getByRole('button', { name: 'Final' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   test('Rendered: a Markdown file on the document viewer’s page, with its line numbers; Unified shows one side', async ({
     page,
     tasksServer,
@@ -1655,6 +1788,7 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect(newSide.locator('.doc-gutter-lines [data-line="1"]')).toHaveCount(0);
     await newSide.getByRole('button', { name: 'Show 2 unchanged lines' }).click();
     await expect(newSide.locator('.doc-gutter-lines [data-line="1"]')).toBeVisible();
+    await drawn(newSide);
     // The document viewer's own page on a desk (ATM-645: DocumentPage), all shown, its last text inside it; the numbers
     // in its margin, clear of the text
     await expect(newSide).toHaveClass(/doc-sheet/);
@@ -2055,6 +2189,8 @@ test.describe('the diff viewer on a review’s page', () => {
     await page.getByRole('button', { name: 'Rendered' }).click();
     const newSide = view.locator('.diff-pane.diff-new');
     await newSide.getByRole('button', { name: 'Show 2 unchanged lines' }).click();
+    // The whole page drawn again before the heading is measured (ATM-781: a slow run pointed where it had been)
+    await drawn(newSide);
     // No + until the pointer is over a block; then the + of that block's line, beside its number
     await expect(newSide.locator('.diff-plus')).toHaveCount(0);
     const heading = newSide.locator('.compmd-page h1');
@@ -2109,6 +2245,8 @@ test.describe('the diff viewer on a review’s page', () => {
     await page.getByRole('button', { name: 'Rendered' }).click();
     const newSide = view.locator('.diff-pane.diff-new');
     await newSide.getByRole('button', { name: 'Show 2 unchanged lines' }).click();
+    // The whole page drawn again before its blocks are measured (ATM-781)
+    await drawn(newSide);
     const first = (await newSide.locator('.compmd-page p', { hasText: 'First step.' }).boundingBox())!;
     const last = (await newSide.locator('.compmd-page p', { hasText: 'New ending.' }).boundingBox())!;
     await page.mouse.move(first.x + 10, first.y + first.height / 2);
@@ -2361,6 +2499,111 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect.poll(() => tasksServer.reviewRequests.filter((r) => r === 'CR-2').length).toBeGreaterThan(asked);
     await expect(page.getByText('Review 2, retitled').first()).toBeVisible();
     await expect(mine.getByLabel('Edit your comment')).toHaveValue('Half written');
+  });
+
+  // ATM-733 (Hakan): what came while the review was open shows where it came, until it is seen
+  test('comments and a round arriving while the review is open are badged on their tabs, marked New, cleared once seen', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openReviews(page, tasksServer);
+    const page_ = reviewPage();
+    await page.goto(reviewPath(tasksServer, '/CR-2'));
+    const badge = (tab: string) => page.locator(`[data-new="${tab}"]`);
+    await expect(page.locator('#review-tab-overview')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.review-new')).toHaveCount(0);
+    // An agent replies on src/a.rs, comments on the review as a whole, and adds round 4; the user comments too
+    const [t1, t2, t3] = page_.chains as { comments: Record<string, unknown>[] }[];
+    const agent = (id: string, body: string) => ({ ...comment(id, body), author: 'claude:b', resolved: null });
+    tasksServer.setReview('CR-2', {
+      ...page_,
+      rounds: [...page_.rounds, { number: 4, kind: { kind: 'files' }, files: [], by: 'claude:a', at: '' }],
+      view: { ...page_.view, round: 4 },
+      chains: [
+        { ...t1, comments: [{ ...t1.comments[0], replies: [agent('c11', 'Upper case is the style.')] }] },
+        t2,
+        t3,
+        {
+          id: 't12',
+          anchor: { round: 4, path: null, side: 'new', lines: null, quote: null },
+          comments: [{ ...agent('c12', 'Round 4 is up.'), resolved: false }],
+          placed: null,
+          drifted: null,
+        },
+        {
+          id: 't13',
+          anchor: { round: 4, path: null, side: 'new', lines: null, quote: null },
+          comments: [{ ...comment('c13', 'My own note.'), author: 'Ana' }],
+          placed: null,
+          drifted: null,
+        },
+      ],
+    });
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    // On the Diffs: the reply, and the new round; the Comments: both comments (the user's own, Ana's, isn't new)
+    await expect(badge('diffs')).toHaveText('1 new, round 4');
+    await expect(badge('comments')).toHaveText(/^[12] new$/);
+    // The Overview shows the comment on the review, marked New; in view, it is seen, and its badges go down
+    const general = page.locator('.review-conversation [data-comment="c12"]');
+    await expect(general).toBeVisible();
+    await expect(badge('overview')).toHaveCount(0);
+    await expect(badge('comments')).toHaveText('1 new');
+    await expect(page.locator('.review-conversation [data-comment="c13"] .chain-new')).toHaveCount(0);
+    // The Diffs show round 4 (seen) and the reply under src/a.rs's chain, marked New until it is in view
+    await page.locator('#review-tab-diffs').click();
+    await expect(diffOf(page, 'src/a.rs').locator('[data-comment="c11"]')).toBeVisible();
+    await expect(page.locator('#review-new-round')).toHaveCount(0);
+    await expect(page.locator('.review-new')).toHaveCount(0);
+    await expect(page.locator('.chain-new')).toHaveCount(0);
+  });
+
+  // ATM-732 (Hakan): an agent's comment arriving above a box being written in cut the diff's rows again, which made
+  // the box again: the reply's text was lost, and the comment's box lost its focus and its cursor
+  test('comments arriving while you write a comment and a reply in the diff keep both, the cursor and the focus', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openReviews(page, tasksServer);
+    const page_ = reviewPage();
+    await page.goto(reviewPath(tasksServer, '/CR-2?file=src/a.rs'));
+    const view = diffOf(page, 'src/a.rs');
+    // A reply to the chain on line 3, half written, then a comment on line 31, being written, its cursor inside it
+    await view.locator('[data-chain="t1"]').getByRole('button', { name: 'Reply' }).click();
+    const reply = view.getByLabel('Reply to Ana');
+    await reply.fill('Half a reply');
+    await view.locator('.diff-new').getByRole('button', { name: 'Line 31', exact: true }).first().click();
+    const box = page.locator('.diff-composer textarea');
+    await box.fill('Half a comment');
+    await box.press('ArrowLeft');
+    await box.press('ArrowLeft');
+    await box.press('ArrowLeft');
+    const caret = 'Half a comment'.length - 3;
+    // An agent comments above each of them: on line 2, and on line 30
+    const agents = (id: string, line: number, cid: string) => ({
+      id,
+      anchor: { round: 3, path: 'src/a.rs', side: 'new', lines: [line, line], quote: `line ${line}` },
+      comments: [{ ...comment(cid, `Agent on line ${line}`), author: 'claude:b' }],
+      placed: [line, line],
+      drifted: null,
+    });
+    tasksServer.setReview('CR-2', {
+      ...page_,
+      chains: [...page_.chains, agents('t8', 2, 'c8'), agents('t9', 30, 'c9')],
+    });
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(view.locator('[data-chain="t8"]')).toBeVisible();
+    await expect(view.locator('[data-chain="t9"]')).toBeVisible();
+    await expect(view.getByLabel('Reply to Ana')).toHaveValue('Half a reply');
+    await expect(page.locator('.diff-composer textarea')).toHaveValue('Half a comment');
+    await expect(page.locator('.diff-composer textarea')).toBeFocused();
+    expect(
+      await page
+        .locator('.diff-composer textarea')
+        .evaluate((el: HTMLTextAreaElement) => [el.selectionStart, el.selectionEnd]),
+    ).toEqual([caret, caret]);
+    // Typing goes on where it was
+    await page.keyboard.type('XY');
+    await expect(page.locator('.diff-composer textarea')).toHaveValue('Half a commXYent');
   });
 
   // ATM-612: drafts, only the user's, sent together with their decision
@@ -3389,12 +3632,34 @@ test.describe('performance', { tag: '@timed' }, () => {
         await frame();
       }
     });
-    await page.waitForTimeout(1000);
+    // Settled (ATM-742): the work a scroll leaves (cards made or let go when the page is idle) done, as the page says it,
+    // not after a fixed second, which a loaded run (CI's retry) doesn't always give it: the page's nodes the same over
+    // two idle periods in a row
+    await page.evaluate(async () => {
+      const idle = () => new Promise((r) => requestIdleCallback(() => requestAnimationFrame(r), { timeout: 2000 }));
+      let last = -1;
+      for (let i = 0; i < 50; i++) {
+        await idle();
+        await idle();
+        const now = document.querySelectorAll('*').length;
+        if (now === last) return;
+        last = now;
+      }
+    });
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Performance.enable');
-    await cdp.send('HeapProfiler.collectGarbage');
-    const { metrics } = await cdp.send('Performance.getMetrics');
-    const alive = metrics.find((m) => m.name === 'Nodes')!.value;
+    // Collected until nothing more goes (one collection can leave what the last one let go): the nodes still alive
+    const nodes = async () => {
+      await cdp.send('HeapProfiler.collectGarbage');
+      const { metrics } = await cdp.send('Performance.getMetrics');
+      return metrics.find((m) => m.name === 'Nodes')!.value;
+    };
+    let alive = await nodes();
+    for (let i = 0; i < 5; i++) {
+      const next = await nodes();
+      if (next >= alive) break;
+      alive = next;
+    }
     console.log('long review, DOM nodes alive after down and back:', alive, 'on the page:', scrolled.nodes);
     // Measured (docs/diff-viewer-profile.md): 93,240 before the fixes (a render after its text was gone kept its
     // card; content-visibility kept every card's old layout), 21,840 after them; the page itself about 5,400

@@ -1,0 +1,437 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 4b84411b..556489fc 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -787,9 +787,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "compmd-host"
+-version = "0.9.0"
++version = "0.10.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "fd0757fe10ee0437612212430395849fb78847ecc9535d16d94f75ea1e4b07e1"
++checksum = "f2f3cc2d7c79968e8559acc394e2f2bb01ffb9268c7c82e234be9d3d9fd60e2a"
+ dependencies = [
+  "compmd-pack",
+  "http",
+@@ -801,9 +801,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "compmd-pack"
+-version = "0.9.0"
++version = "0.10.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "fa63257f2a4987095ffce5c6dfd3007c4635005b2962a21da1f3755279d2a95e"
++checksum = "98a1a9fc08686f085bf7a33b5f6b356ae3f46cd90b1fe0bb2e9742ccf8cf6555"
+ dependencies = [
+  "semver",
+  "serde",
+@@ -960,7 +960,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "d045de693cb712d0b22c6a64be5b953f67b3ce00ab5ad3dd5d8b441886ab8e1a"
+ dependencies = [
+  "quote",
+- "syn 2.0.119",
++ "syn 3.0.9",
+ ]
+ 
+ [[package]]
+@@ -4349,9 +4349,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "tauri-plugin-compmd"
+-version = "0.9.0"
++version = "0.10.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "2fe3c0e5f878c6ec65aec48fbaa05b914fbc29c71f9a3143923f1e77c0f55609"
++checksum = "6975718b31666a1556a591788ea07442238cda28d1b8b2e5a97d0ab6e18cab54"
+ dependencies = [
+  "compmd-host",
+  "serde_json",
+diff --git a/Cargo.toml b/Cargo.toml
+index 65c463aa..89bc4ee5 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -30,9 +30,9 @@ atm-api = { path = "crates/atm-api" }
+ # CompMD in a Tauri app (ADR-006, T-524): CompMD's own plugin serves the bundle the page's build wrote (the frames and
+ # the packs) on a compmd: scheme, embedded by the app's build.rs (the `build` feature). Its version is
+ # @compmd/sandbox's (dashboard/package.json): they are released together
+-tauri-plugin-compmd = "=0.9.0"
++tauri-plugin-compmd = "=0.10.0"
+ # CompMD's serving contract, which atm serve answers its bundle with as the plugin does in the app (ADR-006)
+-compmd-host = "=0.9.0"
++compmd-host = "=0.10.0"
+ clap = { version = "4.5", features = ["derive"] }
+ # Shell completion with atm's own values (task IDs, sprints, …), its dynamic engine (T-451, approved)
+ clap_complete = { version = "4.5", features = ["unstable-dynamic"] }
+diff --git a/dashboard/package.json b/dashboard/package.json
+index bbaf13ed..05ee96ef 100644
+--- a/dashboard/package.json
++++ b/dashboard/package.json
+@@ -43,10 +43,10 @@
+   },
+   "devDependencies": {
+     "@comp-markdown/mermaid": "0.1.2",
+-    "@compmd/processor": "0.9.0",
+-    "@compmd/render": "0.9.0",
+-    "@compmd/sandbox": "0.9.0",
+-    "@compmd/vite": "0.9.0",
++    "@compmd/processor": "0.10.0",
++    "@compmd/render": "0.10.0",
++    "@compmd/sandbox": "0.10.0",
++    "@compmd/vite": "0.10.0",
+     "@dagrejs/dagre": "^3.1.3",
+     "@eslint/js": "^10.0.1",
+     "@playwright/test": "1.64",
+diff --git a/dashboard/pnpm-lock.yaml b/dashboard/pnpm-lock.yaml
+index 7f7efbd4..5bf212c4 100644
+--- a/dashboard/pnpm-lock.yaml
++++ b/dashboard/pnpm-lock.yaml
+@@ -173,17 +173,17 @@ importers:
+         specifier: 0.1.2
+         version: 0.1.2
+       '@compmd/processor':
+-        specifier: 0.9.0
+-        version: 0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
++        specifier: 0.10.0
++        version: 0.10.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+       '@compmd/render':
+-        specifier: 0.9.0
+-        version: 0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
++        specifier: 0.10.0
++        version: 0.10.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+       '@compmd/sandbox':
+-        specifier: 0.9.0
+-        version: 0.9.0(@compmd/processor@0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(@typescript-eslint/types@8.72.1)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
++        specifier: 0.10.0
++        version: 0.10.0(@compmd/processor@0.10.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(@typescript-eslint/types@8.72.1)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
+       '@compmd/vite':
+-        specifier: 0.9.0
+-        version: 0.9.0(@typescript-eslint/types@8.72.1)(svelte@5.57.3(@typescript-eslint/types@8.72.1))(typescript@6.0.3)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
++        specifier: 0.10.0
++        version: 0.10.0(@typescript-eslint/types@8.72.1)(svelte@5.57.3(@typescript-eslint/types@8.72.1))(typescript@6.0.3)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
+       '@dagrejs/dagre':
+         specifier: ^3.1.3
+         version: 3.1.3
+@@ -312,19 +312,19 @@ packages:
+   '@comp-markdown/mermaid@0.1.2':
+     resolution: {integrity: sha512-FpJgzLz4AtA9Ty1ZORW6p1IcjtMgoEE/hoj9O2Nh9/Oa3wXd/6B1CcgkMxgZUZIHxTU/JFC6C7VjLU8vawUYtQ==}
+ 
+-  '@compmd/host@0.9.0':
+-    resolution: {integrity: sha512-IoJRkYgDUeaEvWXseRKUi6PY/OWwTJpmXSrOnib3+K9RkRIzR9bmNDtUY0LORqYI1Esmgk5ZE+J01ZJ4i9lF5A==}
++  '@compmd/host@0.10.0':
++    resolution: {integrity: sha512-jn14UkyxEKnD1ZFyxbYCjs5PGASlXnaju6OFBndGhO5F/x/o/38/UnY3xQDZLffrFNMn8+26s++y1Hg0QrP0/w==}
+ 
+-  '@compmd/processor@0.9.0':
+-    resolution: {integrity: sha512-8jyt6+HEXE2Jfx0Hiys6Oorjc8sEpXi+7+DUpAhAjJ9jo6mA+aTwWfSG7gl8TtU9VeiWFLhA3/YkRFMFctxawQ==}
++  '@compmd/processor@0.10.0':
++    resolution: {integrity: sha512-/+Sz547vfZHISL+S5sYwDuQmhqhjdKUi4/56EiUpBh2Ir8yKgCEImt3OU2vuYH7I8MwCiGCEWeStN7TIpDGnow==}
+ 
+-  '@compmd/registry@0.9.0':
+-    resolution: {integrity: sha512-djGbHRlyaAdHjFgu3Vv9GwjtVPgUwHhlWthkXeTm2eNa2KmEh+EOOgiP5GDxOgMQvfs9N9l9lgJeAFvccU54uQ==}
++  '@compmd/registry@0.10.0':
++    resolution: {integrity: sha512-T2xYbCoz2NN9NlZvpU+H/XfR72uFlFUe1Pc1Ka8JgeHUMISSTqYGKrsgG50GN4jfFlwARD9f/OBaIubyCsq9sA==}
+     peerDependencies:
+-      '@compmd/processor': ^0.9.0
++      '@compmd/processor': ^0.10.0
+ 
+-  '@compmd/render@0.9.0':
+-    resolution: {integrity: sha512-A+mm3mTs2BYdoHAi2vWI1+BaXc8DsrJmtwgcLXbunNQPbmXb9I4CHfgLWkiDzuKgZ/dQoag8oCvAHZrJ6locWg==}
++  '@compmd/render@0.10.0':
++    resolution: {integrity: sha512-qI3Ndo1uf+EJEKC1f0nhkieiFPduMG9chVhGxdjymeP2ckUHfdUhckCxERmZtR0T/XMHZA/aEVjfLVdrj6Po2w==}
+     peerDependencies:
+       react: ^19
+       react-dom: ^19
+@@ -337,17 +337,17 @@ packages:
+       svelte:
+         optional: true
+ 
+-  '@compmd/sandbox@0.9.0':
+-    resolution: {integrity: sha512-gqFAR/7pC0y68KlBEo2UOFn/f6RNVFy6+QVZ6qFwb4L2BqGUddE0gHBIS5lLMemmDOjmKHz56fKWumVLbsuh/Q==}
++  '@compmd/sandbox@0.10.0':
++    resolution: {integrity: sha512-Gqjst8rwc9VG6A6yWlH4y5scPRsQpezabaYAoLnbo+IlDWkjcVQQ/CAUgMrTSQ8l7oOa9Ak4qMKNnQ7iKPfMlA==}
+     peerDependencies:
+-      '@compmd/processor': ^0.9.0
++      '@compmd/processor': ^0.10.0
+       vite: '>=8'
+     peerDependenciesMeta:
+       vite:
+         optional: true
+ 
+-  '@compmd/vite@0.9.0':
+-    resolution: {integrity: sha512-ryPJup9OGuoCJ6SU/o18LbRPulT4OMz5gNhWgXarXi1nXGT8LsdzfroejfQ4OeU4kX+URORIMlmCjQFkgVWa/A==}
++  '@compmd/vite@0.10.0':
++    resolution: {integrity: sha512-CRj6CdHKGiTcLZB7tLCePbx/meFwyJLNeBU0rDxgebmpAEluHphh2VIsat/FH0ul2b2HtmyuFL1L2qkOYh05+w==}
+     peerDependencies:
+       react: ^19
+       react-dom: ^19
+@@ -2124,32 +2124,32 @@ snapshots:
+ 
+   '@comp-markdown/mermaid@0.1.2': {}
+ 
+-  '@compmd/host@0.9.0': {}
++  '@compmd/host@0.10.0': {}
+ 
+-  '@compmd/processor@0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))':
++  '@compmd/processor@0.10.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))':
+     dependencies:
+-      '@compmd/render': 0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
++      '@compmd/render': 0.10.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+     transitivePeerDependencies:
+       - react
+       - react-dom
+       - svelte
+ 
+-  '@compmd/registry@0.9.0(@compmd/processor@0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))':
++  '@compmd/registry@0.10.0(@compmd/processor@0.10.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))':
+     dependencies:
+-      '@compmd/processor': 0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
++      '@compmd/processor': 0.10.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+ 
+-  '@compmd/render@0.9.0(svelte@5.57.2(@typescript-eslint/types@8.72.1))':
++  '@compmd/render@0.10.0(svelte@5.57.2(@typescript-eslint/types@8.72.1))':
+     optionalDependencies:
+       svelte: 5.57.2(@typescript-eslint/types@8.72.1)
+ 
+-  '@compmd/render@0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))':
++  '@compmd/render@0.10.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))':
+     optionalDependencies:
+       svelte: 5.57.3(@typescript-eslint/types@8.72.1)
+ 
+-  '@compmd/sandbox@0.9.0(@compmd/processor@0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(@typescript-eslint/types@8.72.1)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))':
++  '@compmd/sandbox@0.10.0(@compmd/processor@0.10.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(@typescript-eslint/types@8.72.1)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))':
+     dependencies:
+-      '@compmd/processor': 0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+-      '@compmd/render': 0.9.0(svelte@5.57.2(@typescript-eslint/types@8.72.1))
++      '@compmd/processor': 0.10.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
++      '@compmd/render': 0.10.0(svelte@5.57.2(@typescript-eslint/types@8.72.1))
+       '@shikijs/core': 4.5.0
+       '@shikijs/engine-javascript': 4.5.0
+       '@shikijs/engine-oniguruma': 4.5.0
+@@ -2166,13 +2166,13 @@ snapshots:
+       - react
+       - react-dom
+ 
+-  '@compmd/vite@0.9.0(@typescript-eslint/types@8.72.1)(svelte@5.57.3(@typescript-eslint/types@8.72.1))(typescript@6.0.3)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))':
++  '@compmd/vite@0.10.0(@typescript-eslint/types@8.72.1)(svelte@5.57.3(@typescript-eslint/types@8.72.1))(typescript@6.0.3)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))':
+     dependencies:
+-      '@compmd/host': 0.9.0
+-      '@compmd/processor': 0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+-      '@compmd/registry': 0.9.0(@compmd/processor@0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))
+-      '@compmd/render': 0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+-      '@compmd/sandbox': 0.9.0(@compmd/processor@0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(@typescript-eslint/types@8.72.1)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
++      '@compmd/host': 0.10.0
++      '@compmd/processor': 0.10.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
++      '@compmd/registry': 0.10.0(@compmd/processor@0.10.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))
++      '@compmd/render': 0.10.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
++      '@compmd/sandbox': 0.10.0(@compmd/processor@0.10.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(@typescript-eslint/types@8.72.1)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
+       semver: 7.8.5
+       vite: 8.3.5(@types/node@26.6.6)(yaml@2.9.1)
+       yaml: 2.9.1
+diff --git a/dashboard/pnpm-workspace.yaml b/dashboard/pnpm-workspace.yaml
+index 2d4f7ce4..3339dacd 100644
+--- a/dashboard/pnpm-workspace.yaml
++++ b/dashboard/pnpm-workspace.yaml
+@@ -1,11 +1,11 @@
+ minimumReleaseAgeExclude:
+-  - '@compmd/processor@0.7.1 || 0.8.0 || 0.9.0'
+-  - '@compmd/registry@0.7.1 || 0.8.0 || 0.9.0'
+-  - '@compmd/render@0.7.1 || 0.8.0 || 0.9.0'
+-  - '@compmd/sandbox@0.7.1 || 0.8.0 || 0.9.0'
+-  - '@compmd/vite@0.7.1 || 0.8.0 || 0.9.0'
++  - '@compmd/processor@0.7.1 || 0.8.0 || 0.9.0 || 0.10.0'
++  - '@compmd/registry@0.7.1 || 0.8.0 || 0.9.0 || 0.10.0'
++  - '@compmd/render@0.7.1 || 0.8.0 || 0.9.0 || 0.10.0'
++  - '@compmd/sandbox@0.7.1 || 0.8.0 || 0.9.0 || 0.10.0'
++  - '@compmd/vite@0.7.1 || 0.8.0 || 0.9.0 || 0.10.0'
+   - '@comp-markdown/mermaid@0.1.2'
+-  - '@compmd/host@0.8.0 || 0.9.0'
++  - '@compmd/host@0.8.0 || 0.9.0 || 0.10.0'
+ # pnpm's settings for dashboard/ (a single package, not a workspace of several).
+ overrides:
+   # GHSA-g3hv-75wg-m249: ESLint and typescript-eslint still ask for 10.x (a development dependency; nothing ships)
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index a66bdc24..1c284b19 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -176,6 +176,11 @@ async function openDiffs(page: Page, tasksServer: TasksServer, rest = '') {
+   await openReviews(page, tasksServer, `CR-2${rest}`);
+   await page.getByRole('tab', { name: /^Diffs/ }).click();
+   await expect(diffOf(page, 'src/a.rs').getByRole('button', { name: 'Line 3', exact: true }).first()).toBeVisible();
++  // CompMD done drawing its code (ATM-780): until then the rows still move, and a test that measures a line first and
++  // points at it after can point at another
++  const view = diffOf(page, 'src/a.rs');
++  await expect(view.locator('.compmd[data-compmd="ready"]').first()).toBeAttached();
++  await expect(view.locator('.compmd:not([data-compmd="ready"])')).toHaveCount(0);
+ }
+ 
+ test.describe('the reviews tab', () => {
+diff --git a/docs/agent/compmd-llms.txt b/docs/agent/compmd-llms.txt
+index f4f27a46..52703d54 100644
+--- a/docs/agent/compmd-llms.txt
++++ b/docs/agent/compmd-llms.txt
+@@ -1,4 +1,4 @@
+-<!-- CompMD's llms.txt, version 0.9.0 (github.com/comp-markdown/compmd, spec/llms.txt at tag v0.9.0, commit 87032ac311f6; unchanged since v0.8.0, and since v0.4.0 but for one link), as atm ships it: the CompMD version the dashboard renders with. In atm, task text gets no frontmatter of its own (the dashboard adds it, with the task as md.data.task), no imports, data files, URLs or components defined in the text; skills/atm-create-tasks/SKILL.md says what renders. Update this copy with CompMD; agents read it with `atm docs compmd`. -->
++<!-- CompMD's llms.txt, version 0.10.0 (github.com/comp-markdown/compmd, spec/llms.txt at tag v0.10.0, commit 7a06d7e7f071; new in it since v0.9.0: the type params, image boxes, fonts, gradients, no-code components), as atm ships it: the CompMD version the dashboard renders with. In atm, task text gets no frontmatter of its own (the dashboard adds it, with the task as md.data.task), no imports, data files, URLs or components defined in the text; skills/atm-create-tasks/SKILL.md says what renders. Update this copy with CompMD; agents read it with `atm docs compmd`. -->
+ # CompMD
+ 
+ > CompMD (Component Markdown) is CommonMark + GFM with components, containers, named slots, typed params, data, inputs and CSS-like layout. Files end in `.comp.md`. Every construct is one line, so a document stays readable in any plain Markdown renderer. This file is everything you need to write valid CompMD; the normative spec is compmd-spec-v1.md.
+@@ -279,26 +279,28 @@ md:
+ 
+ | Component | Lays out | Own params |
+ | --- | --- | --- |
+-| `box` | per `display` (`block`, `flex`, `grid`) | `display`, `flex-direction`, `gap`, `align-items`, `justify-content`, `flex-wrap`, `grid-template-columns`, `grid-template-rows`, `grid-template-areas` |
++| `box` | per `display` (`block`, `flex`, `grid`) | `display`, `flex-direction`, `gap`, `align-items`, `justify-content`, `flex-wrap`, `grid-template-columns`, `grid-template-rows`, `grid-auto-rows`, `grid-template-areas` |
+ | `stack` | top to bottom | `gap`, `align-items` |
+ | `row` | side by side, wrapping | `gap`, `align-items`, `justify-content`, `flex-wrap` |
+-| `grid` | as many per row as fit (`min`), or an exact grid | `min`, `gap`, `align-items`, `grid-template-columns`, `grid-template-rows`, `grid-template-areas` |
++| `grid` | as many per row as fit (`min`), or an exact grid | `min`, `gap`, `align-items`, `grid-template-columns`, `grid-template-rows`, `grid-auto-rows`, `grid-template-areas` |
+ 
+-`box`'s params take: `display=block|flex|grid|contents`, `flex-direction=row|column`, `align-items=start|center|end|stretch`, `justify-content=start|center|end|between|around|space-between|space-around`, `flex-wrap=wrap|nowrap`, `gap` a space (below), `grid-template-columns` and `grid-template-rows` tracks (`1fr 2fr`, `repeat(auto-fill, minmax(12rem, 1fr))`), `grid-template-areas` quoted rows of area names (`"'head head' 'side main'"`).
++`box`'s params take: `display=block|flex|grid|contents`, `flex-direction=row|column`, `align-items=start|center|end|stretch`, `justify-content=start|center|end|between|around|space-between|space-around`, `flex-wrap=wrap|nowrap`, `gap` a space (below), `grid-template-columns`, `grid-template-rows` and `grid-auto-rows` tracks (`1fr 2fr`, `repeat(auto-fill, minmax(12rem, 1fr))`; `grid-auto-rows=1fr` makes every row as tall as the tallest), `grid-template-areas` quoted rows of area names (`"'head head' 'side main'"`).
+ 
+ Common params, on any container or leaf (they style its outer box):
+ 
+ - size: `width`, `height`, `min-width`, `max-width` (`auto` or a length), `aspect-ratio` (`none` or a ratio such as `16/9`)
+ - spacing: `padding`, `padding-inline`, `padding-block` (one or two spaces), `padding-inline-start`, `padding-inline-end`, `padding-block-start`, `padding-block-end` (one space); a space is `none`, `s`, `m`, `l` or a length
+-- look: `border` (`none subtle strong` or CSS), `border-radius` (`none s m l full` or a length), `background` (`none subtle strong accent` or a CSS color)
++- look: `border` (`none subtle strong` or CSS) and its sides `border-inline-start`, `border-inline-end`, `border-block-start`, `border-block-end` (the same values; `border` covers them), `border-radius` (`none s m l full` or a length), `background` (`none subtle strong accent` or a CSS color), `shadow` (`none s m l`, tokens only), `rotate` (an angle from `-15deg` to `15deg`: a tilt, which moves nothing around it)
++- type, inherited by what the box holds: `font-size` (`s m l xl`, in `em`, or a length), `font-weight` (`normal bold`), `font-style` (`normal italic`), `font-family` (`body heading mono`, the host's fonts; never a font's name), `color` (`muted accent` or a CSS color), `text-align` (`start center end`), `line-height` (`tight normal loose` or a number), `letter-spacing` (`tight normal wide` or a length), `text-transform` (`none uppercase lowercase capitalize`: shown, not written, so `:badge[new]{text-transform=uppercase}` is read "new"), `text-decoration` (`none underline line-through`); W126 for a `color` and a `background` in hex, `rgb()` or `hsl()` that contrast below 4.5:1
+ - placement: `grid-area`, `order` (`first last none`), `align-self` (`start center end stretch`), `justify-self` (`start center end`), `inset-inline-start`, `inset-inline-end`, `inset-block-start`, `inset-block-end` (`auto` or a length)
+-- behavior: `scroll`, `fill` (flags: alone, or `true` or `false`), `sticky=top|bottom|none`, `show=sm|md|lg`, `hide=sm|md|lg`
++- behavior: `scroll`, `fill` (flags: alone, or `true` or `false`), `sticky=top|bottom|none`, `show=sm|md|lg`, `hide=sm|md|lg`, `stretch-link` (a flag, no breakpoint: the box's first link covers the whole box, a card that is a link; W124 with no link in it)
++- what a component draws in its box: `object-fit=contain|cover|fill` (as large as fits, the default; filling the box, cropped; stretched), `object-position` one or two of `start center end`, block then inline (`object-position="center start"`; `center` by default); no breakpoint. A component fits its box: size a QR code or a chart with `width`, `height` or `aspect-ratio`, never with a param of its own. They fit an image box's image too: a `box` holding one Markdown image and nothing else, `::: box {aspect-ratio=4/3 object-fit=cover}` around `![…](harbour.jpg)` crops it to 4:3; on any other box they are W125.
+ 
+ - Spaces (`gap`, padding): tokens `none`, `s`, `m`, `l`, or a length (`px rem em %`). Prefer tokens.
+ - Each top-level block in a layout container is one item. Wrap several blocks in `::: box` to make one item.
+-- Directions are logical only: `inline`/`block`, `start`/`end`. There is no `left`, `top`, `margin`, `color`, `font-size` or `style`. Unknown params are errors (F008); the vocabulary is closed, so raw CSS never passes.
++- Directions are logical only: `inline`/`block`, `start`/`end`. There is no `left`, `top`, `margin` or `style`. Unknown params are errors (F008); the vocabulary is closed, so raw CSS never passes.
+ - Breakpoints follow the width of the block's nearest box (the closest `box`, layout or component box around it; list items and quotes don't count), not the window and not the block's own width. Write the narrow layout first and override up: `::: grid {gap=s md:gap=l md:grid-template-columns="2fr 1fr"}`.
+-- A block with an `inset-*` is placed over its nearest box, which needs `height`, `aspect-ratio` or `fill` (W119).
++- A block with an `inset-*` is placed over its nearest box, which needs a height: blocks in its flow, or `height`, `aspect-ratio` or `fill` (W119).
+ - A box that holds blocks with breakpoints (`md:…`, `show`, `hide`) needs a `width` wherever its width would come from its content (W114): in a `row`; in a `stack` with `align-self` or `align-items` other than `stretch`, or `justify-self=center|end`; in a `grid` with `justify-self`; or positioned without both inline insets.
+ 
+ ```md
+@@ -381,7 +383,8 @@ export default function Chart({ rows, selected, compmd }) {
+ - React and Svelte 5: params are camelCase props, the default slot is `children`, named slots are props of their names, and `compmd` is `{slots, set, fallback, headingLevel, host}`. Plain `js`/`ts`: the default export is `mount(target, {params, slots, set, fallback, headingLevel, host})` returning `{update, destroy}`.
+ - A param typed `input<…>` is bound to an input by the caller (`selected=region`); the component calls `compmd.set("selected", "eu")` to change it. This is the only output a component has.
+ - The code has no network and sees only its params and slots. Use `fallback.text` as the accessible label of non-text content.
+-- A signature fence (`compmd component=<name> signature`) holds only the YAML signature, no `---`, no body, no param list.
++- In a `compmd` definition's body: `{{md.fallback}}` is a leaf's or inline use's fallback (also in an image's alt: `![{{md.fallback}}]({{src}})`; F014 in a definition that declares slots), and `md.slots.<name>` in expressions is whether the caller gave that slot (`::: if {when=(md.slots.middle)}`). A link or image destination that starts with a param (`[{{title}}]({{href}})`) resolves against the caller's document; one that starts with text, against the definition's file. In the expanded tree, such a file of a pack is its place (`@acme/kit@1.4.2/icons/star.svg`) with `pack: true`, which the renderer's `packFile` maps to where the host serves it; one of an imported file is relative to the processed document. An inline use (`:badge[beta]`) of a definition fenced with params is one inline box with them.
++- A signature fence (`compmd component=<name> signature`) holds only the YAML signature, no `---`, no body. Its param list, when it has one, gives the component's box its defaults, as a definition fence's does (`compmd component=qr-code signature {width=12rem max-width=100%}`): the place for them when the component is a built module. A signature never declares a common param (`width`, `height`, `object-fit`, …), `class`, `id`, `lang` or `dir` (F013): the processor keeps them.
+ - A component file (`./chart.jsx`) imported by path exports its default export, named after the file stem.
+ - A code renderer draws the code blocks of one language: import it (`names: [mermaid]`), then write the block as anywhere, with its params and an `alt` after the language: ```` ```mermaid {alt="Draft, then review"} ````. For source computed from data, use the same component as a leaf, its source as `code`: `:: mermaid[Draft, then review] {code=(…)}`; a code block is never interpolated.
+ - A host application may provide components of its own, declared in its pack by a signature alone. Use them like any component, importing the host's pack by name to say so (`from: "@acme/app"`); they work only in that host (W113), so write fallbacks other processors can show.
+@@ -458,7 +461,7 @@ F codes are errors, W codes warnings. Each line: what it means → how to fix it
+ - F010 required param missing → give it.
+ - F011 broken param list → close quotes and brackets; quote values with spaces or parentheses; no `title=` without a value.
+ - F012 `::: +` not after an opener, leaf or continuation → move it directly under that line.
+-- F013 name clash or reserved name → rename: no `if`, `each`, `value`, `box`, `md`, no CEL reserved words or type names as definition params, `as` names or inputs, no two names differing only in `-` vs `_`.
++- F013 name clash or reserved name → rename: no `if`, `each`, `value`, `box`, `md`, no CEL reserved words or type names as definition params, `as` names or inputs, no two names differing only in `-` vs `_`, and in a signature no common param (`width`, `object-fit`, …), `class`, `id`, `lang` or `dir`, which the processor keeps.
+ - F014 unknown `{{path}}` → use `md.doc.`, `md.data.`, `md.input.` or a declared name; write `\{{` for literal braces.
+ - F015 slot line outside a container → move it inside, or remove it.
+ - F016 malformed component line → exactly `::: name`, `::: /name`, `::: + …`, `:: name[…]`, `:: #name`, with a space after the colons; no scoped names in the body.
+@@ -481,7 +484,7 @@ F codes are errors, W codes warnings. Each line: what it means → how to fix it
+ - F033 frontmatter not plain YAML 1.2 → remove anchors, aliases, tags and duplicate keys.
+ - F034 expansion too large → filter or slice the data (`md.slice`), or nest fewer `each` blocks.
+ - F035 pack doesn't match its `integrity` → update the hash or the version.
+-- F036 param list on a signature fence → remove it; box params go on the definition fence.
++- F036 a component's box styled by both its definition fence and its signature fence → keep one param list (the definition fence's is used).
+ - F037 a declaration's type isn't a type → use one: `string`, `number`, `boolean`, `date`, `array`, `object`, `length`, `space`, `color`, `tracks`, `areas`, `surface`, `border`, `radius`, `name`, an enum `a | b`, or `input<…>`.
+ - W101 leaf without fallback → add `[readable text]`.
+ - W102 language or runtime not supported → expect the fallback; write a good one.
+@@ -501,9 +504,10 @@ F codes are errors, W codes warnings. Each line: what it means → how to fix it
+ - W116 `::` line inside an HTML block → put a blank line after the HTML tag, or drop the HTML.
+ - W117 exported host component without `runtime` → add `runtime=react@19` (or `svelte@5`).
+ - W118 host component threw → fix the component; the fallback was shown.
+-- W119 box placing blocks by position has no height → give it `height`, `aspect-ratio` or `fill`.
++- W119 box placing all its blocks by position has no height → give it `height`, `aspect-ratio` or `fill`.
+ - W120 box param given to a `display=contents` component → remove it; that component has no box.
+ - W121 component code can't load (an import that isn't its runtime, a library the processor offers or one its pack names in `peerDependencies`; a relative import in source; a compile error; or a pack needing a runtime or library the processor lacks) → import only those, or bundle the library into a pack's built module.
++- W126 a box's `color` and `background` contrast below 4.5:1 → darken one or lighten the other, or use the tokens.
+ 
+ ## Links
+ 
+diff --git a/docs/review-performance.md b/docs/review-performance.md
+index 3e234c0f..f9627fab 100644
+--- a/docs/review-performance.md
++++ b/docs/review-performance.md
+@@ -258,3 +258,51 @@ All within their run-to-run spread but the reload's Progress tab (66–68 ms on
+ 
+ **Sizes:** CompMD's WebAssembly 2,960,441 → 2,967,257 bytes (+0.2%); `compmd.js` 98,693 → 99,956 bytes; the frames'
+ runtime 81,004 → 82,429 bytes; the dashboard's page unchanged (1,084,296 bytes).
++
++## CompMD 0.10.0 (ATM-780)
++
++CompMD 0.10.0 (the spec's drafts 17 and 18) adds to what a document can write (type in a box, image boxes, a
++document's own fonts, gradients, no-code components, the `lang` and `dir` a renderer sets), and nothing a host must
++change: atm builds and its checks pass with no change but the pins. A document's own fonts a host can't serve show the
++fallback, as atm's page policy does (no font source is allowed).
++
++Measured on 0.9.0 and then on 0.10.0, on this Mac, atm 0.43.0 otherwise unchanged, medians of three: the timed e2e
++tests on one worker, the real review (`--project measure`, its two engines side by side, three runs each). The real
++review ran on three workers in both cases, so its numbers compare with each other, not with the section above (one run
++each, in the full e2e runs).
++
++**The timed e2e tests** (Chromium; 0.9.0 → 0.10.0):
++
++| | 0.9.0 | 0.10.0 |
++|---|---|---|
++| A jump to a long review's last file: sheets set / styles read | 0 / 0 | 0 / 0 |
++| The long review: the first file drawn / settled | 38 / 69 ms | 36 / 66 ms |
++| The long review: the slowest frame after it settled | 29 ms | 28 ms |
++| A file far down a large review: total | 90 ms | 74 ms |
++| The + following the pointer: median / slowest frame | 33 / 34 ms | 33 / 35 ms |
++| Tab switches (500 tasks): Kanban / Progress / Agents / Graph / List | 31 / 48 / 64 / 61 / 84 ms | 30 / 48 / 58 / 61 / 86 ms |
++| A reload that changes the data: Graph / Kanban / Progress | 55 / 59 / 57 ms | 54 / 47 / 56 ms |
++
++All within their run-to-run spread.
++
++**The real review** (CompMD's CR-1, 94 files; 0.9.0 → 0.10.0):
++
++| | Chromium | WebKit |
++|---|---|---|
++| Opening: the first file drawn | 400 → 201 ms | 401 → 235 ms |
++| Opening: blocked | 183 → 100 ms | 413 → 217 ms |
++| Opening: busy until | 715 → 366 ms | 794 → 486 ms |
++| Scrolled to the end: the last file drawn | 2,292 → 2,070 ms | 2,081 → 2,080 ms |
++| A jump to the top: blocked | 0 → 0 ms | 199 → 100 ms |
++| A jump to the end: blocked | 0 → 0 ms | 239 → 119 ms |
++| The sides: their time at atm in all (the slowest) | 36.1 → 27.1 s (528 → 305 ms) | 4.8 → 3.3 s (644 → 426 ms) |
++
++A review opens about twice as fast in both engines, the app's WebKit included, and a jump in WebKit blocks half as
++long.
++
++**Sizes:** CompMD's WebAssembly 2,967,257 → 3,058,330 bytes (+3.1%); `compmd.js` 99,956 → 117,611 bytes (+17.7%);
++the dashboard's page 1,165,584 → 1,165,586 bytes.
++
++**A test made to wait for the page (`reviews.spec.ts` `openDiffs`):** 0.10.0 is still drawing a file's code a moment
++after its line numbers show, so a test that measured a line and then pointed at it could point at another (the drag
++over three lines, 3 runs in 5). It waits now for CompMD to say every block of the file is drawn (`data-compmd="ready"`).
+diff --git a/docs/security-architecture.md b/docs/security-architecture.md
+index e54ef23a..2bf9c951 100644
+--- a/docs/security-architecture.md
++++ b/docs/security-architecture.md
+@@ -1449,6 +1449,23 @@ shown, as the user, as before.
+   `a_registered_project_is_found_by_its_key_or_id_never_the_one_asking`; the CLI suite's `inbox add --project` scenarios
+   (two registered projects: the item and its origin, `--json`, an unregistered project and this one refused, dry run).
+ 
++**CompMD 0.10.0 (ATM-780).** As 0.9.0 was (above): the four `@compmd/*` packages at 0.10.0 (`@compmd/host` and
++`@compmd/registry` 0.10.0 with them), the crates at `=0.10.0` (`compmd-pack` 0.10.0). No new package or crate. Where it
++differs from 0.9:
++- **What a document may write grows** (the spec's drafts 17 and 18): type in a box, image boxes, gradients in
++  `background` (checked part by part, no `url()`, `var()` or `calc()`: CompMD's F009), shadows, no-code components. All
++  are the processor's, checked by it; nothing reaches the page's CSS but the values it allows.
++- **A document's own fonts** (`md.fonts`: `.woff2` or `.woff` files beside it or in a pack, never a URL). atm's page
++  policies allow no font source, so such a font shows its fallback: nothing is loosened for them.
++- **Inline styles in a component's box:** the frames allowed them already; a host-language component in atm's page is
++  only the packs' (the sandbox still never runs one the text defines), and atm's page already allows inline styles.
++- **A pack's own files** (`pack: true` destinations) are served as the pack's other files are, by the bundle's hosting
++  (`compmd-host`, `tauri-plugin-compmd`): its contract (`GET` only, the bundle's frames and packs, `nosniff`) and I26
++  are unchanged.
++- `minimumReleaseAgeExclude` names the 0.10.0 packages, released yesterday by CompMD's author.
++- **CompMD's guide for agents** is its `spec/llms.txt` at `v0.10.0` (commit `7a06d7e7f071`): the new params and
++  components, nothing about running, fetching or loading; what renders in atm is still `atm-create-tasks`'s list.
++
+ ## 4. Keeping it current
+ 
+ This document changes **in the same PR** as a change that:

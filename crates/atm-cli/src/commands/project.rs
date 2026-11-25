@@ -303,8 +303,11 @@ pub fn run(command: ProjectCommand, ctx: Context, cwd: &Path) -> Result<()> {
             let now = atm_common::time::now() * 1000;
             let forecast =
                 project_stats(&project, &StatsQuery::default(), now)?["forecast"].clone();
+            // The inbox's open items (ATM-760, docs/inbox-design.md §5): a line for the person; never the loop's
+            let inbox_open = atm_lib::inbox::open_count(&project)?;
             if let Some(report) = status.report.as_object_mut() {
                 report.insert("forecast".into(), forecast.clone());
+                report.insert("inbox_open".into(), serde_json::json!(inbox_open));
             }
             if ctx.json {
                 print_json(&status.report);
@@ -329,6 +332,9 @@ pub fn run(command: ProjectCommand, ctx: Context, cwd: &Path) -> Result<()> {
                 }
                 if let Some(line) = forecast_line(&forecast) {
                     crate::output::emit(&labels.text(&line));
+                }
+                if inbox_open > 0 {
+                    crate::output::emit(&format!("Inbox: {inbox_open} open (/atm-triage-inbox)"));
                 }
                 if let Some(warning) = shared {
                     crate::output::emit(&format!(

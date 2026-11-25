@@ -1,6 +1,17 @@
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { board, boardCard, expect, loadFixture, openDashboard, sprintNumbers, summary, test, follow } from './helpers';
+import {
+  board,
+  boardCard,
+  expect,
+  loadFixture,
+  openDashboard,
+  openView,
+  sprintNumbers,
+  summary,
+  test,
+  follow,
+} from './helpers';
 
 /**
  * Screenshot of the view shown, its panel only: not the tabs or the title bar above it, so a change there (spacing,
@@ -75,7 +86,7 @@ test('visual: detail panel', async ({ page, tasksServer }) => {
 for (const fixture of ['standard', 'kanban']) {
   test(`visual: kanban board (${fixture})`, async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer.withAtmSummary(), fixture);
-    await page.locator('#tab-kanban').click();
+    await openView(page, 'kanban');
     await expect(page.locator('#kanban .kanban-card').first()).toBeVisible();
     await sectionScreenshot(page, `${fixture}-kanban.png`);
   });
@@ -84,7 +95,7 @@ for (const fixture of ['standard', 'kanban']) {
 test('visual: progress tab', async ({ page, tasksServer }) => {
   await page.clock.setFixedTime(new Date('2026-04-06T12:00:00Z'));
   await openDashboard(page, tasksServer, 'progress');
-  await page.locator('#tab-progress').click();
+  await openView(page, 'progress');
   await expect(page.locator('#burndown svg')).toBeVisible();
   await sectionScreenshot(page, 'progress-progress.png');
 });
@@ -162,7 +173,7 @@ test.describe('visual: light mode', () => {
 
   test('kanban board', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer.withAtmSummary(), 'kanban');
-    await page.locator('#tab-kanban').click();
+    await openView(page, 'kanban');
     await expect(page.locator('#kanban .kanban-card').first()).toBeVisible();
     await sectionScreenshot(page, 'light-kanban.png');
   });
@@ -170,7 +181,7 @@ test.describe('visual: light mode', () => {
   test('progress tab', async ({ page, tasksServer }) => {
     await page.clock.setFixedTime(new Date('2026-04-06T12:00:00Z'));
     await openDashboard(page, tasksServer, 'progress');
-    await page.locator('#tab-progress').click();
+    await openView(page, 'progress');
     await expect(page.locator('#burndown svg')).toBeVisible();
     await sectionScreenshot(page, 'light-progress.png');
   });
@@ -457,7 +468,7 @@ for (const mode of ['dark', 'light'] as const) {
         }),
       );
     await openDashboard(page, tasksServer, 'standard');
-    await page.locator('#overview-tab-board').click();
+    await openView(page, 'board', { overview: true });
     await expect(page.locator('#projects-overview')).toHaveScreenshot(`all-projects-board-${mode}.png`);
     // Grouped by project (T-260): a lane each, no chips on the cards
     await page.locator('#board-group-by-project').check();
@@ -488,7 +499,7 @@ for (const theme of [
         [theme, mode],
       );
       await openDashboard(page, tasksServer.withAtmSummary(), 'kanban');
-      await page.locator('#tab-kanban').click();
+      await openView(page, 'kanban');
       await expect(page.locator('#kanban .kanban-card').first()).toBeVisible();
       await expect(page.locator('#kanban .kanban-column').first()).toHaveScreenshot(`theme-${theme}-${mode}.png`);
     });
@@ -503,7 +514,8 @@ for (const colorScheme of ['dark', 'light'] as const) {
 
     test(`visual: scope bar (${colorScheme})`, async ({ page, tasksServer }) => {
       await page.clock.setFixedTime(new Date('2026-04-14T12:00:00Z'));
-      await openDashboard(page, tasksServer, 'sprints');
+      // The Board's (a project opens on its Overview since ATM-751, which has no scope bar)
+      await openDashboard(page, tasksServer, 'sprints', { tab: 'kanban' });
       await expect(page.locator('#scope-bar')).toHaveScreenshot(`scope-bar-${colorScheme}.png`);
     });
 
@@ -532,7 +544,7 @@ for (const colorScheme of ['dark', 'light'] as const) {
 
     test(`visual: scope menu (${colorScheme})`, async ({ page, tasksServer }) => {
       await page.clock.setFixedTime(new Date('2026-04-14T12:00:00Z'));
-      await openDashboard(page, tasksServer, 'sprints');
+      await openDashboard(page, tasksServer, 'sprints', { tab: 'kanban' });
       await page.locator('#scope-trigger').click();
       await expect(page.locator('#scope-menu')).toHaveScreenshot(`scope-menu-${colorScheme}.png`);
     });

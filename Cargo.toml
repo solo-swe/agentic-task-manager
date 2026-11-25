@@ -9,7 +9,7 @@ resolver = "3"
 # atm's version, the one source (T-477): the dashboard is stamped with it, and CHANGELOG.md and WHATS-NEW.md need an
 # entry for it (dashboard/scripts/check-versions.mjs). The dashboard's About dialog shows the description, the author,
 # the licence and the repository
-version = "0.43.0"
+version = "0.44.0"
 description = "File-based task management for agentic development. Decompose requirements into tasks, execute them in loops, and watch progress on a live HTML dashboard."
 authors = ["Hakan Serce <hakanserce@gmail.com>"]
 edition = "2024"
@@ -30,9 +30,9 @@ atm-api = { path = "crates/atm-api" }
 # CompMD in a Tauri app (ADR-006, T-524): CompMD's own plugin serves the bundle the page's build wrote (the frames and
 # the packs) on a compmd: scheme, embedded by the app's build.rs (the `build` feature). Its version is
 # @compmd/sandbox's (dashboard/package.json): they are released together
-tauri-plugin-compmd = "=0.9.0"
+tauri-plugin-compmd = "=0.10.0"
 # CompMD's serving contract, which atm serve answers its bundle with as the plugin does in the app (ADR-006)
-compmd-host = "=0.9.0"
+compmd-host = "=0.10.0"
 clap = { version = "4.5", features = ["derive"] }
 # Shell completion with atm's own values (task IDs, sprints, …), its dynamic engine (T-451, approved)
 clap_complete = { version = "4.5", features = ["unstable-dynamic"] }
@@ -101,6 +101,12 @@ unsafe_code = "forbid"
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
+
+# Debug builds (`cargo run`, `cargo tauri dev`, the tests) with the dependencies optimized (ATM-776): serde_json and
+# the others otherwise run several times slower than users ever see (the app's start took 2.6 s against 1 s); atm's
+# own crates stay unoptimized, so they still build quickly and debug as before
+[profile.dev.package."*"]
+opt-level = 2
 
 [profile.release]
 lto = true

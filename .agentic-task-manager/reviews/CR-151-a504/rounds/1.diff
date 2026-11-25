@@ -1,0 +1,614 @@
+diff --git a/crates/atm-lib/src/changes.rs b/crates/atm-lib/src/changes.rs
+index 7196ee1d..2107aa27 100644
+--- a/crates/atm-lib/src/changes.rs
++++ b/crates/atm-lib/src/changes.rs
+@@ -245,13 +245,44 @@ fn newly_ready(
+ /// One status command on a task, as the project's actor.
+ ///
+ /// # Errors
+-/// What the state machine or the claims refuse; an unknown task (it says when the task is archived); a store error.
+-#[allow(clippy::too_many_lines)] // reason: one step per rule, in the order the Python change_task_status runs them
++/// What the state machine or the claims refuse; an unknown task (it says when the task is archived); a store error;
++/// an agent's move to review with no code review the task waits on (ATM-770).
+ pub fn change_task_status(
+     project: &mut Project,
+     command: Command,
+     task_id: &str,
+     options: &Options,
++) -> Result<StatusChange> {
++    // An agent's review is a code review (ATM-770): the dashboard decides a task through one, so a task asked into
++    // review without one would wait on a decision nobody there can make. Opening the review puts the task in review
++    // (`atm review create`, `atm review round`, which move it with [`move_task_status`]); a person may still ask for
++    // it, and decide it, themselves
++    if command == Command::Review
++        && atm_common::edits::is_agent(project.actor())
++        && crate::reviews::awaited_reviews(project, task_id)?
++            .is_some_and(|awaited| awaited.is_empty())
++    {
++        let key = crate::reviews::task_reference(project, task_id);
++        return Err(Error::Refused(format!(
++            "{key} is reviewed through a code review: `atm review create --task {key} --range BASE..HEAD \
++             --summary-file F` opens one and puts it in review; for a review sent back, `atm review round CR-N` \
++             (atm docs reviews)"
++        )));
++    }
++    move_task_status(project, command, task_id, options)
++}
++
++/// [`change_task_status`] without the rule that an agent's review is a code review: the reviews' own moves, which
++/// put a task in review as its review asks (a review opened, a round, a live review's approval).
++///
++/// # Errors
++/// As [`change_task_status`].
++#[allow(clippy::too_many_lines)] // reason: one step per rule, in the order the Python change_task_status runs them
++pub(crate) fn move_task_status(
++    project: &mut Project,
++    command: Command,
++    task_id: &str,
++    options: &Options,
+ ) -> Result<StatusChange> {
+     let agent = project.actor().map(String::from);
+     let agent = agent.as_deref();
+diff --git a/crates/atm-lib/src/reviews.rs b/crates/atm-lib/src/reviews.rs
+index 268893e8..fca52a8b 100644
+--- a/crates/atm-lib/src/reviews.rs
++++ b/crates/atm-lib/src/reviews.rs
+@@ -23,7 +23,8 @@ pub use atm_review::{
+     ReviewFilter, ReviewHeader, ReviewId, ReviewRef, ReviewStore, Reviews, RoundKind, Status,
+ };
+ 
+-use crate::changes::change_task_status;
++// The reviews' own moves: each as a review asks it, so not refused as an agent's review without one (ATM-770)
++use crate::changes::move_task_status as change_task_status;
+ use crate::project::Project;
+ use crate::review_keys;
+ use crate::state::{Command, Options};
+diff --git a/crates/atm-lib/src/reviews/doctor.rs b/crates/atm-lib/src/reviews/doctor.rs
+index 2af185a0..ea92531a 100644
+--- a/crates/atm-lib/src/reviews/doctor.rs
++++ b/crates/atm-lib/src/reviews/doctor.rs
+@@ -1,6 +1,78 @@
+-//! `atm doctor`'s checks of the reviews and the tasks they name.
++//! `atm doctor`'s checks of the reviews and the tasks they name, and what a task's move to review asks of them.
+ 
+-use super::{Kind, Project, ReviewFilter, ReviewStore, Status, Value, id_of, kind_of, store};
++use atm_common::Vocabulary;
++
++use super::{
++    FileStore, Kind, Project, ReviewFilter, ReviewHeader, ReviewStore, Status, Value, id_of,
++    kind_of, names_task, store, task_reference,
++};
++
++/// The states of a review a task waits on (ATM-770): waiting, live, or sent back (a draft puts no task in review)
++const AWAITED: [Status; 3] = [Status::Waiting, Status::Live, Status::ChangesRequested];
++
++/// The references of the reviews a task waits on (ATM-770): those waiting, live or sent back that name task `id` (as
++/// stored), by whatever key they were written with. None when the project has no folder to keep reviews in (nothing
++/// to say either way).
++///
++/// # Errors
++/// The reviews can't be read.
++pub fn awaited_reviews(project: &Project, id: &str) -> atm_common::Result<Option<Vec<String>>> {
++    if project.root().is_none() {
++        return Ok(None);
++    }
++    let reviews = store(project)?;
++    let key = task_reference(project, id);
++    Ok(Some(
++        reviews
++            .list_reviews(&ReviewFilter::default())?
++            .into_iter()
++            .filter(|h| AWAITED.contains(&h.status) && names_task(project, Some(&reviews), h, &key))
++            .map(|h| h.reference.0)
++            .collect(),
++    ))
++}
++
++/// The tasks stranded in review (ATM-770): in review, their review not decided, and no review they wait on (`headers`
++/// of `reviews`), so nothing in the dashboard decides them (an agent asked for one without a code review, before atm
++/// refused that). Those in `warned` are named already.
++fn stranded(
++    project: &Project,
++    document: &Value,
++    reviews: &FileStore,
++    headers: &[ReviewHeader],
++    warned: &std::collections::HashSet<String>,
++) -> Vec<String> {
++    let Ok(vocab) = Vocabulary::of_document(document) else {
++        return Vec::new();
++    };
++    let undecided = |task: &Value| {
++        !matches!(
++            task.get("review_state").and_then(Value::as_str),
++            Some("approved" | "changes_requested" | "rejected")
++        )
++    };
++    let mut found = Vec::new();
++    for task in document["tasks"].as_array().into_iter().flatten() {
++        let Some(id) = id_of(task) else { continue };
++        if vocab.kind_of(task.get("status")) != Some(Kind::Review)
++            || !undecided(task)
++            || warned.contains(id)
++        {
++            continue;
++        }
++        let key = task_reference(project, id);
++        let awaited = headers
++            .iter()
++            .any(|h| AWAITED.contains(&h.status) && names_task(project, Some(reviews), h, &key));
++        if !awaited {
++            found.push(format!(
++                "{key}: in review with no code review waiting on it, so the dashboard can't decide it: \
++                 `atm review create --task {key} …` opens one, or `atm task review approve|request-changes|reject {key}` decides it"
++            ));
++        }
++    }
++    found
++}
+ 
+ /// `atm doctor`'s checks of the reviews (docs/code-review-design.md §4): errors, a review atm can't read; warnings,
+ /// lines of `comments.md` the comment format doesn't expect, numbers two reviews share (CR-8.1 and CR-8.2), and tasks
+@@ -47,6 +119,8 @@ pub fn check(project: &Project, document: &Value) -> (Vec<String>, Vec<String>)
+     // `~`): the review's decision, the user's, is recorded on the task with the command named (I23: never by atm). A
+     // task follows its latest review (§3.8): the reviews are listed newest first, and only a task's first counts
+     let mut followed = std::collections::HashSet::new();
++    // The tasks warned of here: the stranded-task warning below doesn't name them again
++    let mut warned = std::collections::HashSet::new();
+     for header in &headers {
+         let latest: Vec<&String> = header
+             .tasks
+@@ -80,9 +154,11 @@ pub fn check(project: &Project, document: &Value) -> (Vec<String>, Vec<String>)
+                     header.reference,
+                     header.status.name().replace('_', " ")
+                 ));
++                warned.insert(id);
+             }
+         }
+     }
++    warnings.extend(stranded(project, document, &store, &headers, &warned));
+     let known: std::collections::HashSet<&str> = headers.iter().map(|h| h.id.0.as_str()).collect();
+     for task in document["tasks"].as_array().into_iter().flatten() {
+         for link in task
+diff --git a/crates/atm-lib/src/state.rs b/crates/atm-lib/src/state.rs
+index cb09baed..0b2efc64 100644
+--- a/crates/atm-lib/src/state.rs
++++ b/crates/atm-lib/src/state.rs
+@@ -265,7 +265,8 @@ fn check_guards(
+             let mode = vocab.effective_review(task);
+             if (mode == "blocker" || mode == "async") && is_agent(agent) && kind == Kind::Active {
+                 return Err(usage(format!(
+-                    "{id} is reviewed ({mode}): ask for it with atm task state {id} in_review --note '<what to check>'"
++                    "{id} is reviewed ({mode}): open its code review with atm review create --task {id} --range \
++                     BASE..HEAD --summary-file F (atm docs reviews)"
+                 )));
+             }
+             if kind == Kind::Review && !state_is("approved") {
+diff --git a/crates/atm-lib/src/state/tests.rs b/crates/atm-lib/src/state/tests.rs
+index 25c35e41..79782518 100644
+--- a/crates/atm-lib/src/state/tests.rs
++++ b/crates/atm-lib/src/state/tests.rs
+@@ -212,11 +212,9 @@ fn done_records_the_outcome_and_a_batch_task_waits_for_the_sprint_review() {
+     let mut r = task(json!({"id": "T-3", "status": "in_progress", "review": "blocker"}));
+     let error = run(&mut r, Command::Done, &options, Some("claude:1")).unwrap_err();
+     assert_eq!(error.code(), 2);
+-    assert!(
+-        error
+-            .to_string()
+-            .starts_with("T-3 is reviewed (blocker): ask for it with atm task state T-3 in_review")
+-    );
++    assert!(error.to_string().starts_with(
++        "T-3 is reviewed (blocker): open its code review with atm review create --task T-3"
++    ));
+ }
+ 
+ #[test]
+diff --git a/crates/atm-lib/tests/reviews/asking.rs b/crates/atm-lib/tests/reviews/asking.rs
+new file mode 100644
+index 00000000..e7446f68
+--- /dev/null
++++ b/crates/atm-lib/tests/reviews/asking.rs
+@@ -0,0 +1,127 @@
++//! ATM-770: an agent asks for a task's review through a code review. A move to review without a review the task waits
++//! on is refused to an agent (the dashboard decides a task only through a review, so the task would wait on nobody);
++//! a person may still ask, and `atm doctor` names a task stranded so.
++
++use serde_json::json;
++
++use crate::fixtures::{dir, open_review, project, reopen, task};
++use atm_lib::Project;
++use atm_lib::changes::change_task_status;
++use atm_lib::reviews::{ReviewStore, Status};
++use atm_lib::state::{Command, Options};
++
++fn ask(project: &mut Project, id: &str) -> atm_common::Result<()> {
++    change_task_status(project, Command::Review, id, &Options::default()).map(|_| ())
++}
++
++#[test]
++fn an_agent_is_refused_a_review_with_no_code_review_and_told_how_to_open_one() {
++    let dir = dir();
++    let mut agent = project(&dir.0, "claude:1");
++    let refused = ask(&mut agent, "T-1").unwrap_err();
++    assert!(
++        matches!(refused, atm_common::Error::Refused(_)),
++        "{refused}"
++    );
++    assert!(
++        refused.to_string().starts_with(
++            "T-1 is reviewed through a code review: `atm review create --task T-1 --range BASE..HEAD"
++        ),
++        "{refused}"
++    );
++    assert_eq!(
++        task(&agent, "T-1")["status"],
++        "in_progress",
++        "nothing changed"
++    );
++}
++
++#[test]
++fn a_review_of_another_task_or_one_decided_or_closed_is_none_the_task_waits_on() {
++    let dir = dir();
++    let mut agent = project(&dir.0, "claude:1");
++    // T-2's review: open, but not T-1's
++    let header = open_review(&mut agent, &["T-2"]);
++    assert!(ask(&mut agent, "T-1").is_err());
++    // A review of T-1 decided or closed: nothing waits on it
++    let mut store = atm_lib::reviews::store(&agent).unwrap();
++    for status in [Status::Approved, Status::Closed] {
++        store
++            .set_status(&header.id, status, &"Hakan".into())
++            .unwrap();
++        let mut agent = reopen(&dir.0, "claude:1");
++        assert!(ask(&mut agent, "T-1").is_err(), "{status:?}");
++    }
++}
++
++#[test]
++fn opening_a_review_puts_the_task_in_review_as_before_and_a_round_after_changes_asked_for_too() {
++    let dir = dir();
++    let mut agent = project(&dir.0, "claude:1");
++    let header = open_review(&mut agent, &["T-1"]);
++    assert_eq!(task(&agent, "T-1")["status"], "in_review");
++    // Changes asked for: the review is sent back, and the agent's next round asks for the review again
++    let mut hakan = reopen(&dir.0, "Hakan");
++    let reason = Options {
++        reason: Some("CR-1 round 1: 1 open comment".into()),
++        ..Options::default()
++    };
++    change_task_status(&mut hakan, Command::RequestChanges, "T-1", &reason).unwrap();
++    atm_lib::reviews::store(&hakan)
++        .unwrap()
++        .set_status(&header.id, Status::ChangesRequested, &"Hakan".into())
++        .unwrap();
++    let mut agent = reopen(&dir.0, "claude:1");
++    ask(&mut agent, "T-1").unwrap();
++    assert_eq!(task(&agent, "T-1")["status"], "in_review");
++}
++
++#[test]
++fn a_person_may_ask_for_a_review_without_one_and_a_project_without_a_folder_has_nothing_to_say() {
++    let dir = dir();
++    let mut hakan = project(&dir.0, "Hakan");
++    ask(&mut hakan, "T-2").unwrap();
++    assert_eq!(task(&hakan, "T-2")["status"], "in_review");
++    // No folder to keep reviews in: atm can't tell, so it doesn't refuse
++    let mut memory = Project::new(Box::new(
++        atm_db::MemoryStore::new(
++            vec![
++                json!({"id": "T-1", "name": "One", "status": "in_progress"})
++                    .as_object()
++                    .unwrap()
++                    .clone(),
++            ],
++            Vec::new(),
++            &serde_json::Map::new(),
++        )
++        .unwrap(),
++    ))
++    .with_actor(Some("claude:1".into()));
++    ask(&mut memory, "T-1").unwrap();
++}
++
++#[test]
++fn doctor_names_a_task_stranded_in_review_and_not_one_a_review_waits_on() {
++    let dir = dir();
++    // As an atm before ATM-770 left it: an agent's task in review with no code review; a person's ask is the same
++    let mut hakan = project(&dir.0, "Hakan");
++    ask(&mut hakan, "T-2").unwrap();
++    let document = hakan.store().document().unwrap().clone();
++    let (errors, warnings) = atm_lib::reviews::check(&hakan, &document);
++    assert!(errors.is_empty(), "{errors:?}");
++    assert_eq!(
++        warnings,
++        [
++            "T-2: in review with no code review waiting on it, so the dashboard can't decide it: \
++          `atm review create --task T-2 …` opens one, or `atm task review approve|request-changes|reject T-2` decides it"
++        ]
++    );
++    // A review waiting on it: nothing to say
++    let mut agent = reopen(&dir.0, "claude:1");
++    open_review(&mut agent, &["T-1", "T-2"]);
++    let document = agent.store().document().unwrap().clone();
++    assert_eq!(
++        atm_lib::reviews::check(&agent, &document),
++        (Vec::new(), Vec::new())
++    );
++}
+diff --git a/crates/atm-lib/tests/reviews/main.rs b/crates/atm-lib/tests/reviews/main.rs
+index c7ce042a..7ec57cd1 100644
+--- a/crates/atm-lib/tests/reviews/main.rs
++++ b/crates/atm-lib/tests/reviews/main.rs
+@@ -1,6 +1,7 @@
+ //! atm-lib's reviews with the tasks they name, through the real review store and a real git repository: the
+ //! integration tests of `atm_lib::reviews` (ATM-711, docs/guides/rust.md §Tests), a module per group.
+ 
++mod asking;
+ mod decisions;
+ mod doctor;
+ mod fixtures;
+diff --git a/docs/agent/reviews.md b/docs/agent/reviews.md
+index 141697a3..10e09ec5 100644
+--- a/docs/agent/reviews.md
++++ b/docs/agent/reviews.md
+@@ -6,7 +6,8 @@
+   it.
+ - **Opening one for your task:** `atm review create --title '<one line>' --task <key> --range <base>..HEAD
+ [--summary-file <file>]`. It puts its tasks in review, with the review's link in their note; you don't also run
+-  `atm task state <key> in_review`. `--draft` keeps it a draft (nothing in review yet). Opened by an agent, it either
++  `atm task state <key> in_review`, which atm refuses an agent with no review the task waits on (ATM-770: the
++  dashboard decides a task only through its review, so it would wait on nobody). `--draft` keeps it a draft (nothing in review yet). Opened by an agent, it either
+   opens the review with every task in review or refuses and writes nothing, naming what to do instead: a task you hold, or no one
+   does, goes in review; one whose claim of yours lapsed (back in to do while your checks ran) is taken back and goes in
+   review, its note saying so; one already in review is linked, unless another review already waits on it (add a round
+diff --git a/docs/agent/states.md b/docs/agent/states.md
+index 66205d01..5b7bd7b3 100644
+--- a/docs/agent/states.md
++++ b/docs/agent/states.md
+@@ -10,9 +10,13 @@ several statuses, `--status <id>` picks one; otherwise atm uses the first listed
+ - `in_progress`: start it (its dependencies must be done; an archived task counts as done). `atm loop next --claim`
+   does this for the next task.
+ - `done --note '<one-line outcome>'`: finished, once its work is committed.
+-- `in_review --note '<what the reviewer should check>'`: ask for a review when the task's review mode needs one
++- `in_review --note '<what the reviewer should check>'`: in review, when the task's review mode needs one
+   (`blocker`: reviewed before anything goes on; `async`: reviewed while agents go on; `batch`: in the end-of-sprint
+-  review, so it can be done; `none`).
++  review, so it can be done; `none`). **An agent's review is a code review**: its review puts the task in review
++  (`atm review create --task <key> …`, `atm review round CR-N`; `atm docs reviews`), and atm refuses an agent's
++  `in_review` with no review the task waits on (waiting, live or sent back), as the dashboard decides a task only
++  through its review. Work with no change to review is blocked on the user instead. A person may still ask for a
++  review this way and decide it themselves; `atm doctor` names a task in review that no review waits on.
+ - `blocked --on user|agent --question '…' [--question '…']`: it can't go on without a decision. Whoever decides
+   answers with `atm task state <id> todo --answer '…'` (one per question).
+ - `todo`: back to to do: `--reason '…'` when it failed, `--note '<handoff>'` when you stop early; a done or skipped
+diff --git a/docs/security-architecture.md b/docs/security-architecture.md
+index 67834c76..fc9e45e4 100644
+--- a/docs/security-architecture.md
++++ b/docs/security-architecture.md
+@@ -1396,6 +1396,18 @@ they landed (I11, I13, I24, I25, I30, I35). Fields:
+   - the Linux screenshots in Docker (84; sixteen regenerated: the Kanban and List with atm's progress in the header,
+     the projects overview, the Settings menu and the update notice).
+ 
++**An agent's review is a code review (ATM-770).** atm refuses an agent's `atm task state <id> in_review` when no code
++review waiting, live or sent back names the task: the dashboard decides a task only through its review, so a task
++asked into review without one waited on a decision nobody there could make (ATM-728 did). A review opened, a round and
++a live review's approval still move their tasks, as before; a person's moves and decisions are unchanged (I23: the
++decision stays theirs). `atm doctor` warns of a task in review that no review waits on. No new entry point or field.
++The skills changed, so a written skill review (no API key for the sandbox run; §3.3):
++- **`atm-do-task` and `atm-loop-tasks`**: an agent's review is its code review (`atm review create`, the command they
++  already named); work with no change to review is blocked on the user with a question (`atm task state … blocked
++  --on user`, a command they already use) instead of asked into review; a check in the preview is a review of its
++  change (`--range`). Nothing new is run, fetched or pushed, and no agent decides a review.
++- **`docs/agent/states.md` and `reviews.md`**: the same rule, and the doctor's warning.
++
+ ## 4. Keeping it current
+ 
+ This document changes **in the same PR** as a change that:
+diff --git a/skills/atm-do-task/SKILL.md b/skills/atm-do-task/SKILL.md
+index fd9728d5..b0e02122 100644
+--- a/skills/atm-do-task/SKILL.md
++++ b/skills/atm-do-task/SKILL.md
+@@ -222,15 +222,16 @@ project's (`meta.review`), else `none`. Run `atm task state $TASK_ID done --note
+ - `none`: it is done.
+ - `batch`: it is done, and waits for the end-of-sprint review (`sprint_review: pending`): write the note as what
+   the reviewer should check.
+-- `blocker` or `async`: atm refuses (`… is reviewed (blocker): ask for it with atm task state … in_review …`), unless
++- `blocker` or `async`: atm refuses (`… is reviewed (blocker): open its code review with atm review create …`), unless
+   an approved live review already covers the change (then it is done, naming that review). Then open a **code
+   review** of the task's change: write what the reviewer should check to a scratch file outside the repository, and
+   run `atm review create --task $TASK_ID --title '<one line>' --range <base>..HEAD --summary-file <file>` (`<base>`:
+   the commit before the task's first; `--file <path>` instead of `--range` for a document reviewed whole). It puts
+   the task in review with the review's link in its note (CR-7), and your claim is released; the tasks that depend on
+-  it keep waiting until the review passes. Work with no change to review (a decision, a check) asks with
+-  `atm task state $TASK_ID in_review --note '<what the reviewer should check>'` instead (with `--status <id>` when the
+-  project has several review statuses and one fits, e.g. `awaiting_user`). Report it as **waiting for review**.
++  it keep waiting until the review passes. An agent's review is always a code review: atm refuses
++  `atm task state $TASK_ID in_review` without one, as the dashboard decides a task only through its review. Work with
++  no change to review (a decision, a check) is blocked on the user instead, the question saying what to decide or
++  check (`atm task state $TASK_ID blocked --on user --question '…'`). Report it as **waiting for review**.
+   - **`blocker`**: the review happens now, before anything else: if the user is in the session, tell them it is open
+     (`atm review show CR-7`) and wait for them with `atm review wait CR-7 --json` in the background. In an unattended
+     loop, stop the loop and say what waits.
+@@ -258,8 +259,8 @@ for agents' work. A task in review leaves it only by its review's decision, for
+   **A review you hold with the user** (the task says to review a draft or proposal with them): commit the draft, then
+   open its review, `atm review create --task $TASK_ID --title '<one line>' --file <the draft>`, which puts the task in
+   review, so the dashboard shows it waiting on them. Wait with `atm review wait CR-7 --json` and answer their comments
+-  as above while it stays in review. A review of no file (a check in the preview) asks with
+-  `atm task state $TASK_ID in_review` before you show it.
++  as above while it stays in review. A check in the preview is a review of the change it shows: open it with
++  `--range` as above before you show it.
+   The decision is theirs, and they record it: on the review (`atm review submit`), or `atm task review approve $TASK_ID [--note '<what is left>']`,
+   `request-changes $TASK_ID --reason '<what to change>'` or `reject $TASK_ID --reason '<why>'` (no skill
+   pre-approves them; if they ask you to run one, it asks them for permission). Rejected, the task goes back to to do
+diff --git a/skills/atm-loop-tasks/SKILL.md b/skills/atm-loop-tasks/SKILL.md
+index 6b0aabbf..e95764c3 100644
+--- a/skills/atm-loop-tasks/SKILL.md
++++ b/skills/atm-loop-tasks/SKILL.md
+@@ -120,8 +120,8 @@ errors (the message says what).
+ 4. **Commit first, then finish.** Commit with `atm vcs commit <id> --file <path> ...` while the task is still in
+    progress, naming every file you changed for the task: it commits exactly those plus `tasks.json`. Never
+    `git add -A` or `git add .`: another agent's unfinished work may be in the same working tree. Only then finish with
+-   `atm task state <id> done --note '<one-line outcome>'`, or `atm task state <id> in_review --note '...'` when its
+-   review mode asks for one, or `atm task state <id> blocked --on user|agent --question '...'` when you can't go on
++   `atm task state <id> done --note '<one-line outcome>'`, or its code review (`atm review create --task <id> …`)
++   when its review mode asks for one, or `atm task state <id> blocked --on user|agent --question '...'` when you can't go on
+    without a decision (steps 5 and 6 below). A task is never done with its work uncommitted.
+ 5. Back to to do is `atm task state <id> todo`, from wherever the task is: give up with `--reason '...'` (a failure
+    note), stop early with `--note '<handoff>'`. Never change a status by editing `tasks.json`. Quote notes,
+@@ -221,9 +221,9 @@ while true:
+          For a `blocker` or `async` task atm refuses (unless an approved live review covers the change): open its
+          code review, `atm review create --task $TASK_ID --title '<one line>' --range <base>..HEAD --summary-file
+          <file>` (/atm-do-task Step 7b: the base, the summary, a document's `--file`), which puts it in review with
+-         the review's link (CR-7); work with no change to review asks with `atm task state $TASK_ID in_review --note
+-         '<what the reviewer should check>'` (with `--status` when one of several review statuses fits). The claim is
+-         released and the tasks that depend on it keep waiting. Count it as waiting for review, not completed.
++         the review's link (CR-7); atm refuses an agent's `in_review` without a code review, so work with no change
++         to review (a decision, a check) is blocked on the user, the question saying what to decide or check. The
++         claim is released and the tasks that depend on it keep waiting. Count it as waiting for review, not completed.
+          `async`: the loop goes on with other ready tasks. `blocker`: the review comes first: with the user
+          watching, tell them CR-7 is open and wait with `atm review wait CR-7 --json` in the background; unattended,
+          stop the loop and say what waits for the review.
+diff --git a/tests/scripts/scenarios/agents.json b/tests/scripts/scenarios/agents.json
+index bc30bacc..4f0439d3 100644
+--- a/tests/scripts/scenarios/agents.json
++++ b/tests/scripts/scenarios/agents.json
+@@ -95,7 +95,7 @@
+     "env": { "CODEX_THREAD_ID": "abc12345" },
+     "expect": {
+       "exit": 2,
+-      "stderrIncludes": ["T-1 is reviewed (blocker): ask for it with atm task state T-1 in_review"]
++      "stderrIncludes": ["T-1 is reviewed (blocker): open its code review with atm review create --task T-1"]
+     }
+   }
+ ]
+diff --git a/tests/scripts/scenarios/review-modes.json b/tests/scripts/scenarios/review-modes.json
+index 923f4701..f52278e4 100644
+--- a/tests/scripts/scenarios/review-modes.json
++++ b/tests/scripts/scenarios/review-modes.json
+@@ -13,7 +13,7 @@
+     "expect": {
+       "exit": 2,
+       "stderrIncludes": [
+-        "T-1 is reviewed (blocker): ask for it with atm task state T-1 in_review --note '<what to check>'"
++        "T-1 is reviewed (blocker): open its code review with atm review create --task T-1 --range BASE..HEAD --summary-file F (atm docs reviews)"
+       ]
+     }
+   },
+@@ -33,7 +33,7 @@
+     "expect": {
+       "stdoutIncludes": ["T-1: in_progress -> done"],
+       "files": {
+-        "err.txt": "atm: T-1 is reviewed (async): ask for it with atm task state T-1 in_review --note '<what to check>'\n"
++        "err.txt": "atm: T-1 is reviewed (async): open its code review with atm review create --task T-1 --range BASE..HEAD --summary-file F (atm docs reviews)\n"
+       }
+     }
+   },
+diff --git a/tests/scripts/scenarios/review-request.json b/tests/scripts/scenarios/review-request.json
+new file mode 100644
+index 00000000..ba4ab94b
+--- /dev/null
++++ b/tests/scripts/scenarios/review-request.json
+@@ -0,0 +1,61 @@
++[
++  {
++    "name": "an agent's in_review with no code review is refused, saying how to open one (ATM-770); nothing changes",
++    "setup": {
++      "files": {
++        ".agentic-task-manager/tasks.json": {
++          "meta": { "review": "async" },
++          "tasks": [{ "id": "T-1", "name": "Work", "status": "in_progress", "started_by": "claude:a" }]
++        }
++      }
++    },
++    "env": { "ATM_AGENT": "claude:a" },
++    "args": ["task", "state", "T-1", "in_review", "--note", "Look at it"],
++    "expect": {
++      "exit": 1,
++      "stderrIncludes": [
++        "atm: T-1 is reviewed through a code review: `atm review create --task T-1 --range BASE..HEAD --summary-file F` opens one and puts it in review"
++      ],
++      "files": {
++        ".agentic-task-manager/tasks.json": {
++          "meta": { "review": "async" },
++          "tasks": [{ "id": "T-1", "name": "Work", "status": "in_progress", "started_by": "claude:a" }]
++        }
++      }
++    }
++  },
++  {
++    "name": "an agent finishing a reviewed task is told to open its code review (ATM-770)",
++    "setup": {
++      "files": {
++        ".agentic-task-manager/tasks.json": {
++          "meta": { "review": "async" },
++          "tasks": [{ "id": "T-1", "name": "Work", "status": "in_progress", "started_by": "claude:a" }]
++        }
++      }
++    },
++    "env": { "ATM_AGENT": "claude:a" },
++    "args": ["task", "state", "T-1", "done", "--note", "x"],
++    "expect": {
++      "exit": 2,
++      "stderrIncludes": ["T-1 is reviewed (async): open its code review with atm review create --task T-1"]
++    }
++  },
++  {
++    "name": "a person may still ask for a review without one; doctor then names the task stranded in review",
++    "setup": {
++      "files": {
++        ".agentic-task-manager/tasks.json": {
++          "tasks": [{ "id": "T-1", "name": "Work", "type": "feature", "status": "in_progress" }]
++        }
++      },
++      "commands": [["sh", "-c", "ATM_AGENT=Ana \"$ATM\" task state T-1 in_review --note 'Check it'"]]
++    },
++    "args": ["doctor"],
++    "expect": {
++      "stdoutIncludes": [
++        "warning: T-1: in review with no code review waiting on it, so the dashboard can't decide it: `atm review create --task T-1 …` opens one, or `atm task review approve|request-changes|reject T-1` decides it"
++      ]
++    }
++  }
++]
+diff --git a/tests/scripts/scenarios/review-states.json b/tests/scripts/scenarios/review-states.json
+index dc4e846e..5392addc 100644
+--- a/tests/scripts/scenarios/review-states.json
++++ b/tests/scripts/scenarios/review-states.json
+@@ -154,11 +154,16 @@
+       "git": true,
+       "commit": true,
+       "files": {
+-        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] }
++        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] },
++        "a.txt": "columns\n"
+       },
+       "commands": [
+         ["sh", "-c", "ATM_AGENT=claude:aaaa1111 \"$ATM\" task state T-1 in_progress"],
+-        ["sh", "-c", "ATM_AGENT=claude:aaaa1111 \"$ATM\" task state T-1 in_review --note 'Check the columns'"],
++        [
++          "sh",
++          "-c",
++          "ATM_AGENT=claude:aaaa1111 \"$ATM\" review create --title 'Check the columns' --task T-1 --file a.txt"
++        ],
+         ["sh", "-c", "ATM_AGENT=Hakan \"$ATM\" task review request-changes T-1 --reason 'Name the columns'"]
+       ]
+     },
+@@ -172,11 +177,16 @@
+       "git": true,
+       "commit": true,
+       "files": {
+-        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] }
++        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] },
++        "a.txt": "columns\n"
+       },
+       "commands": [
+         ["sh", "-c", "ATM_AGENT=claude:aaaa1111 \"$ATM\" task state T-1 in_progress"],
+-        ["sh", "-c", "ATM_AGENT=claude:aaaa1111 \"$ATM\" task state T-1 in_review --note 'Check the columns'"],
++        [
++          "sh",
++          "-c",
++          "ATM_AGENT=claude:aaaa1111 \"$ATM\" review create --title 'Check the columns' --task T-1 --file a.txt"
++        ],
+         ["sh", "-c", "ATM_AGENT=Hakan \"$ATM\" task review approve T-1"]
+       ]
+     },

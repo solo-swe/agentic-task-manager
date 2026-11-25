@@ -1,0 +1,22 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "3bfd4310398696d5f7b24230f384220a10ba8b3c",
+    "head": "878fb1daff11dadc2ad33fc7e62bb0762c8a3d84"
+  },
+  "files": [
+    {
+      "path": "dashboard/tests/e2e/memory.spec.ts",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "docs/memory-growth-analysis.md",
+      "status": "added",
+      "binary": false
+    }
+  ],
+  "by": "claude:ba530ebb",
+  "at": "2026-11-24T00:48:05Z"
+}

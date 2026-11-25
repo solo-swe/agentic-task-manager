@@ -31,9 +31,13 @@
     onopen = undefined,
   }: {
     source?: {
+      /** Every project's tasks, the archived ones too (T-355), and by project for the charts */
       tasks: Task[];
       claims: ClaimMap;
       byProject: Task[];
+      /** The pill's: the task files' alone, by project (ATM-739); and whether a project has an archive */
+      liveByProject: Task[];
+      archived: boolean;
       projects: { name: string; color: string }[];
       of: (worker: string) => string;
     };
@@ -56,8 +60,10 @@
   );
 
   // Compact: completions per period (bars) with their rolling average (line, same scale). Click: the deep dive.
-  // Archived completions count too once the archive is loaded (dashboard.history)
-  const series = $derived(activitySeries(charted, null, dashboard.loadedAt));
+  // The pill charts the task files' completions alone, never the archive's (ATM-739, Hakan): the same chart every
+  // time, whether a view has loaded the archive or not. The deep dive counts the archive too (D-5.2)
+  const series = $derived(activitySeries(source ? source.liveByProject : dashboard.tasks, null, dashboard.loadedAt));
+  const archiveLeftOut = $derived(source ? source.archived : dashboard.archivedCount > 0);
   let open = $state(false);
 
   // The panel shows the chosen period (saved with the view); the pill always shows all time
@@ -66,7 +72,7 @@
   // Each stepped period in its natural bucket: a week per day, a day per hour (PRESET_BUCKET_MS)
   const detail = $derived(
     range.preset === 'all'
-      ? series
+      ? activitySeries(charted, null, dashboard.loadedAt)
       : // The whole period on the time axis (T-350): what is still to come stays empty
         activitySeries(
           charted,
@@ -143,8 +149,8 @@
       class="widget-card activity-card"
       id="activity-card"
       aria-expanded={open}
-      title={sparklineTitle(series, dashboard.loadedAt)}
-      aria-label="Activity: {series.totalCompleted} tasks completed"
+      title={sparklineTitle(series, dashboard.loadedAt, archiveLeftOut)}
+      aria-label="Activity: {series.totalCompleted} tasks completed{archiveLeftOut ? ', archived tasks left out' : ''}"
       onclick={() => (open = !open)}
     >
       <span class="widget-body">
@@ -194,12 +200,16 @@
             <InfoTip label="activity">
               <p>
                 {#if source}
-                  Every project shown, together (their archives left out), in a colour each. All times are for the
-                  chosen period.
+                  Every project shown, together, archived tasks included, in a colour each. All times are for the chosen
+                  period.
                 {:else}
                   The whole project, archived tasks included: the search and filters don't apply here. All times are for
                   the chosen period.
                 {/if}
+              </p>
+              <p>
+                The pill's chart is the task {source ? 'files’' : 'file’s'} completions, archived tasks left out, so it is
+                the same chart every time.
               </p>
               <p>
                 <strong>Agents working</strong>: at least one agent at work on a task, from its start until it asked for

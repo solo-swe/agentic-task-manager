@@ -33,6 +33,11 @@ describe('the project in the address (T-429)', () => {
 
   it('is set or replaced by the overview, keeping dialogs, and the view where the page has it', () => {
     expect(withProject('/?view=kanban', 'abc')).toBe('/projects/abc/kanban');
+    // The landing page's view is kept where the page gone to has it: `list` is a project's and All's (ATM-752)
+    expect(withProject('/?view=list', 'abc')).toBe('/projects/abc/list');
+    expect(withProject('/?view=list', null)).toBe('/list');
+    expect(withProject('/?view=kanban', null)).toBe('/projects');
+    expect(withProject('/?view=board', 'abc')).toBe('/projects/abc');
     expect(withProject('/projects/abc/list?about', 'def')).toBe('/projects/def/list?about');
     expect(withProject('/projects', 'a b')).toBe('/projects/a%20b');
     // A project's tab stays out of the overview, the overview's out of a project
@@ -108,5 +113,11 @@ describe('routeFor', () => {
     expect(routeFor([project('a'), project('gone', true)], '/?view=list')).toEqual({ page: 'project', id: 'a' });
     expect(routeFor([project('gone', true)], '/')).toEqual({ page: 'none' });
     expect(routeFor([], '/')).toEqual({ page: 'none' });
+  });
+
+  it('the new tab is its own page, whatever the projects: never the one project’s (ATM-755)', () => {
+    for (const projects of [[], [project('a')], two])
+      expect(routeFor(projects, '/new'), String(projects.length)).toEqual({ page: 'new' });
+    expect(routeFor(two, '/w/work/new')).toEqual({ page: 'new' });
   });
 });

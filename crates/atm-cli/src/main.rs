@@ -46,6 +46,7 @@ use commands::{
     claim::{ClaimCommand, WatchArgs},
     component::ComponentCommand,
     db::DbCommand,
+    inbox::InboxCommand,
     label::LabelCommand,
     loop_::LoopCommand,
     project::ProjectCommand,
@@ -120,6 +121,9 @@ enum Command {
     /// The tasks' labels
     #[command(subcommand)]
     Label(LabelCommand),
+    /// The project's inbox: what a person notes for later, triaged into tasks (IN-1, IN-2, …)
+    #[command(subcommand)]
+    Inbox(InboxCommand),
     /// Project-level config
     #[command(subcommand)]
     Project(ProjectCommand),
@@ -436,6 +440,7 @@ fn dispatch(command: Command, ctx: Context, cwd: &Path) -> Result<u8, Error> {
         Command::Release(command) => commands::release::run(command, ctx, &cwd).map(|()| 0),
         Command::Component(command) => commands::component::run(command, ctx, &cwd).map(|()| 0),
         Command::Label(command) => commands::label::run(command, ctx, &cwd).map(|()| 0),
+        Command::Inbox(command) => commands::inbox::run(command, ctx, &cwd).map(|()| 0),
         Command::Loop(command) => commands::loop_::run(command, ctx, &cwd),
         Command::Claim(command) => commands::claim::run(command, ctx, &cwd).map(|()| 0),
         Command::Review(command) => commands::review::run(command, ctx, &cwd),

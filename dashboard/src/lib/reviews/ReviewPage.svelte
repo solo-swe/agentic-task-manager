@@ -15,6 +15,9 @@
   import { setCommentEdits, setDocumentLinks, setTaskLinks } from './links';
   import type { TaskLinks } from '../compmd';
   import ReviewFile, { holdNearCards, whenIdle } from './ReviewFile.svelte';
+  import { forgetAllUnsent } from './unsent';
+  import { isDiffMode, type DiffMode } from './diff';
+  import { seenAtFirst, setUnseenMarks, unseenOf, withSeen, type Seen } from './unseen';
   import {
     chainsOf,
     driftedOf,
@@ -167,6 +170,29 @@
   /** Sent back to its author: more words are *Publish comments* (ATM-597, CR-2), the button's name only */
   const sentBack = $derived(review.status === 'changes_requested');
   const rounds = $derived(page.rounds.map((r) => r.number));
+  // What came since the page opened (ATM-733): what it showed first is seen; a comment after it is new until it has
+  // been in view (ChainBox marks it, through `setUnseenMarks`), a round until the Diffs show it. The page is one
+  // review's (ATM-675), so another review starts again
+  let seen = $state.raw<Seen>(
+    untrack(() =>
+      seenAtFirst(
+        page.chains,
+        page.rounds.map((r) => r.number),
+      ),
+    ),
+  );
+  const unseen = $derived(unseenOf(seen, page.chains, rounds, page.you));
+  setUnseenMarks({
+    isNew: (id) => unseen.comments.has(id),
+    seen: (id) => {
+      if (unseen.comments.has(id)) seen = withSeen(seen, [id]);
+    },
+  });
+  $effect(() => {
+    const round = unseen.round;
+    if (round !== null && tab === 'diffs' && !view.now && view.round === round)
+      untrack(() => (seen = { ...seen, round }));
+  });
   const sideOf = (revision: string | null) => (revision ? side(revision) : null);
   const statusLetter = { added: 'A', modified: 'M', deleted: 'D', renamed: 'R' } as const;
   const totals = $derived(
@@ -189,12 +215,40 @@
   let tab = $state<ReviewSection>(untrack(() => sectionOf(section)));
   $effect.pre(() => {
     const next = sectionOf(section);
-    untrack(() => (tab = next));
+    untrack(() => {
+      if (next !== tab && next === 'diffs') backToDiffs = true;
+      tab = next;
+    });
   });
   function chooseTab(next: ReviewSection) {
     if (next === tab) return;
+    if (next === 'diffs') backToDiffs = true;
     tab = next;
     onsection?.(next);
+  }
+
+  // Each sub-tab keeps its place (ATM-730): a tab's pane is made again when it is shown, so where it was scrolled is
+  // kept here as it scrolls, and put back when it comes back (the tab's Back and Forward too). The Overview, the
+  // Comments and the tree by their scroll; the diffs by the first card in view and how far up it is scrolled, as
+  // their cards are made again at an estimate's height until drawn (the card is held there while they settle, as a
+  // file gone to is)
+  type Place = { path: string; top: number };
+  const places: { overview: number; comments: number; tree: number; diffs: Place | null } = {
+    overview: 0,
+    comments: 0,
+    tree: 0,
+    diffs: null,
+  };
+  /** The diffs come back on their place: unless a file is gone to (`showFile`) or a change or comment (`jump`) */
+  let backToDiffs = false;
+  /** A pane that keeps its scroll in `places[key]`, put back when the pane is made */
+  function keepsPlace(key: 'overview' | 'comments' | 'tree') {
+    return (el: HTMLElement) => {
+      el.scrollTop = places[key];
+      const save = () => (places[key] = el.scrollTop);
+      el.addEventListener('scroll', save, { passive: true });
+      return () => el.removeEventListener('scroll', save);
+    };
   }
 
   // The comment in view (ATM-697): once its tab has drawn it, scrolled to the middle and marked; each comment once
@@ -225,7 +279,7 @@
   // The layout and view of every diff, and the tree's width: kept in this browser
   const LAYOUT_KEY = 'atm-review-layout';
   const stored = readStored(LAYOUT_KEY);
-  let mode = $state<'split' | 'unified'>(stored.mode === 'unified' ? 'unified' : 'split');
+  let mode = $state<DiffMode>(isDiffMode(stored.mode) ? stored.mode : 'split');
   let rendered = $state<'source' | 'rendered'>(stored.view === 'rendered' ? 'rendered' : 'source');
   let width = $state(typeof stored.tree === 'number' ? stored.tree : TREE_WIDTH.default);
   /** Long lines wrap (ATM-588), in Split too, its two sides kept level (ATM-616) */
@@ -327,14 +381,18 @@
   // anchoring, anchored inside a card a live update drew again, moved the pane by the card's height (1,033 px). Its
   // pane has the browser's anchoring off (`.live`), and the first card in view is kept where it is when a card above
   // it changes size (the cards' ResizeObserver, below); a card that grows below the place read moves nothing anyway
-  let reading: { path: string; top: number } | null = null;
-  /** The first card in view, and how far its top is from the pane's: what a live update keeps in place */
-  function remember() {
+  let reading: Place | null = null;
+  /** The first card in view, and how far its top is from the pane's */
+  function firstInView(): Place | null {
     const el = list;
-    if (!el) return;
+    if (!el?.isConnected) return null;
     const top = el.getBoundingClientRect().top;
     const card = cards().find((c) => c.getBoundingClientRect().bottom > top + 1);
-    reading = card?.dataset.file ? { path: card.dataset.file, top: card.getBoundingClientRect().top - top } : null;
+    return card?.dataset.file ? { path: card.dataset.file, top: card.getBoundingClientRect().top - top } : null;
+  }
+  /** What a live update keeps in place */
+  function remember() {
+    reading = firstInView();
   }
   /** That card back where it was, the list scrolled by the difference */
   function keepReading() {
@@ -351,11 +409,16 @@
     scrolling = requestAnimationFrame(() => {
       scrolling = 0;
       findTop();
+      // The diffs' place for the way back to them (a pane already gone keeps the last one)
+      const place = firstInView();
+      if (place) places.diffs = place;
     });
   }
 
   let writing: (() => void) | null = null;
   onDestroy(() => writing?.());
+  // What was written and not sent is this review's (ATM-732): the next review's page starts with none
+  onDestroy(forgetAllUnsent);
   /** A link in the summary or a comment to a document of the project (ATM-586): a file the round changed opens its diff
    * here, the review being about it; anything else, or a document's heading or text, the document viewer */
   function openLink(ref: DocumentRef) {
@@ -380,20 +443,23 @@
   let wanted = $state<string | null>(null);
   const cardOf = (path: string) =>
     list?.querySelector<HTMLElement>(`.review-file-card[data-file="${CSS.escape(path)}"]`) ?? null;
-  /** `card` at the list's top, as near as it scrolls: the list scrolled by the difference, and nothing else (ATM-656:
-   * `scrollIntoView` also scrolls what holds the list, and in WebKit landed a few px off one time in two) */
-  function toTop(card: HTMLElement | null) {
+  /** `card` at the list's top (or `at` px below it, a negative `at` scrolled into it), as near as it scrolls: the list
+   * scrolled by the difference, and nothing else (ATM-656: `scrollIntoView` also scrolls what holds the list, and in
+   * WebKit landed a few px off one time in two) */
+  function toTop(card: HTMLElement | null, at = 0) {
     const el = list;
     if (!el || !card) return;
-    const off = card.getBoundingClientRect().top - el.getBoundingClientRect().top;
+    const off = card.getBoundingClientRect().top - el.getBoundingClientRect().top - at;
     if (Math.abs(off) >= 1) el.scrollTop += off;
   }
   /** Go to file `path` on the Diffs tab; with `address`, the address follows (the sub-tab and file, and the comment gone
    * to from the Comments tab) */
   async function showFile(path: string, address = true, comment: string | null = null) {
     tab = 'diffs';
+    backToDiffs = false;
     holdNearCards();
     wanted = path;
+    pinOffset = 0;
     await tick();
     toTop(cardOf(path));
     atFile = chosen = pinned = path;
@@ -410,6 +476,8 @@
   // put it back (19 px for a few frames, 1 jump in 8); and the observer's own correction, when a card above changed
   // size, came a frame late in WebKit (96 px off for that frame). Once the reader moves, both are back
   let pinned = $state<string | null>(null);
+  /** How far below the pane's top the held card stands (negative: scrolled into it, the diffs' place kept, ATM-730) */
+  let pinOffset = 0;
   const pinnedAt = $derived(pinned === null ? -1 : files.findIndex((f) => f.path === pinned));
   /** The hold ended: the cards above take their own heights again, in the same update the pane's anchoring comes back,
    * so no anchor has seen them change; the file held stays where it was, the pane scrolled by what they changed */
@@ -432,7 +500,7 @@
       if (pinned) release();
     };
     const settle = new ResizeObserver(() => {
-      if (pinned) toTop(cardOf(pinned));
+      if (pinned) toTop(cardOf(pinned), pinOffset);
       else if (live) keepReading();
     });
     for (const card of el.querySelectorAll('.review-file-card')) settle.observe(card);
@@ -450,6 +518,26 @@
     opened = true;
     void showFile(file, false);
   });
+  // Back on the Diffs tab: the list where it was left (ATM-730), its first card in view held at the same height while
+  // the cards around it are made; a file the round no longer has leaves the list at its top
+  $effect(() => {
+    if (!list || !backToDiffs) return;
+    backToDiffs = false;
+    const place = places.diffs;
+    if (!place || !files.some((f) => f.path === place.path)) return;
+    untrack(() => void backTo(place));
+  });
+  async function backTo(place: Place) {
+    holdNearCards();
+    wanted = place.path;
+    await tick();
+    const card = cardOf(place.path);
+    if (!card) return;
+    pinOffset = place.top;
+    toTop(card, pinOffset);
+    pinned = place.path;
+    findTop();
+  }
 
   function stepFile(by: number) {
     const i = files.findIndex((f) => f.path === (atFile ?? files[0]?.path));
@@ -479,6 +567,7 @@
   }
   async function jump(back: boolean, kind: keyof typeof TARGETS = 'change') {
     chooseTab('diffs');
+    backToDiffs = false;
     holdNearCards();
     if (pinned) release();
     await tick();
@@ -640,12 +729,33 @@
     anchor: { ...c.anchor, lines: c.placed ?? c.drifted?.lines ?? c.anchor.lines },
   });
 
+  // `fresh`: what came under each since the page opened (ATM-733): the review's own comments (the Overview's
+  // conversation), the files' and a new round (the Diffs), all of them (the Comments)
   const tabs = $derived([
-    { id: 'overview', label: 'Overview', icon: 'info', count: null, open: 0 },
-    { id: 'diffs', label: 'Diffs', icon: 'file-diff', count: files.length, open: 0 },
+    { id: 'overview', label: 'Overview', icon: 'info', count: null, open: 0, fresh: unseen.general, round: false },
+    {
+      id: 'diffs',
+      label: 'Diffs',
+      icon: 'file-diff',
+      count: files.length,
+      open: 0,
+      fresh: unseen.onFiles,
+      round: unseen.round !== null,
+    },
     // The open ones beside the total (ATM-614): *Comments 7 (2 open)*
-    { id: 'comments', label: 'Comments', icon: 'message-square', count: allChains.length, open: chainCounts.open },
+    {
+      id: 'comments',
+      label: 'Comments',
+      icon: 'message-square',
+      count: allChains.length,
+      open: chainCounts.open,
+      fresh: unseen.general + unseen.onFiles,
+      round: false,
+    },
   ] as const);
+  /** A tab's badge's words: how many new comments, and a new round */
+  const freshText = (t: { fresh: number; round: boolean }) =>
+    [t.fresh ? `${t.fresh} new` : '', t.round ? `round ${unseen.round}` : ''].filter(Boolean).join(', ');
 </script>
 
 <svelte:window {onkeydown} />
@@ -667,7 +777,17 @@
         <span class="review-divider" aria-hidden="true"></span>
       {/if}
       <h1 class="review-title">
-        {#if project}<span class="review-project">{project}</span>{/if}
+        <!-- Its tasks first, each a link, as `[ATM-1] CR-15 Title`: a task's key names the project, so the project's
+             isn't said again; a review of no task names its project -->
+        {#if review.tasks.length}<span class="review-title-tasks"
+            >[{#each review.tasks as task, i (task)}{#if i > 0},&nbsp;{/if}{#if taskHref}<a
+                  class="review-title-task"
+                  href={taskHref(task)}
+                  data-task={task}
+                  onclick={(e) => openTask(e, task)}
+                  onauxclick={(e) => e.button === 1 && openTask(e, task)}>{task}</a
+                >{:else}{task}{/if}{/each}]</span
+          >{:else if project}<span class="review-project">{project}</span>{/if}
         <span class="review-ref">{review.reference}</span>
         <span class="review-name">{review.title}</span>
       </h1>
@@ -828,7 +948,11 @@
             aria-label={t.open ? `${t.label}: ${t.count}, ${t.open} open` : undefined}
             ><Icon name={t.icon} size={15} /><span class="review-tab-label">{t.label}</span>{#if t.count !== null}<span
                 class="review-count">{t.count}</span
-              >{/if}{#if t.open}<span class="review-count-open">({t.open} open)</span>{/if}</button
+              >{/if}{#if t.open}<span class="review-count-open">({t.open} open)</span>{/if}{#if t.fresh || t.round}<span
+                class="review-new"
+                data-new={t.id}
+                title="Came while you had the review open">{freshText(t)}</span
+              >{/if}</button
           >
         {/each}
       </div>
@@ -845,9 +969,17 @@
               }}
             >
               {#if live}<option value="now">Now, as it is being made</option>{/if}
-              {#each rounds as n (n)}<option value={String(n)}>{n} of {rounds.length}</option>{/each}
+              {#each rounds as n (n)}<option value={String(n)}
+                  >{n} of {rounds.length}{n === unseen.round ? ' (new)' : ''}</option
+                >{/each}
             </select>
           </label>
+          {#if unseen.round !== null}<button
+              class="review-new review-new-round"
+              id="review-new-round"
+              title="Show round {unseen.round}, new since you opened the review"
+              onclick={() => onround(unseen.round, null)}>Round {unseen.round} new</button
+            >{/if}
           <select
             class="review-select-bare"
             id="review-against"
@@ -914,6 +1046,13 @@
               title="Unified"
               onclick={() => (mode = 'unified')}><Icon name="rows-2" size={15} /></button
             >
+            <!-- The file as it is after the change, nothing marked (ATM-731) -->
+            <button
+              aria-pressed={mode === 'final'}
+              aria-label="Final"
+              title="Final: the file after the change"
+              onclick={() => (mode = 'final')}><Icon name="file-text" size={15} /></button
+            >
           </div>
           <div class="review-segmented" role="group" aria-label="Lines">
             <span class="review-wrap-hint">
@@ -950,7 +1089,7 @@
   {#if problem}<p class="review-problem" role="alert">{problem}</p>{/if}
 
   {#if tab === 'overview'}
-    <div class="review-overview" role="tabpanel" aria-labelledby="review-tab-overview">
+    <div class="review-overview" role="tabpanel" aria-labelledby="review-tab-overview" {@attach keepsPlace('overview')}>
       <dl class="review-facts">
         <div class="review-fact">
           <dt><Icon name="user" size={13} /> Author</dt>
@@ -1081,7 +1220,7 @@
       bind:this={split}
       style:--tree="{width}px"
     >
-      <nav class="review-files" aria-label="Files">
+      <nav class="review-files" aria-label="Files" {@attach keepsPlace('tree')}>
         <div class="review-files-head">
           <span>Files</span>
           <span class="review-files-total"
@@ -1206,7 +1345,7 @@
       </div>
     </div>
   {:else}
-    <div class="review-comments" role="tabpanel" aria-labelledby="review-tab-comments">
+    <div class="review-comments" role="tabpanel" aria-labelledby="review-tab-comments" {@attach keepsPlace('comments')}>
       <div class="review-segmented review-filter" role="group" aria-label="Show">
         {#each [['all', 'All'], ['open', 'Open'], ['resolved', 'Resolved']] as const as [id, label] (id)}
           <button aria-pressed={filter === id} data-filter={id} onclick={() => (filter = id)}
@@ -1292,6 +1431,14 @@
     font-weight: 600;
     letter-spacing: -0.01em;
   }
+  .review-title-task {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .review-title-task:hover {
+    text-decoration: underline;
+  }
+  .review-title-tasks,
   .review-project,
   .review-ref {
     font-family: 'SF Mono', Menlo, Consolas, monospace;
@@ -1475,6 +1622,20 @@
   .review-count-open {
     color: var(--text-muted);
     font-size: var(--text-xs);
+  }
+  /* What came while the page was open (ATM-733): on its tab, and the round picker's new round */
+  .review-new {
+    margin-left: var(--space-2);
+    padding: 0 var(--space-3);
+    border: none;
+    border-radius: var(--radius-pill);
+    background: var(--accent);
+    color: var(--on-accent);
+    font-size: var(--text-xs);
+    font-weight: 600;
+  }
+  .review-new-round {
+    cursor: pointer;
   }
   /* The Diffs tab's tools */
   .review-tools {

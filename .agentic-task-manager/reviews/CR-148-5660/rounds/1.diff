@@ -1,0 +1,997 @@
+diff --git a/dashboard/src/lib/overview/ProjectsOverview.svelte b/dashboard/src/lib/overview/ProjectsOverview.svelte
+index a880cb0b..76cdae70 100644
+--- a/dashboard/src/lib/overview/ProjectsOverview.svelte
++++ b/dashboard/src/lib/overview/ProjectsOverview.svelte
+@@ -6,6 +6,7 @@
+   import { BOARD_SCOPES, withoutActiveSprint } from '../allboard';
+   import { ACTIVE_DAYS, isActive, orderProjects } from '../projects';
+   import type { Item } from '../address';
++  import { inApp } from '../api/http';
+   import type { OverviewTab } from '../routes';
+   import { dashboard } from '../state.svelte';
+   import { ALL_ITEM_VIEWS, itemOfOverviewTab } from '../tabs';
+@@ -55,7 +56,10 @@
+ 
+ <!-- On the board, the page doesn't scroll: the board takes the window's height and its columns scroll (T-265) -->
+ <section class="projects-overview" class:on-board={tab === 'board'} id="projects-overview">
+-  <ItemTabs {items} current={item} onselect={selectItem} label="All projects" />
++  {#if !inApp || !dashboard.sidebarOpen}
++    <!-- In the app the sidebar's items do its job (ATM-753); with the sidebar hidden it is back, until ATM-755 -->
++    <ItemTabs {items} current={item} onselect={selectItem} label="All projects" />
++  {/if}
+   {#if subViews.length > 1}
+     <SubTabs
+       views={subViews}
+diff --git a/dashboard/src/lib/prefs.ts b/dashboard/src/lib/prefs.ts
+index b0b0afc4..b6190cb8 100644
+--- a/dashboard/src/lib/prefs.ts
++++ b/dashboard/src/lib/prefs.ts
+@@ -37,6 +37,8 @@ export interface Prefs {
+   sidebarOpen: boolean;
+   /** The app's sidebar's width, in pixels (T-515) */
+   sidebarWidth: number;
++  /** The scope the app's sidebar was set to by hand (ATM-753): a project's id, or '' for All projects */
++  sidebarScope: string;
+   /** The app's icon shows the workspace's needs-you count (T-517's switch, T-518's badge) */
+   needsYouBadge: boolean;
+   /** The app notifies when a project's needs-you count goes up (T-520) */
+diff --git a/dashboard/src/lib/shell/AppTitleBar.svelte b/dashboard/src/lib/shell/AppTitleBar.svelte
+index 6e3cae8d..a80e4363 100644
+--- a/dashboard/src/lib/shell/AppTitleBar.svelte
++++ b/dashboard/src/lib/shell/AppTitleBar.svelte
+@@ -6,7 +6,6 @@
+   // with its subtitle, search and Filters, Progress and Activity, and the ⋯ settings. Dragging the bar moves the
+   // window, a double click maximizes it. The browser keeps its own title bar.
+   import { onMount, type Snippet } from 'svelte';
+-  import ProjectSelector from './ProjectSelector.svelte';
+   import { reviewOf } from '../address';
+   import { reviewWindow } from '../reviews/window.svelte';
+   import Icon from '../ui/Icon.svelte';
+@@ -94,11 +93,9 @@
+       {:else}
+         {#if listed}<ProjectLogo project={listed} size={16} />{:else}<Logo size={16} />{/if}
+         {#if tab.id === appTabs.active}
+-          <!-- The tab shown: its name is the page's heading, and the project chooser -->
++          <!-- The tab shown: its name is the page's heading. No project chooser: the sidebar's scope does its job, and a
++               tab doesn't change project in place (ATM-753, docs/sidebar-overhaul-design.md §2.3) -->
+           <h1 id="dashboard-title">{name}</h1>
+-          {#if dashboard.projects.length > 0}<span class="app-tab-chooser"
+-              ><ProjectSelector badge={false} floating /></span
+-            >{/if}
+         {:else}
+           <span class="app-tab-name">{name}</span>
+         {/if}
+@@ -174,18 +171,6 @@
+     text-overflow: ellipsis;
+     white-space: nowrap;
+   }
+-  /* The project chooser in the tab: a quiet chevron, no border or background (the browser's keeps its own) */
+-  .app-tab-chooser :global(.project-switch) {
+-    background: none;
+-    border: none;
+-    height: 22px;
+-    width: 22px;
+-  }
+-  .app-tab-chooser :global(.project-switch:hover),
+-  .app-tab-chooser :global(.project-switch[aria-expanded='true']) {
+-    background: var(--surface);
+-    border-radius: var(--radius-sm);
+-  }
+   .window-buttons {
+     align-self: stretch;
+     align-items: center;
+diff --git a/dashboard/src/lib/shell/Sidebar.svelte b/dashboard/src/lib/shell/Sidebar.svelte
+index bb7e42a2..fe9b463f 100644
+--- a/dashboard/src/lib/shell/Sidebar.svelte
++++ b/dashboard/src/lib/shell/Sidebar.svelte
+@@ -1,28 +1,90 @@
+ <script lang="ts">
+-  // The atm app's sidebar (T-515, docs/app-desktop-ui-design.md §4), the app only: Projects Overview, then the
+-  // workspace's projects, each with its logo, name, its progress as a thin bar and what needs you as a badge; the one
+-  // shown marked, missing ones dimmed. A click opens a project in this tab; ⌘-click (Ctrl-click, a middle click) in a
+-  // new one. The title bar's sidebar button and View ▸ Show Sidebar show and hide it; its edge resizes it; both are kept
+-  // in the preferences. The project chooser, search and the workspace picker stay in the title bar (Hakan).
+-  import { onMount } from 'svelte';
++  // The atm app's sidebar (ATM-753, docs/sidebar-overhaul-design.md §2; T-515 before it), the app only: a scope
++  // selector, All projects or one of the workspace's projects, and that scope's items under it. An item always opens a
++  // new tab, right of the active one, and goes to it (⌘-click, Ctrl-click or a middle click: in the background); each is
++  // a real link, so the right-click link menu (ATM-699) and Copy Link work. The scope follows the active tab's page; a
++  // choice by hand holds until the active tab or its page's scope changes, and is kept in the preferences. The title
++  // bar's sidebar button and View ▸ Show Sidebar show and hide it; its edge resizes it; both are kept in the preferences.
++  import { DropdownMenu } from 'bits-ui';
++  import { onMount, untrack } from 'svelte';
++  import type { Item } from '../address';
+   import { appShell, onBarMouseDown, type AppShell } from '../api/shell';
++  import { appTabs } from '../app-tabs.svelte';
+   import type { ProjectEntry } from '../load';
++  import { ITEM_NAMES } from '../places';
+   import { getPref, setPref } from '../prefs';
+-  import HistoryArrows from './HistoryArrows.svelte';
+-  import SidebarToggle from './SidebarToggle.svelte';
+-  import { needsYou } from '../projects';
++  import { needsYou, reviewsWaiting } from '../projects';
++  import {
++    itemAddress,
++    itemsOf,
++    scopeFromPref,
++    scopePref,
++    sidebarScope,
++    type Scope,
++    type ScopeChoice,
++  } from '../sidebar';
+   import { dashboard } from '../state.svelte';
+-  import { tabActions, wantsNewTab } from '../tab-actions';
++  import { inBackground, tabActions, wantsNewTab } from '../tab-actions';
++  import { ITEM_ICONS, itemOfOverviewTab, itemOfView } from '../tabs';
+   import Icon from '../ui/Icon.svelte';
+   import ProjectLogo from '../ui/ProjectLogo.svelte';
++  import HistoryArrows from './HistoryArrows.svelte';
++  import SidebarToggle from './SidebarToggle.svelte';
+ 
+   const MIN = 180;
+   const MAX = 420;
+   const tabs = tabActions();
+ 
+   let width = $state(Math.min(MAX, Math.max(MIN, getPref('sidebarWidth', 240))));
+-  const current = $derived(dashboard.route.page === 'project' ? dashboard.route.id : null);
+-  const onOverview = $derived(dashboard.route.page === 'overview');
++  let menuOpen = $state(false);
++
++  // The active tab's page's scope: a project's, All's, or none (the landing page's choice, the new tab)
++  const pageScope = $derived<Scope | undefined>(
++    dashboard.route.page === 'project' ? dashboard.route.id : dashboard.route.page === 'overview' ? null : undefined,
++  );
++  // The scope chosen by hand, and on what (the preferences' at the start: it holds on the first tab until it changes)
++  let choice = $state<ScopeChoice | null>(null);
++  // The scope shown last: a page of no scope keeps it (a plain variable: only the scope's own derivation writes it)
++  let last: Scope = null;
++  let started = false;
++  $effect(() => {
++    if (started || !dashboard.projectsLoaded) return;
++    started = true;
++    const saved = getPref('sidebarScope', '');
++    if (saved !== '' || pageScope === undefined)
++      choice = { scope: scopeFromPref(saved, dashboard.projects), tab: appTabs.active, pageScope };
++  });
++  const scope = $derived.by(() => (last = sidebarScope(pageScope, appTabs.active, choice, last)));
++  // A switch of tab ends a choice by hand (§2.1): back on its tab, the scope follows the page again
++  $effect(() => {
++    const active = appTabs.active;
++    untrack(() => {
++      if (choice && choice.tab !== active) choice = null;
++    });
++  });
++  const scoped = $derived(scope === null ? null : dashboard.projects.find((p) => p.id === scope));
++  // The item the active tab shows, when its page is the sidebar's scope's
++  const currentItem = $derived(
++    pageScope !== scope || pageScope === undefined
++      ? null
++      : pageScope === null
++        ? itemOfOverviewTab(dashboard.overviewTab)
++        : itemOfView(dashboard.tab),
++  );
++
++  function choose(next: Scope) {
++    choice = { scope: next, tab: appTabs.active, pageScope };
++    setPref('sidebarScope', scopePref(next));
++  }
++
++  /** The item's badge: Code Reviews, the reviews waiting on you (the scope's: All's sums its projects'); Inbox's comes
++   * with the inbox (ATM-762) */
++  function badgeOf(item: Item): number {
++    if (item !== 'reviews') return 0;
++    return scope === null
++      ? dashboard.projects.reduce((n, p) => n + reviewsWaiting(p), 0)
++      : reviewsWaiting(scoped ?? undefined);
++  }
+ 
+   // Whether macOS's traffic lights sit over its top strip (they are at the window's left end)
+   let shell = $state<AppShell | null>(null);
+@@ -58,12 +120,11 @@
+     };
+   }
+ 
+-  /** A project (the overview for null): in a new tab for ⌘-click, Ctrl-click or a middle click, else in this one */
+-  function open(e: MouseEvent, id: string | null) {
+-    if (wantsNewTab(e)) {
+-      e.preventDefault();
+-      tabs.open(dashboard.projectAddress(id));
+-    } else if (e.button === 0) dashboard.openProject(id);
++  /** An item: always a new tab, shown; ⌘-click, Ctrl-click or a middle click, in the background (⇧ brings it forward) */
++  function open(e: MouseEvent, address: string) {
++    if (e.button !== 0 && e.button !== 1) return;
++    e.preventDefault();
++    tabs.open(address, wantsNewTab(e) && inBackground(e));
+   }
+ 
+   // The edge: dragged, or the arrows with it focused, resizes the sidebar
+@@ -91,8 +152,35 @@
+   }
+ </script>
+ 
++<!-- A scope's logo, name and what needs you, in the selector's button and in its menu -->
++{#snippet scopeLabel(project: ProjectEntry | null | undefined, inMenu: boolean)}
++  {#if project}
++    {@const waiting = needsYou(project)}
++    <ProjectLogo {project} size={18} />
++    <span class="app-sidebar-name">{project.name}</span>
++    {#if waiting}<span class="app-sidebar-badge" title="{waiting} need you">{waiting}</span>{/if}
++    {#if !project.missing}
++      {@const progress = progressOf(project)}
++      <span
++        class="project-option-bar app-sidebar-bar"
++        class:in-menu={inMenu}
++        role="img"
++        aria-label={progress.text}
++        title={progress.text}
++        data-percent={progress.percent}
++        ><span class="project-option-fill" style:width="{progress.percent}%"></span></span
++      >
++    {/if}
++  {:else}
++    {@const waiting = dashboard.projects.reduce((n, p) => n + needsYou(p), 0)}
++    <span class="app-sidebar-icon"><Icon name="layout-grid" size={18} /></span>
++    <span class="app-sidebar-name">All projects</span>
++    {#if waiting}<span class="app-sidebar-badge" title="{waiting} need you">{waiting}</span>{/if}
++  {/if}
++{/snippet}
++
+ {#if dashboard.sidebarOpen}
+-  <nav class="app-sidebar" id="app-sidebar" aria-label="Projects" style:width="{width}px">
++  <nav class="app-sidebar" id="app-sidebar" aria-label="Sidebar" style:width="{width}px">
+     <!-- Its top strip, the title bar's height (T-535): room for macOS's traffic lights, then the sidebar button; its
+          free space drags the window, as the title bar's does -->
+     <!-- svelte-ignore a11y_no_static_element_interactions -->
+@@ -106,49 +194,76 @@
+       <HistoryArrows />
+       <SidebarToggle />
+     </div>
+-    <ul class="app-sidebar-list">
+-      <li>
+-        <button
+-          class="app-sidebar-item"
+-          class:current={onOverview}
+-          aria-current={onOverview ? 'page' : undefined}
+-          data-id="overview"
+-          onclick={(e) => open(e, null)}
+-          onauxclick={(e) => open(e, null)}
+-          ><span class="app-sidebar-icon"><Icon name="layout-grid" size={16} /></span>
+-          <span class="app-sidebar-name">Projects Overview</span></button
+-        >
+-      </li>
+-      {#each dashboard.projects as project (project.id)}
+-        {@const waiting = needsYou(project)}
+-        <li>
++    <!-- The scope (§2.1): All projects, then the workspace's projects; missing ones dimmed and not chosen -->
++    <DropdownMenu.Root bind:open={menuOpen}>
++      <DropdownMenu.Trigger>
++        {#snippet child({ props })}
+           <button
+-            class="app-sidebar-item"
+-            class:current={current === project.id}
+-            class:missing={project.missing}
+-            aria-current={current === project.id ? 'page' : undefined}
+-            disabled={project.missing}
+-            title={project.missing ? `${project.path}: not found` : project.path}
+-            data-id={project.id}
+-            onclick={(e) => open(e, project.id)}
+-            onauxclick={(e) => open(e, project.id)}
++            {...props}
++            class="app-sidebar-item app-sidebar-scope"
++            id="app-sidebar-scope"
++            data-scope={scope ?? ''}
++            aria-label="Scope: {scope === null ? 'All projects' : (scoped?.name ?? scope)}; choose another"
++            >{@render scopeLabel(scope === null ? null : scoped, false)}<span class="app-sidebar-chevron"
++              ><Icon name="chevron-down" size={14} /></span
++            ></button
+           >
+-            <ProjectLogo {project} size={16} />
+-            <span class="app-sidebar-name">{project.name}</span>
+-            {#if waiting}<span class="app-sidebar-badge" title="{waiting} need you">{waiting}</span>{/if}
+-            {#if !project.missing}
+-              {@const progress = progressOf(project)}
+-              <span
+-                class="project-option-bar app-sidebar-bar"
+-                role="img"
+-                aria-label={progress.text}
+-                title={progress.text}
+-                data-percent={progress.percent}
+-                ><span class="project-option-fill" style:width="{progress.percent}%"></span></span
+-              >
+-            {/if}
+-          </button>
+-        </li>
++        {/snippet}
++      </DropdownMenu.Trigger>
++      <DropdownMenu.ContentStatic preventScroll={false} aria-label="Scopes">
++        {#snippet child({ props })}
++          <span {...props} class="menu app-sidebar-scopes" id="app-sidebar-scopes">
++            <DropdownMenu.Item onSelect={() => choose(null)}>
++              {#snippet child({ props })}
++                <button
++                  {...props}
++                  class="app-sidebar-item"
++                  class:current={scope === null}
++                  aria-current={scope === null ? 'true' : undefined}
++                  data-scope="">{@render scopeLabel(null, true)}</button
++                >
++              {/snippet}
++            </DropdownMenu.Item>
++            {#each dashboard.projects as project (project.id)}
++              <DropdownMenu.Item disabled={project.missing} onSelect={() => choose(project.id)}>
++                {#snippet child({ props })}
++                  <button
++                    {...props}
++                    class="app-sidebar-item"
++                    class:current={scope === project.id}
++                    class:missing={project.missing}
++                    aria-current={scope === project.id ? 'true' : undefined}
++                    title={project.missing ? `${project.path}: not found` : project.path}
++                    data-scope={project.id}>{@render scopeLabel(project, true)}</button
++                  >
++                {/snippet}
++              </DropdownMenu.Item>
++            {/each}
++          </span>
++        {/snippet}
++      </DropdownMenu.ContentStatic>
++    </DropdownMenu.Root>
++    <!-- The scope's items (§2.2): each a link to its page, opened in a new tab -->
++    <ul class="app-sidebar-list" aria-label="{scope === null ? 'All projects' : (scoped?.name ?? scope)}: pages">
++      {#each itemsOf(scope) as item (item)}
++        {@const address = itemAddress(dashboard.workspace, scope, item)}
++        {@const badge = badgeOf(item)}
++        {#if address}
++          <li>
++            <a
++              class="app-sidebar-item app-sidebar-link"
++              class:current={currentItem === item}
++              aria-current={currentItem === item ? 'page' : undefined}
++              href={address}
++              data-item={item}
++              onclick={(e) => open(e, address)}
++              onauxclick={(e) => open(e, address)}
++              ><span class="app-sidebar-icon"><Icon name={ITEM_ICONS[item]} size={16} /></span>
++              <span class="app-sidebar-name">{ITEM_NAMES[item]}</span>
++              {#if badge}<span class="app-sidebar-badge" title="{badge} waiting for you">{badge}</span>{/if}</a
++            >
++          </li>
++        {/if}
+       {/each}
+     </ul>
+     <!-- The edge: drag it, or focus it and use the arrows, to resize -->
+@@ -194,12 +309,13 @@
+     padding-left: 88px;
+   }
+   .app-sidebar-list {
++    border-top: 1px solid var(--border);
+     display: flex;
+     flex-direction: column;
+     gap: var(--space-1);
+     list-style: none;
+-    margin: 0;
+-    padding: 0;
++    margin: var(--space-3) 0 0;
++    padding: var(--space-3) 0 0;
+   }
+   .app-sidebar-item {
+     align-items: center;
+@@ -213,9 +329,11 @@
+     grid-template-columns: auto 1fr auto;
+     padding: var(--space-2) var(--space-3);
+     text-align: left;
++    text-decoration: none;
+     width: 100%;
+   }
+-  .app-sidebar-item:hover:not(:disabled) {
++  .app-sidebar-item:hover:not(:disabled),
++  .app-sidebar-item[data-highlighted] {
+     background: var(--surface);
+   }
+   .app-sidebar-item.current {
+@@ -225,10 +343,32 @@
+   .app-sidebar-item.missing {
+     opacity: 0.5;
+   }
++  /* The scope: a little larger, the chevron at its right end */
++  .app-sidebar-scope {
++    font-size: var(--text-md);
++    font-weight: 600;
++    grid-template-columns: auto 1fr auto auto;
++  }
++  .app-sidebar-chevron {
++    color: var(--text-muted);
++    display: inline-flex;
++    grid-column: -2;
++    grid-row: 1;
++  }
++  .app-sidebar-scopes {
++    display: flex;
++    flex-direction: column;
++    gap: var(--space-1);
++    min-width: 220px;
++    padding: var(--space-2);
++  }
+   .app-sidebar-icon {
+     color: var(--text-muted);
+     display: inline-flex;
+   }
++  .app-sidebar-link.current .app-sidebar-icon {
++    color: var(--accent);
++  }
+   .app-sidebar-name {
+     min-width: 0;
+     overflow: hidden;
+diff --git a/dashboard/src/lib/shell/ViewPanel.svelte b/dashboard/src/lib/shell/ViewPanel.svelte
+index bb54f241..611c6cc2 100644
+--- a/dashboard/src/lib/shell/ViewPanel.svelte
++++ b/dashboard/src/lib/shell/ViewPanel.svelte
+@@ -3,6 +3,7 @@
+   // as sub-tabs under them where it has more than one (Tasks: Board · List · Dependencies; Analysis: Progress · Agents)
+   import { ITEMS, type Item } from '../address';
+   import { itemOfView, PROJECT_ITEM_VIEWS, VIEW_ICONS, VIEW_LABELS, type ViewId } from '../tabs';
++  import { inApp } from '../api/http';
+   import { reviewsWaiting } from '../projects';
+   import { dashboard } from '../state.svelte';
+   import AgentsTab from '../agents/AgentsTab.svelte';
+@@ -35,12 +36,17 @@
+   // (state.svelte.ts onNavigate). An item opens on its first view
+   const selectItem = (next: Item) => next !== item && dashboard.selectTab(PROJECT_ITEM_VIEWS[next][0]);
+   const selectView = (next: ViewId) => dashboard.selectTab(next);
++  // In the app the sidebar's items do the item row's job (ATM-753); with the sidebar hidden, the row is back, until the
++  // new tab's chooser reaches every page (ATM-755)
++  const showsItems = $derived(!inApp || !dashboard.sidebarOpen);
+ </script>
+ 
+ <div class="graph-section" id="graph-section">
+-  <div class="view-header">
+-    <ItemTabs items={ITEMS} current={item} onselect={selectItem} {badges} label="Project" />
+-  </div>
++  {#if showsItems}
++    <div class="view-header">
++      <ItemTabs items={ITEMS} current={item} onselect={selectItem} {badges} label="Project" />
++    </div>
++  {/if}
+   {#if subViews.length > 1}
+     <SubTabs
+       views={subViews}
+diff --git a/dashboard/src/lib/sidebar.ts b/dashboard/src/lib/sidebar.ts
+new file mode 100644
+index 00000000..3a50202f
+--- /dev/null
++++ b/dashboard/src/lib/sidebar.ts
+@@ -0,0 +1,55 @@
++// The app's sidebar (ATM-753, docs/sidebar-overhaul-design.md §2): a scope (All projects, or one project) and its
++// items, each opening that scope's page in a new tab. What it shows and where an item goes, apart from the component.
++import { ALL_ITEMS, formatAddress, ITEMS, type Item } from './address';
++import { ALL_ITEM_VIEWS, PROJECT_ITEM_VIEWS } from './tabs';
++
++/** A scope: a project's id, or null for All projects */
++export type Scope = string | null;
++
++/** The scope's items: six for a project, four for All (no Inbox or Documents, Hakan CR-135) */
++export function itemsOf(scope: Scope): readonly Item[] {
++  return scope === null ? ALL_ITEMS : ITEMS;
++}
++
++/** Where `item` of `scope` opens, in `workspace`: its first view, nothing else of the page shown (no task, document or
++ * filter carried over); null for an item the scope doesn't have */
++export function itemAddress(workspace: string, scope: Scope, item: Item): string | null {
++  const params = new URLSearchParams();
++  if (workspace) params.set('workspace', workspace);
++  if (scope === null) {
++    const tab = ALL_ITEM_VIEWS[item]?.[0];
++    if (!tab) return null;
++    params.set('overview', '');
++    params.set('view', tab);
++  } else {
++    params.set('project', scope);
++    params.set('view', PROJECT_ITEM_VIEWS[item][0]);
++  }
++  return formatAddress(params);
++}
++
++/** A scope chosen by hand, and on what: the active tab and the scope its page had then */
++export interface ScopeChoice {
++  scope: Scope;
++  tab: string | null;
++  pageScope: Scope | undefined;
++}
++
++/** The sidebar's scope (§2.1): it follows the active tab's page; a choice by hand holds while the active tab and its
++ * page's scope stay what they were when it was made (a switch of tab ends it: the component forgets it then). A page of
++ * no scope (the landing page, the new tab) keeps the last one followed */
++export function sidebarScope(
++  page: Scope | undefined,
++  tab: string | null,
++  choice: ScopeChoice | null,
++  last: Scope,
++): Scope {
++  if (choice && choice.tab === tab && choice.pageScope === page) return choice.scope;
++  return page === undefined ? last : page;
++}
++
++/** A scope as the preferences keep it ('' for All projects), and back; a project no longer listed is All */
++export const scopePref = (scope: Scope): string => scope ?? '';
++export function scopeFromPref(pref: string, projects: readonly { id: string; missing?: boolean }[]): Scope {
++  return projects.some((p) => p.id === pref && !p.missing) ? pref : null;
++}
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index 3b7018ed..c9ae0f2a 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -112,28 +112,11 @@ test.describe('the dashboard in the atm app', () => {
+       await expect(page.locator('#app-tab-new')).toBeVisible();
+       await expect(page.locator('#app-titlebar [role="tab"]')).toHaveCount(1);
+       await expect(page.locator('#app-titlebar .view-tab')).toHaveCount(0);
+-      // The tab's label has the project picker; the bar's right end search and Filters, the charts and the ⋯; inside
+-      // the tab only the subtitle line; no reload button or version chip
+-      await expect(page.locator('.title-bar-tab.selected #project-selector')).toBeVisible();
+-      await expect(page.locator('.title-bar-tab.selected #other-projects-need')).toHaveCount(0);
+-      // The chooser in the tab opens its menu (its click isn't the tab's)
+-      await page.locator('.title-bar-tab.selected #project-selector').click();
+-      await expect(page.locator('#project-menu')).toBeVisible();
+-      // Drawn where it can be seen and used, not clipped by the tabs' scrolling strip (ATM-684): what is at its
+-      // middle is the menu itself, once it is placed beside its button, and its filter takes a real click
+-      await expect
+-        .poll(() =>
+-          page.evaluate(() => {
+-            const menu = document.querySelector('#project-menu')!;
+-            const box = menu.getBoundingClientRect();
+-            const at = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+-            return box.height > 40 && !!at && menu.contains(at);
+-          }),
+-        )
+-        .toBe(true);
+-      await page.locator('#project-filter').click();
+-      await expect(page.locator('#project-filter')).toBeFocused();
+-      await page.keyboard.press('Escape');
++      // No project chooser in the tab (ATM-753): the sidebar's scope does its job; inside the tab only the subtitle
++      // line; no reload button or version chip
++      await expect(page.locator('#app-titlebar #project-selector')).toHaveCount(0);
++      await expect(page.locator('#project-selector')).toHaveCount(0);
++      await expect(page.locator('#app-sidebar #app-sidebar-scope')).toBeVisible();
+       // Search and Filters inside the tab, on the subtitle's line, before it; not in the title bar
+       await expect(page.locator('.topbar.in-tab .in-tab-row #filters')).toBeVisible();
+       await expect(page.locator('#app-titlebar #filters')).toHaveCount(0);
+@@ -541,9 +524,8 @@ test.describe('the dashboard in the atm app', () => {
+     await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+     // Opened on its own, its back button goes up to its reviews list
+     await expect(page.locator('.review-back')).toHaveText('Reviews');
+-    // The tab is the review's: its reference and title, no project chooser
++    // The tab is the review's: its reference and title
+     await expect(page.locator('#dashboard-title')).toHaveText('CR-2: Trim the names');
+-    await expect(tabs.nth(1).locator('.app-tab-chooser')).toHaveCount(0);
+     // The window's own bar and sidebar toggle are there, as on every tab
+     await expect(page.locator('#app-titlebar')).toBeVisible();
+     // ATM-691 (Hakan): and the ⋯ at its right end, which opens Settings, the document's text size with them
+@@ -568,19 +550,20 @@ test.describe('the dashboard in the atm app', () => {
+     await expect(page.locator('#app-tab-t2-label')).toContainText('CR-2: Trim the names');
+     expect(tasksServer.httpRequests).toEqual([]);
+ 
+-    // ATM-581 (Hakan): from the review's tab, a project in the sidebar: the tab becomes that project's page, labelled
+-    // by it; no new tab
++    // From the review's tab, another project's page from the sidebar: a new tab of its own, labelled by it (ATM-753:
++    // the sidebar never changes the tab shown; ATM-581's tab became the project's)
+     await tabs.nth(1).click();
+     await expect(page.locator('#review-page')).toBeVisible();
+-    await page.locator('#app-sidebar [data-id="second"]').click();
+-    await expect(tabs).toHaveCount(2);
+-    await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
++    await page.locator('#app-sidebar-scope').click();
++    await page.locator('#app-sidebar-scopes [data-scope="second"]').click();
++    await page.locator('#app-sidebar [data-item="overview"]').click();
++    await expect(tabs).toHaveCount(3);
++    await expect(tabs.nth(2)).toHaveAttribute('aria-selected', 'true');
+     await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
+-    await expect(page.locator('#review-page')).toHaveCount(0);
+-    await expect.poll(() => addressOf(page)).toMatch(/^\/projects\/second(\/[a-z]+)?(\?|$)/);
+-    await expect(page.locator('#app-tab-t2-label')).toContainText('Minimal Project');
+-    // The first tab is as it was
++    await expect.poll(() => addressOf(page)).toMatch(/^\/projects\/second\/project(\?|$)/);
++    // The other tabs are as they were
+     await expect(page.locator('#app-tab-t1-label')).toContainText('Standard Project');
++    await expect(page.locator('#app-tab-t2-label')).toContainText('CR-2: Trim the names');
+   });
+ 
+   test('tabs are addresses (T-514): + opens the overview, a click goes back, × closes, the menu steps', async ({
+@@ -884,7 +867,7 @@ test.describe('the dashboard in the atm app', () => {
+     await expect.poll(at).toBe(`${base}/kanban`);
+   });
+ 
+-  test('the sidebar (T-515): projects open here or, ⌘-clicked, in a new tab; a task too; its button and menu hide it', async ({
++  test('the sidebar (ATM-753): a scope and its items; an item opens a new tab, ⌘-clicked in the background; a task too; its button and menu hide it', async ({
+     page,
+     tasksServer,
+   }) => {
+@@ -894,38 +877,70 @@ test.describe('the dashboard in the atm app', () => {
+     await page.goto('/');
+     const sidebar = page.locator('#app-sidebar');
+     const tabs = page.locator('#app-titlebar [role="tab"]');
+-    await expect(sidebar.locator('.app-sidebar-item')).toHaveCount(3);
+     await expect.poll(() => tasksServer.menuState?.sidebar).toBe(true);
+-    // Every project's bar is visible, its empty track too: not the sidebar's own colour (T-533)
+-    await expect(sidebar.locator('.app-sidebar-bar')).toHaveCount(2);
++    // Two projects: the landing page is All projects', and so is the sidebar's scope, with its four items
++    const scope = page.locator('#app-sidebar-scope');
++    await expect(scope).toHaveAttribute('data-scope', '');
++    await expect(sidebar.locator('.app-sidebar-link')).toHaveText(['Overview', 'Tasks', 'Code Reviews', 'Analysis']);
++    await expect(sidebar.locator('[data-item="overview"]')).toHaveAttribute('aria-current', 'page');
++    // The page's item row is the sidebar's job in the app
++    await expect(page.locator('.item-tabs')).toHaveCount(0);
++
++    // The scope's menu: All, then the projects, each with its progress bar, its empty track too: not the sidebar's
++    // own colour (T-533)
++    await scope.click();
++    const menu = page.locator('#app-sidebar-scopes');
++    await expect(menu.locator('[data-scope]')).toHaveCount(3);
++    await expect(menu.locator('.app-sidebar-bar')).toHaveCount(2);
+     const colours = await page.evaluate(() => ({
+       sidebar: getComputedStyle(document.querySelector('#app-sidebar')!).backgroundColor,
+-      tracks: [...document.querySelectorAll('.app-sidebar-bar')].map((b) => getComputedStyle(b).backgroundColor),
++      tracks: [...document.querySelectorAll('#app-sidebar-scopes .app-sidebar-bar')].map(
++        (b) => getComputedStyle(b).backgroundColor,
++      ),
+     }));
+     for (const track of colours.tracks) expect(track).not.toBe(colours.sidebar);
++    // Choosing a scope changes the sidebar only, never the tab
++    await menu.locator(`[data-scope="${tasksServer.projectId}"]`).click();
++    await expect(scope).toHaveAttribute('data-scope', tasksServer.projectId);
++    await expect(sidebar.locator('.app-sidebar-link')).toHaveCount(6);
++    await expect(tabs).toHaveCount(1);
++    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
+ 
+-    // A click opens the project here
+-    await sidebar.locator(`[data-id="${tasksServer.projectId}"]`).click();
++    // An item opens its page in a new tab, shown
++    await sidebar.locator('[data-item="tasks"]').click();
++    await expect(tabs).toHaveCount(2);
++    await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+     await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+-    await expect(tabs).toHaveCount(1);
+-    // ⌘-click (Ctrl-click) opens one in a new tab
+-    await sidebar.locator('[data-id="second"]').click({ modifiers: ['ControlOrMeta'] });
++    await expect(page.locator('#kanban')).toBeVisible();
++    await expect(sidebar.locator('[data-item="tasks"]')).toHaveAttribute('aria-current', 'page');
++    // Even the page the tab shows: a new tab again
++    await sidebar.locator('[data-item="tasks"]').click();
++    await expect(tabs).toHaveCount(3);
++    // ⌘-click (Ctrl-click): in the background, right of this one
++    await sidebar.locator('[data-item="analysis"]').click({ modifiers: ['ControlOrMeta'] });
++    await expect(tabs).toHaveCount(4);
++    await expect(tabs.nth(2)).toHaveAttribute('aria-selected', 'true');
++    // The scope follows the active tab: the first tab is All projects'
++    await tabs.nth(0).click();
++    await expect(scope).toHaveAttribute('data-scope', '');
++    await tabs.nth(1).click();
++    await expect(scope).toHaveAttribute('data-scope', tasksServer.projectId);
++    await tabs.nth(3).click();
++    await expect(page.locator('#progress')).toBeVisible();
++    for (const i of [3, 2]) await page.locator('.title-bar-tab').nth(i).locator('.title-bar-tab-close').click();
+     await expect(tabs).toHaveCount(2);
+-    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
+ 
+     // ⌘-click on a task's card opens its details in a new tab
+-    await tabs.nth(0).click();
++    await tabs.nth(1).click();
+     await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+-    // A project opens on its Overview (ATM-751): to its board
+-    await openView(page, 'kanban');
+     const card = page.locator('#kanban .kanban-card').first();
+     const id = await card.getAttribute('data-id');
+     await card.click({ modifiers: ['ControlOrMeta'] });
+     await expect(tabs).toHaveCount(3);
+     // In the background, right of this tab, which stays as it was (ATM-698)
+-    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true');
++    await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+     await expect(page.locator('#detail-overlay')).not.toHaveClass(/open/);
+-    await tabs.nth(1).click();
++    await tabs.nth(2).click();
+     await expect.poll(() => addressOf(page)).toContain(`task=${id}`);
+     await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+     await page.keyboard.press('Escape');
+@@ -1006,7 +1021,9 @@ test.describe('the dashboard in the atm app', () => {
+     await expect(trail).toBeHidden();
+     await expect(page.locator('#subtitle')).toBeVisible();
+     // The overview has none in its tab
+-    await page.locator('#app-sidebar .app-sidebar-item').first().click();
++    await page.locator('#app-sidebar-scope').click();
++    await page.locator('#app-sidebar-scopes [data-scope=""]').click();
++    await page.locator('#app-sidebar [data-item="overview"]').click();
+     await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
+     await expect(page.locator('#in-tab-trail')).toHaveCount(0);
+   });
+diff --git a/dashboard/tests/e2e/helpers.ts b/dashboard/tests/e2e/helpers.ts
+index c20eb7cf..f5125fa9 100644
+--- a/dashboard/tests/e2e/helpers.ts
++++ b/dashboard/tests/e2e/helpers.ts
+@@ -1376,8 +1376,20 @@ const WITH_SUB_TABS = new Set(['tasks', 'analysis']);
+ 
+ export async function openView(page: Page, view: string, { overview = false } = {}) {
+   const item = ITEM_OF_VIEW[view];
+-  await page.locator(`#item-${item}`).click();
+-  if (WITH_SUB_TABS.has(item)) await page.locator(overview ? `#overview-tab-${view}` : `#tab-${view}`).click();
++  const subTab = page.locator(overview ? `#overview-tab-${view}` : `#tab-${view}`);
++  // Already on the item: its sub-tab
++  if (WITH_SUB_TABS.has(item) && (await subTab.count())) return subTab.click();
++  if (await page.locator(`#item-${item}`).count()) {
++    await page.locator(`#item-${item}`).click();
++  } else {
++    // In the app, whose items are the sidebar's (each a new tab, ATM-753): the view in this tab, as a link to it would
++    const { pathname } = new URL(page.url());
++    const project = /^((?:\/w\/[^/]+)?\/projects\/[^/]+)/.exec(pathname)?.[1];
++    if (!project) throw new Error(`openView: no item row and no project in ${pathname}`);
++    await follow(page, `${project}/${view}`);
++    return;
++  }
++  if (WITH_SUB_TABS.has(item)) await subTab.click();
+ }
+ 
+ /** Open the filter panel (Phase, Type and Status buttons) under the search line, if it isn't open yet. */
+diff --git a/dashboard/tests/unit/Sidebar.component.test.ts b/dashboard/tests/unit/Sidebar.component.test.ts
+index 63f3a96d..1a951d33 100644
+--- a/dashboard/tests/unit/Sidebar.component.test.ts
++++ b/dashboard/tests/unit/Sidebar.component.test.ts
+@@ -1,17 +1,20 @@
+ import { fireEvent, render } from '@testing-library/svelte';
+-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
++import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+ import { appTabs } from '../../src/lib/app-tabs.svelte';
+ import type { ProjectEntry, ProjectSummary } from '../../src/lib/load';
++import { setPref } from '../../src/lib/prefs';
+ import Sidebar from '../../src/lib/shell/Sidebar.svelte';
+ import { dashboard } from '../../src/lib/state.svelte';
+ import { summary as fullSummary } from './summary.helpers';
+ 
+-const summary = (percent: number, review = 0, blocked = 0): ProjectSummary =>
++// The app's sidebar (ATM-753, docs/sidebar-overhaul-design.md §2): a scope selector and the scope's items
++
++const summary = (percent: number, review = 0, blocked = 0, codeReviews = 0): ProjectSummary =>
+   fullSummary({
+     total: 10,
+     done: percent / 10,
+     percent,
+-    needs_you: { review, blocked_on_user: blocked, together: 0, code_reviews: 0 },
++    needs_you: { review, blocked_on_user: blocked, together: 0, code_reviews: codeReviews },
+   });
+ const project = (id: string, name: string, s: ProjectSummary | null, missing = false): ProjectEntry => ({
+   id,
+@@ -21,72 +24,110 @@ const project = (id: string, name: string, s: ProjectSummary | null, missing = f
+   summary: s,
+ });
+ 
+-describe('Sidebar (T-515)', () => {
++const items = (container: HTMLElement) =>
++  [...container.querySelectorAll<HTMLAnchorElement>('.app-sidebar-link')].map((a) => a.dataset.item);
++const scopeButton = (container: HTMLElement) => container.querySelector<HTMLElement>('#app-sidebar-scope')!;
++
++describe('Sidebar (ATM-753)', () => {
+   beforeEach(() => {
++    localStorage.clear();
++    sessionStorage.clear();
+     dashboard.projects = [
+-      project('a', 'Alpha', summary(40, 1)),
+-      project('b', 'Beta', summary(90, 0, 2)),
++      project('a', 'Alpha', summary(40, 1, 0, 2)),
++      project('b', 'Beta', summary(90, 0, 2, 1)),
+       project('c', 'Gone', null, true),
+     ];
++    dashboard.projectsLoaded = true;
+     dashboard.route = { page: 'project', id: 'a' };
++    dashboard.tab = 'kanban';
+     dashboard.sidebarOpen = true;
+-    appTabs.start('/projects/a');
++    appTabs.start('/projects/a/kanban');
+   });
+   afterEach(() => history.replaceState(null, '', '/'));
+ 
+-  it('lists the overview and the projects: the open one marked, what needs you badged, a missing one dimmed', () => {
++  it('the scope is the active tab’s project, with what needs you; its six items, the page shown marked', () => {
+     const { container } = render(Sidebar);
+-    const items = [...container.querySelectorAll<HTMLButtonElement>('.app-sidebar-item')];
+-    expect(items.map((i) => i.dataset.id)).toEqual(['overview', 'a', 'b', 'c']);
+-    expect(items[1]).toHaveAttribute('aria-current', 'page');
+-    expect(items[1].querySelector('.app-sidebar-badge')).toHaveTextContent('1');
+-    expect(items[2].querySelector('.app-sidebar-badge')).toHaveTextContent('2');
+-    expect(items[3]).toBeDisabled();
+-    expect(items[3].querySelector('.app-sidebar-bar')).toBeNull();
++    expect(scopeButton(container)).toHaveAttribute('data-scope', 'a');
++    expect(scopeButton(container)).toHaveTextContent('Alpha');
++    // What needs you: a review and two code reviews
++    expect(scopeButton(container).querySelector('.app-sidebar-badge')).toHaveTextContent('3');
++    expect(items(container)).toEqual(['overview', 'inbox', 'tasks', 'reviews', 'documents', 'analysis']);
++    const tasks = container.querySelector('[data-item="tasks"]')!;
++    expect(tasks).toHaveAttribute('aria-current', 'page');
++    expect(tasks).toHaveAttribute('href', '/projects/a/kanban');
++    expect(container.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
++    // Code Reviews: the reviews waiting on you; no badge on the others
++    expect(container.querySelector('[data-item="reviews"] .app-sidebar-badge')).toHaveTextContent('2');
++    expect(container.querySelector('[data-item="inbox"] .app-sidebar-badge')).toBeNull();
+     // The page leaves room for it
+     expect(document.documentElement.style.getPropertyValue('--sidebar-offset')).toBe('240px');
+   });
+ 
+-  it('every project shows its progress as its card counts it: the active sprint’s, else its own; at 0% too (T-533)', () => {
+-    const sprint = (done: number, total: number) => ({
+-      id: 'Now',
+-      state: 'active' as const,
+-      due: null,
+-      release: null,
+-      done,
+-      total,
+-      percent: total ? Math.round((100 * done) / total) : 100,
+-      goal: null,
+-    });
+-    dashboard.projects = [
+-      project('s', 'Sprinting', { ...summary(80), active_sprint: sprint(1, 4) }),
+-      project('z', 'Just started', { ...summary(50), active_sprint: sprint(0, 6) }),
+-      project('n', 'No sprints', summary(30)),
+-      project('e', 'Empty sprint', { ...summary(60), active_sprint: sprint(0, 0) }),
+-      project('u', 'Not summed up', null),
+-    ];
++  it('on All projects’ page: All, its four items, the reviews waiting summed over the projects', async () => {
++    dashboard.route = { page: 'overview' };
++    dashboard.overviewTab = 'progress';
++    const { container } = render(Sidebar);
++    expect(scopeButton(container)).toHaveAttribute('data-scope', '');
++    expect(scopeButton(container)).toHaveTextContent('All projects');
++    expect(items(container)).toEqual(['overview', 'tasks', 'reviews', 'analysis']);
++    expect(container.querySelector('[data-item="analysis"]')).toHaveAttribute('aria-current', 'page');
++    expect(container.querySelector('[data-item="tasks"]')).toHaveAttribute('href', '/board');
++    expect(container.querySelector('[data-item="reviews"] .app-sidebar-badge')).toHaveTextContent('3');
++  });
++
++  it('follows the active tab: another project’s page changes the scope', async () => {
++    const { container } = render(Sidebar);
++    dashboard.route = { page: 'project', id: 'b' };
++    await Promise.resolve();
++    expect(scopeButton(container)).toHaveAttribute('data-scope', 'b');
++    expect(container.querySelector('[data-item="overview"]')).toHaveAttribute('href', '/projects/b/project');
++  });
++
++  it('a scope kept in the preferences holds on the first tab until it changes; another page follows again', async () => {
++    setPref('sidebarScope', 'b');
+     const { container } = render(Sidebar);
+-    const bar = (id: string) => container.querySelector<HTMLElement>(`[data-id="${id}"] .app-sidebar-bar`)!;
+-    expect(bar('s').dataset.percent).toBe('25');
+-    expect(bar('s').title).toBe('Now: 1 of 4 done (25%)');
+-    // 0%: the bar is there, its track drawn, and it says so
+-    expect(bar('z').dataset.percent).toBe('0');
+-    expect(bar('z').title).toBe('Now: 0 of 6 done (0%)');
+-    expect(bar('n').title).toBe('3 of 10 done (30%)');
+-    expect(bar('e').title).toBe('Now: no tasks yet');
+-    expect(bar('u').title).toBe('Progress not known yet');
+-    expect(bar('u').getAttribute('aria-label')).toBe('Progress not known yet');
++    await Promise.resolve();
++    expect(scopeButton(container)).toHaveAttribute('data-scope', 'b');
++    // Not the page's scope: no item marked
++    expect(container.querySelectorAll('[aria-current="page"]')).toHaveLength(0);
++    dashboard.route = { page: 'overview' };
++    await Promise.resolve();
++    expect(scopeButton(container)).toHaveAttribute('data-scope', '');
++  });
++
++  it('a switch of tab ends the choice by hand: back on its tab, the scope is the page’s again', async () => {
++    setPref('sidebarScope', 'b');
++    const { container } = render(Sidebar);
++    await Promise.resolve();
++    expect(scopeButton(container)).toHaveAttribute('data-scope', 'b');
++    const first = appTabs.active!;
++    appTabs.open('/projects/a/list');
++    await Promise.resolve();
++    appTabs.select(first);
++    await Promise.resolve();
++    expect(scopeButton(container)).toHaveAttribute('data-scope', 'a');
++  });
++
++  it('a missing project kept in the preferences is All projects', async () => {
++    setPref('sidebarScope', 'c');
++    const { container } = render(Sidebar);
++    await Promise.resolve();
++    expect(scopeButton(container)).toHaveAttribute('data-scope', '');
+   });
+ 
+-  it('a click opens a project here; ⌘-click in a new tab', async () => {
+-    const opened = vi.spyOn(dashboard, 'openProject').mockImplementation(() => {});
++  it('an item always opens a new tab, shown; ⌘-click in the background; never the tab shown', async () => {
+     const { container } = render(Sidebar);
+-    await fireEvent.click(container.querySelector('[data-id="b"]')!);
+-    expect(opened).toHaveBeenCalledWith('b');
+-    await fireEvent.click(container.querySelector('[data-id="b"]')!, { metaKey: true });
++    const first = appTabs.active;
++    // Even the page the tab already shows
++    await fireEvent.click(container.querySelector('[data-item="tasks"]')!);
+     expect(appTabs.tabs).toHaveLength(2);
+-    expect(appTabs.current?.address).toMatch(/\/projects\/b/);
+-    opened.mockRestore();
++    expect(appTabs.current?.address).toBe('/projects/a/kanban');
++    expect(appTabs.active).not.toBe(first);
++    const shown = appTabs.active;
++    await fireEvent.click(container.querySelector('[data-item="analysis"]')!, { metaKey: true });
++    expect(appTabs.tabs).toHaveLength(3);
++    expect(appTabs.active).toBe(shown);
++    expect(appTabs.tabs.map((t) => t.address)).toContain('/projects/a/progress');
+   });
+ 
+   it('the arrows on its edge resize it, kept within bounds; hidden, it takes no room', async () => {
+diff --git a/dashboard/tests/unit/sidebar.test.ts b/dashboard/tests/unit/sidebar.test.ts
+new file mode 100644
+index 00000000..a3cb0890
+--- /dev/null
++++ b/dashboard/tests/unit/sidebar.test.ts
+@@ -0,0 +1,75 @@
++import { describe, expect, it } from 'vitest';
++import { ITEMS } from '../../src/lib/address';
++import { itemAddress, itemsOf, scopeFromPref, scopePref, sidebarScope } from '../../src/lib/sidebar';
++
++// The app's sidebar: its scope and items (lib/sidebar.ts, ATM-753, docs/sidebar-overhaul-design.md §2)
++
++describe('itemsOf', () => {
++  it('a project has six items, All projects four (no Inbox or Documents)', () => {
++    expect(itemsOf('atm')).toEqual(ITEMS);
++    expect(itemsOf(null)).toEqual(['overview', 'tasks', 'reviews', 'analysis']);
++  });
++});
++
++describe('itemAddress', () => {
++  it.each([
++    ['atm', 'overview', '/projects/atm/project'],
++    ['atm', 'inbox', '/projects/atm/inbox'],
++    ['atm', 'tasks', '/projects/atm/kanban'],
++    ['atm', 'reviews', '/projects/atm/reviews'],
++    ['atm', 'documents', '/projects/atm/documents'],
++    ['atm', 'analysis', '/projects/atm/progress'],
++    [null, 'overview', '/projects'],
++    [null, 'tasks', '/board'],
++    [null, 'reviews', '/reviews'],
++    [null, 'analysis', '/progress'],
++  ] as const)('%s’s %s opens on its first view: %s', (scope, item, address) => {
++    expect(itemAddress('default', scope, item)).toBe(address);
++  });
++
++  it('in another workspace, under it; a project’s id is encoded', () => {
++    expect(itemAddress('work', 'atm', 'tasks')).toBe('/w/work/projects/atm/kanban');
++    expect(itemAddress('work', null, 'overview')).toBe('/w/work/projects');
++    expect(itemAddress('', 'a b', 'reviews')).toBe('/projects/a%20b/reviews');
++  });
++
++  it('All projects has no Inbox or Documents', () => {
++    expect(itemAddress('default', null, 'inbox')).toBeNull();
++    expect(itemAddress('default', null, 'documents')).toBeNull();
++  });
++});
++
++describe('sidebarScope', () => {
++  it('follows the active tab’s page: a project’s, or All’s', () => {
++    expect(sidebarScope('atm', 't1', null, null)).toBe('atm');
++    expect(sidebarScope(null, 't1', null, 'atm')).toBeNull();
++  });
++
++  it('a page of no scope (the landing page, the new tab) keeps the last one', () => {
++    expect(sidebarScope(undefined, 't1', null, 'atm')).toBe('atm');
++    expect(sidebarScope(undefined, 't1', null, null)).toBeNull();
++  });
++
++  it('a choice by hand holds while the active tab and its page’s scope stay', () => {
++    const choice = { scope: 'lfb', tab: 't1', pageScope: 'atm' };
++    expect(sidebarScope('atm', 't1', choice, 'atm')).toBe('lfb');
++    // Another tab, or the page moved to another scope: it follows again
++    expect(sidebarScope('atm', 't2', choice, 'lfb')).toBe('atm');
++    expect(sidebarScope(null, 't1', choice, 'lfb')).toBeNull();
++    // All chosen by hand on a project's page
++    expect(sidebarScope('atm', 't1', { scope: null, tab: 't1', pageScope: 'atm' }, 'atm')).toBeNull();
++  });
++});
++
++describe('the scope in the preferences', () => {
++  const projects = [{ id: 'atm' }, { id: 'gone', missing: true }];
++
++  it('a project by its id, All as an empty string; back, a project no longer listed or missing is All', () => {
++    expect(scopePref('atm')).toBe('atm');
++    expect(scopePref(null)).toBe('');
++    expect(scopeFromPref('atm', projects)).toBe('atm');
++    expect(scopeFromPref('', projects)).toBeNull();
++    expect(scopeFromPref('gone', projects)).toBeNull();
++    expect(scopeFromPref('other', projects)).toBeNull();
++  });
++});

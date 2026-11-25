@@ -1,5 +1,14 @@
 import type { Page } from '@playwright/test';
-import { expect, loadFixture, openDashboard, openFilters, filterButton, test, type TasksServer } from './helpers';
+import {
+  expect,
+  loadFixture,
+  openDashboard,
+  openFilters,
+  openView,
+  filterButton,
+  test,
+  type TasksServer,
+} from './helpers';
 
 // The Agents tab: a lane per agent, a bar per task from start to completion. Expected numbers: fixtures/agents.md.
 const NOW = new Date('2026-04-01T12:00:00Z');
@@ -190,11 +199,11 @@ test.describe('Agents tab: time range', () => {
   test('the range is remembered and keeps following live work', async ({ page, tasksServer }) => {
     await openAgents(page, tasksServer);
     await page.locator('[data-preset="1h"]').click();
-    await page.locator('#tab-graph').click();
+    await openView(page, 'graph');
     // Half an hour later, the "last hour" is still the last hour
     await page.clock.setFixedTime(new Date('2026-04-01T12:30:00Z'));
     await page.goto('/');
-    await page.locator('#tab-agents').click();
+    await openView(page, 'agents');
     await expect(range(page)).toHaveText('11:30 AM – now');
 
     // A window in the past stays where it was

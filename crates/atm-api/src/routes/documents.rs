@@ -24,6 +24,11 @@ pub(super) fn get_document(
 ) -> Response {
     let path = parameter(query, "path");
     let at = parameter(query, "at");
+    // No path (and no revision, which names a document): the project's documents (ATM-765, docs/documents-design.md
+    // §5)
+    if path.is_empty() && at.is_empty() {
+        return list_documents(project, &parameter(query, "q"), request);
+    }
     if !at.is_empty() {
         // A full object ID only, as a round records its sides (ATM-671, audit H6): never a name or an expression git
         // would work out (`:/<regex>` searches every commit's message)
@@ -62,6 +67,26 @@ pub(super) fn get_document(
     }
     match project.document(&path) {
         Ok(document) => ok_json(&document, Some(&tag)),
+        Err(e) => error_response(&e),
+    }
+}
+
+/// `GET …/projects/<p>/documents` without `path` (`?q=` names some: titles and paths): the project's documents, its
+/// submodules, and how many more there were past the cap (`{documents, submodules, more}`). The `ETag` is what the
+/// listing is made from (the files git lists, their versions, the commit) and the query, so the page's poll gets a 304
+/// without the listing being made again; a project without git isn't tagged.
+fn list_documents(project: &dyn ProjectSource, q: &str, request: &HeaderMap) -> Response {
+    let tag = match project.documents_stamp() {
+        Ok(stamp) => stamp.map(|stamp| etag(&json!(["documents", stamp, q]))),
+        Err(e) => return error_response(&e),
+    };
+    if let Some(tag) = &tag
+        && unchanged(request, tag)
+    {
+        return not_modified(tag, &[]);
+    }
+    match project.documents(q) {
+        Ok(listing) => ok_json(&listing, tag.as_deref()),
         Err(e) => error_response(&e),
     }
 }
@@ -308,19 +333,114 @@ mod tests {
         }
     }
 
-    /// No path, or one the project doesn't have: atm-docs is asked, and says no
+    /// A path the project doesn't have: atm-docs is asked, and says no
     #[test]
-    fn no_path_or_an_unknown_one_is_atm_docs_to_refuse() {
-        for (query, path) in [
+    fn an_unknown_path_is_atm_docs_to_refuse() {
+        let (project, calls) = bound(fake(PATH, Ok(file((1, 1))), None));
+        let answer = answer(get_document(project.as_ref(), "path=gone.md", &plain()));
+        assert_eq!(answer.status, StatusCode::NOT_FOUND);
+        assert_eq!(calls.taken(), [Call::FileVersion("gone.md".into())]);
+    }
+
+    /// ATM-765: no path (none, blank, or other parameters only) is the project's documents, atm-lib's listing as it
+    /// is, for the query given (decoded), tagged by its stamp and the query
+    #[test]
+    fn no_path_is_the_listing_of_the_query_tagged_by_its_stamp() {
+        for (query, q) in [
             ("", ""),
             ("path=", ""),
             ("other=x", ""),
-            ("path=gone.md", "gone.md"),
+            ("q=read+me", "read me"),
+            ("path=&q=%2Fdocs", "/docs"),
         ] {
-            let (project, calls) = bound(fake(PATH, Ok(file((1, 1))), None));
+            let (project, calls) = bound(FakeProject::default());
             let answer = answer(get_document(project.as_ref(), query, &plain()));
-            assert_eq!(answer.status, StatusCode::NOT_FOUND, "{query}");
-            assert_eq!(calls.taken(), [Call::FileVersion(path.into())], "{query}");
+            assert_eq!(answer.status, StatusCode::OK, "{query}");
+            assert_eq!(
+                answer.json(),
+                json!({"documents": [{"path": "README.md", "title": "Read me"}], "submodules": [], "more": 0}),
+                "{query}"
+            );
+            assert_eq!(answer.header("content-type"), "application/json");
+            assert_eq!(
+                answer.tag(),
+                etag(&json!(["documents", "s1", q])),
+                "{query}"
+            );
+            assert_eq!(
+                calls.taken(),
+                [Call::DocumentsStamp, Call::Documents(q.into())],
+                "{query}"
+            );
+        }
+    }
+
+    /// Asked again with its tag: a 304 without the listing being made, until the stamp or the query changes
+    #[test]
+    fn the_listing_is_a_304_without_being_made_until_its_stamp_or_query_changes() {
+        let (project, calls) = bound(FakeProject::default());
+        let tag = answer(get_document(project.as_ref(), "q=a", &plain())).tag();
+        calls.taken();
+        let again = answer(get_document(project.as_ref(), "q=a", &having(&tag)));
+        assert_eq!(again.status, StatusCode::NOT_MODIFIED);
+        assert_eq!(again.body, b"");
+        assert_eq!(again.tag(), tag);
+        assert_eq!(calls.taken(), [Call::DocumentsStamp]);
+        // Another query: the listing
+        assert_eq!(
+            answer(get_document(project.as_ref(), "q=b", &having(&tag))).status,
+            StatusCode::OK
+        );
+        // The documents changed: the listing
+        let (moved, _) = bound(FakeProject {
+            documents_stamp: Ok(Some("s2".into())),
+            ..FakeProject::default()
+        });
+        assert_eq!(
+            answer(get_document(moved.as_ref(), "q=a", &having(&tag))).status,
+            StatusCode::OK
+        );
+    }
+
+    /// Without git there is no stamp: the listing, untagged, every time
+    #[test]
+    fn a_listing_without_a_stamp_is_never_tagged() {
+        let (project, calls) = bound(FakeProject {
+            documents_stamp: Ok(None),
+            ..FakeProject::default()
+        });
+        let first = answer(get_document(project.as_ref(), "", &having("\"any\"")));
+        assert_eq!(first.status, StatusCode::OK);
+        assert_eq!(first.tag(), "");
+        assert_eq!(
+            calls.taken(),
+            [Call::DocumentsStamp, Call::Documents(String::new())]
+        );
+    }
+
+    /// What atm-lib refuses, for the stamp or the listing (a query too long is its `Invalid`): its status, no tag
+    #[test]
+    fn a_listing_atm_lib_refuses_is_its_status() {
+        for (error, status) in refusals() {
+            let (stamp_refused, calls) = bound(FakeProject {
+                documents_stamp: Err(error.clone()),
+                ..FakeProject::default()
+            });
+            let answer_ = answer(get_document(stamp_refused.as_ref(), "", &plain()));
+            assert_eq!(answer_.status, status, "{error}");
+            assert_eq!(answer_.json(), json!({"error": error.to_string()}));
+            assert_eq!(
+                calls.taken(),
+                [Call::DocumentsStamp],
+                "the listing isn't made"
+            );
+            let (listing_refused, _) = bound(FakeProject {
+                documents: Err(error.clone()),
+                ..FakeProject::default()
+            });
+            let answer_ = answer(get_document(listing_refused.as_ref(), "q=x", &plain()));
+            assert_eq!(answer_.status, status, "{error}");
+            assert_eq!(answer_.tag(), "", "{error}");
         }
     }
 

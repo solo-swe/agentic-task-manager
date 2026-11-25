@@ -1,0 +1,184 @@
+diff --git a/dashboard/src/lib/reviews/ReviewPage.svelte b/dashboard/src/lib/reviews/ReviewPage.svelte
+index 709b597b..40590a20 100644
+--- a/dashboard/src/lib/reviews/ReviewPage.svelte
++++ b/dashboard/src/lib/reviews/ReviewPage.svelte
+@@ -777,7 +777,17 @@
+         <span class="review-divider" aria-hidden="true"></span>
+       {/if}
+       <h1 class="review-title">
+-        {#if project}<span class="review-project">{project}</span>{/if}
++        <!-- Its tasks first, each a link, as `[ATM-1] CR-15 Title`: a task's key names the project, so the project's
++             isn't said again; a review of no task names its project -->
++        {#if review.tasks.length}<span class="review-title-tasks"
++            >[{#each review.tasks as task, i (task)}{#if i > 0},&nbsp;{/if}{#if taskHref}<a
++                  class="review-title-task"
++                  href={taskHref(task)}
++                  data-task={task}
++                  onclick={(e) => openTask(e, task)}
++                  onauxclick={(e) => e.button === 1 && openTask(e, task)}>{task}</a
++                >{:else}{task}{/if}{/each}]</span
++          >{:else if project}<span class="review-project">{project}</span>{/if}
+         <span class="review-ref">{review.reference}</span>
+         <span class="review-name">{review.title}</span>
+       </h1>
+@@ -1421,6 +1431,14 @@
+     font-weight: 600;
+     letter-spacing: -0.01em;
+   }
++  .review-title-task {
++    color: var(--accent);
++    text-decoration: none;
++  }
++  .review-title-task:hover {
++    text-decoration: underline;
++  }
++  .review-title-tasks,
+   .review-project,
+   .review-ref {
+     font-family: 'SF Mono', Menlo, Consolas, monospace;
+diff --git a/dashboard/src/lib/shell/ReviewsTab.svelte b/dashboard/src/lib/shell/ReviewsTab.svelte
+index 3844d2b4..cedacb6a 100644
+--- a/dashboard/src/lib/shell/ReviewsTab.svelte
++++ b/dashboard/src/lib/shell/ReviewsTab.svelte
+@@ -240,7 +240,8 @@
+   const shownSection = $derived(at.section === 'overview' && at.file ? 'diffs' : at.section);
+   const review = $derived(shown?.review.reference ?? at.review ?? '');
+   const listAddress = $derived(withReview(currentAddress(), { review: null }));
+-  /** Where the review was opened from in this tab (ATM-686): its back button goes Back there, saying where; a review
++  /** Where the review was opened from in this tab (ATM-686): its back button goes Back there, saying where (in the
++   * browser only: the app's title bar has the tab's Back and Forward, so the page has no button of its own); a review
+    * opened on its own (a new tab, a link from elsewhere) goes up to its reviews list, in its place (ATM-696: no way
+    * back to a review left that way). Another place over the review
+    * (a task's details) or another file or round is the same page: its way back is the review's (navigation.ts) */
+@@ -302,9 +303,9 @@
+           isViewed={(file: ViewFile) => isViewed(viewed, page.review.id, page.view.round, page.view.against, file)}
+           taskHref={taskPage}
+           tasks={taskLinks}
+-          backHref={cameFrom ?? listAddress}
++          backHref={inApp ? undefined : (cameFrom ?? listAddress)}
+           backLabel={cameFrom ? placeName(cameFrom) : 'Reviews'}
+-          onback={() => (cameFrom ? goBack() : go(listAddress, true))}
++          onback={inApp ? undefined : () => (cameFrom ? goBack() : go(listAddress, true))}
+           {busy}
+           {problem}
+           docStyle={dashboard.docStyle === 'auto' ? null : dashboard.docStyle}
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index 561a4102..70e19f2f 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -544,12 +544,13 @@ test.describe('the dashboard in the atm app', () => {
+     await expect(page.locator('#review-list')).toBeVisible();
+     await expect(tabs).toHaveCount(1);
+ 
+-    // A plain click opens it in place, as every link (ATM-686), and its back button comes back to the list
++    // A plain click opens it in place, as every link (ATM-686); the title bar's Back comes back to the list, the page
++    // has no back button of its own in the app
+     await page.locator('.review-row[data-review="CR-2"] .review-link').click();
+     await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+     await expect(tabs).toHaveCount(1);
+-    await expect(page.locator('.review-back')).toHaveText('Reviews');
+-    await page.locator('.review-back').click();
++    await expect(page.locator('.review-back')).toHaveCount(0);
++    await page.locator('#app-back').click();
+     await expect(page.locator('#review-list')).toBeVisible();
+ 
+     // ⌘-click: a tab of its own, in the background, this tab still the list (ATM-698, as browsers do)
+@@ -560,8 +561,8 @@ test.describe('the dashboard in the atm app', () => {
+     await tabs.nth(1).click();
+     await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+     await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+-    // Opened on its own, its back button goes up to its reviews list
+-    await expect(page.locator('.review-back')).toHaveText('Reviews');
++    // Opened on its own: no back button in the page either (the sidebar's Code Reviews is the way to the list)
++    await expect(page.locator('.review-back')).toHaveCount(0);
+     // The tab is the review's (ATM-754): its project and reference, its title on hover, the item's icon
+     await expect(page.locator('#dashboard-title')).toHaveText('Standard Project - CR-2');
+     await expect(page.locator('#dashboard-title')).toHaveAttribute('title', 'CR-2: Trim the names');
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 878a3c21..a66bdc24 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -599,7 +599,9 @@ test.describe('a review’s page', () => {
+     await expect(page.locator('#review-window #review-page')).toBeVisible();
+     await expect(page).toHaveTitle(/^\S.* CR-2: Review 2$/);
+     await expect(page.locator('#item-reviews')).toHaveCount(0);
+-    await expect(page.locator('.review-project')).not.toBeEmpty();
++    // Its task leads the heading, `[T-1] CR-2 …`, a link: the task's key says the project, so the project's isn't said
++    await expect(page.locator('.review-title .review-title-task').first()).toHaveAttribute('href', /task=/);
++    await expect(page.locator('.review-title .review-project')).toHaveCount(0);
+     // Back to the list, in the dashboard again
+     await page.getByRole('link', { name: 'Reviews', exact: true }).click();
+     await expect(page.locator('#review-list')).toBeVisible();
+diff --git a/dashboard/tests/unit/ReviewPage.component.test.ts b/dashboard/tests/unit/ReviewPage.component.test.ts
+index 69c98e15..d8032cc3 100644
+--- a/dashboard/tests/unit/ReviewPage.component.test.ts
++++ b/dashboard/tests/unit/ReviewPage.component.test.ts
+@@ -152,11 +152,13 @@ beforeEach(() => {
+ afterEach(() => vi.restoreAllMocks());
+ 
+ describe('ReviewPage: the top bar', () => {
+-  it('names the project, the reference and the title; the status, needs-you, and a link back to the reviews', async () => {
++  it('names its task, the reference and the title; the status, needs-you, and a link back to the reviews', async () => {
+     const onback = vi.fn();
+     const { container } = show(data(), { backHref: '/projects/p1/reviews', onback });
+     const top = within(container.querySelector('.review-top') as HTMLElement);
+-    expect(top.getByRole('heading').textContent?.replace(/\s+/g, ' ').trim()).toBe('ATM CR-7 Trim the names');
++    // The task's key names the project: the project's isn't said again
++    expect(top.getByRole('heading').textContent?.replace(/\s+/g, ' ').trim()).toBe('[ATM-1] CR-7 Trim the names');
++    expect(container.querySelector('.review-top .review-project')).toBeNull();
+     expect(top.getByText('Waiting for review')).toBeTruthy();
+     expect(top.getByText('Needs you')).toBeTruthy();
+     const back = top.getByRole('link', { name: 'Reviews' });
+@@ -166,8 +168,37 @@ describe('ReviewPage: the top bar', () => {
+     expect(onback).toHaveBeenCalledOnce();
+   });
+ 
+-  it('without a project name, a needs-you mark or a way back: the reference and title alone', () => {
+-    show(data({ needs_you: false }), { project: null });
++  it('its task in the heading is a link: a click opens it as the facts’ link does, ⌘-click in a tab of its own', async () => {
++    const open = vi.fn();
++    const { container } = show(data(), { tasks: { known: () => true, open } });
++    const link = within(container.querySelector('.review-title') as HTMLElement).getByRole('link', { name: 'ATM-1' });
++    expect(link.getAttribute('href')).toBe('/projects/p1/list?task=ATM-1');
++    await fireEvent.click(link);
++    expect(open).toHaveBeenLastCalledWith('ATM-1', false);
++    await fireEvent.click(link, { metaKey: true });
++    expect(open).toHaveBeenLastCalledWith('ATM-1', true);
++  });
++
++  it('several tasks: one bracket, each a link; a review of no task names its project instead', () => {
++    const page = data();
++    page.review = { ...page.review, tasks: ['ATM-1', 'ATM-2'] };
++    const { container, unmount } = show(page);
++    const title = container.querySelector('.review-title') as HTMLElement;
++    expect(title.textContent?.replace(/\s+/g, ' ').trim()).toBe('[ATM-1, ATM-2] CR-7 Trim the names');
++    expect([...title.querySelectorAll('a')].map((a) => a.textContent)).toEqual(['ATM-1', 'ATM-2']);
++    unmount();
++    const none = data();
++    none.review = { ...none.review, tasks: [] };
++    show(none);
++    expect(screen.getByRole('heading', { level: 1 }).textContent?.replace(/\s+/g, ' ').trim()).toBe(
++      'ATM CR-7 Trim the names',
++    );
++  });
++
++  it('without tasks, a project name, a needs-you mark or a way back: the reference and title alone', () => {
++    const page = data({ needs_you: false });
++    page.review = { ...page.review, tasks: [] };
++    show(page, { project: null });
+     expect(screen.getByRole('heading', { level: 1 }).textContent?.replace(/\s+/g, ' ').trim()).toBe(
+       'CR-7 Trim the names',
+     );
+@@ -218,7 +249,11 @@ describe('ReviewPage: Overview', () => {
+       ['Changes', '3 files +3 −3'],
+       ['Comments', '1 open · 1 resolved'],
+     ]);
+-    expect(screen.getByRole('link', { name: 'ATM-1' }).getAttribute('href')).toBe('/projects/p1/list?task=ATM-1');
++    expect(
++      within(container.querySelector('.review-facts') as HTMLElement)
++        .getByRole('link', { name: 'ATM-1' })
++        .getAttribute('href'),
++    ).toBe('/projects/p1/list?task=ATM-1');
+     // The facts first, then the description beside the conversation
+     const overview = container.querySelector('.review-overview') as HTMLElement;
+     expect(overview.firstElementChild).toHaveClass('review-facts');

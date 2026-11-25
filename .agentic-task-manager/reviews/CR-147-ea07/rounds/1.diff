@@ -1,0 +1,2378 @@
+diff --git a/dashboard/src/app.css b/dashboard/src/app.css
+index 3f053f95..ea2cf555 100644
+--- a/dashboard/src/app.css
++++ b/dashboard/src/app.css
+@@ -3132,13 +3132,48 @@ a.detail-dep-item {
+   padding-left: var(--space-4);
+   border-bottom: 1px solid var(--border);
+ }
+-/* Between the task views and the project views (T-251) */
+-.view-tab-divider {
+-  align-self: center;
+-  width: 1px;
+-  height: 18px;
+-  margin: 0 var(--space-4);
+-  background: var(--border);
++/* An item's views under the items (ATM-752): Board · List · Dependencies, Progress · Agents, as a segmented row */
++.sub-tabs {
++  display: flex;
++  gap: var(--space-1);
++  padding: var(--space-4) var(--space-4) 0;
++}
++.sub-tab {
++  display: inline-flex;
++  align-items: center;
++  gap: var(--space-2);
++  background: none;
++  border: 1px solid transparent;
++  border-radius: var(--radius-pill);
++  padding: var(--space-2) var(--space-5);
++  font: inherit;
++  font-size: var(--text-md);
++  line-height: 18px;
++  font-weight: 600;
++  color: var(--text-muted);
++  cursor: pointer;
++}
++.sub-tab:hover {
++  color: var(--text);
++  background: color-mix(in srgb, var(--surface) 60%, transparent);
++}
++.sub-tab[aria-selected='true'] {
++  color: var(--text);
++  background: var(--surface);
++  border-color: var(--border);
++}
++.sub-tab[aria-selected='true'] .icon {
++  color: var(--accent);
++}
++.sub-tab:focus-visible {
++  outline: 2px solid var(--accent);
++  outline-offset: -2px;
++}
++/* Inbox and Documents until their pages come (ATM-762, ATM-766) */
++.view-placeholder {
++  color: var(--text-muted);
++  padding: var(--space-6);
++  font-size: var(--text-lg);
+ }
+ .view-tab {
+   display: inline-flex;
+@@ -5541,10 +5576,14 @@ svg.graph-minimap.hidden {
+   color: var(--text);
+   cursor: pointer;
+ }
+-/* Projects | Omniboard (T-259), looking like a project's tabs (T-346) */
+-.overview-tabs {
++/* All projects' items and sub-tabs (ATM-752), looking like a project's (T-346) */
++.projects-overview > .item-tabs,
++.projects-overview > .sub-tabs {
+   margin-bottom: var(--space-6);
+ }
++.projects-overview > .item-tabs:has(+ .sub-tabs) {
++  margin-bottom: 0;
++}
+ /* The All projects board (AllProjectsBoard.svelte), like a project's Kanban (T-262, T-265): the page doesn't
+    scroll; the board takes the height down to the status bar (basis 0) and each column scrolls inside it. Grouped by
+    project, the lanes scroll as one and the columns are as long as their cards. */
+diff --git a/dashboard/src/lib/address.ts b/dashboard/src/lib/address.ts
+index 2a9c6904..149213ab 100644
+--- a/dashboard/src/lib/address.ts
++++ b/dashboard/src/lib/address.ts
+@@ -15,17 +15,17 @@
+ // part of the address it lives in. An old link (`#project=x&view=list`) has the same parameters in its hash: it is
+ // read as such, and the page replaces it with its new address. The route files under `src/routes/` are these paths.
+ 
+-/** The All projects page's tabs (T-259): the project cards, the board of every project's tasks, every project's
+- * progress (T-329) or agents (T-333) */
+-export const OVERVIEW_TABS = ['projects', 'board', 'progress', 'agents', 'reviews'] as const;
++/** The All projects page's tabs (T-259): the project cards, the board of every project's tasks and their list
++ * (ATM-752), every project's progress (T-329) or agents (T-333), and all reviews (ATM-575) */
++export const OVERVIEW_TABS = ['projects', 'board', 'list', 'progress', 'agents', 'reviews'] as const;
+ export type OverviewTab = (typeof OVERVIEW_TABS)[number];
+ 
+ export function isOverviewTab(value: unknown): value is OverviewTab {
+   return OVERVIEW_TABS.includes(value as OverviewTab);
+ }
+ 
+-/** The All projects page's paths: its tabs, and All's List (ATM-751: the Tasks item's List; its page is ATM-752's) */
+-export const OVERVIEW_PATHS = [...OVERVIEW_TABS, 'list'] as const;
++/** The All projects page's paths: its tabs */
++export const OVERVIEW_PATHS = OVERVIEW_TABS;
+ type OverviewPath = (typeof OVERVIEW_PATHS)[number];
+ const isOverviewPath = (value: unknown): value is OverviewPath => OVERVIEW_PATHS.includes(value as OverviewPath);
+ 
+diff --git a/dashboard/src/lib/overview/AllProjectsBoard.svelte b/dashboard/src/lib/overview/AllProjectsBoard.svelte
+index 3c79c6a5..dc281264 100644
+--- a/dashboard/src/lib/overview/AllProjectsBoard.svelte
++++ b/dashboard/src/lib/overview/AllProjectsBoard.svelte
+@@ -2,18 +2,11 @@
+   // The All projects board (T-259, docs/all-projects-kanban-proposal.md §3): what's happening now, everywhere. Cards
+   // like a project's Kanban cards, each with its project's chip; a card opens the task's details over the board
+   // (T-411), the chip the project, "+ N more" the project's Kanban. Grouped by project, a lane per project instead of the chips.
+-  import {
+-    allBoard,
+-    allBoardLanes,
+-    BOARD_COLUMNS,
+-    boardOf,
+-    type AllBoardCard,
+-    type AllBoardColumn,
+-    type BoardMatch,
+-  } from '../allboard';
++  import { allBoard, allBoardLanes, type AllBoardCard, type AllBoardColumn } from '../allboard';
++  import { boardSearch } from './board-search.svelte';
+   import { shortAgent } from '../claims';
+   import { formatAgo } from '../format';
+-  import { searchProjects, type ProjectEntry } from '../load';
++  import type { ProjectEntry } from '../load';
+   import { dashboard } from '../state.svelte';
+   import { kindStyle, priorityStyle, typeStyle } from '../theme';
+   import { DEFAULT_VOCABULARY, priorityRank } from '../vocab';
+@@ -27,40 +20,11 @@
+ 
+   let { projects }: { projects: ProjectEntry[] } = $props();
+ 
+-  // The search (T-261): the server searches every project's tasks (api/search, their descriptions and notes too,
+-  // which the board's cards don't carry), and the board keeps its cards among the results. Asked once per pause in
+-  // typing, and again when the board's cards change (not on every poll)
+-  const SEARCH_PAUSE_MS = 300;
+-  let match = $state<BoardMatch>(null);
++  // The search (T-261, board-search.svelte.ts)
++  const search = boardSearch(() => projects);
++  const match = $derived(search.match);
+   // The active sprints' board or the whole one (T-340)
+   const scope = $derived(dashboard.boardScope);
+-  const boardCards = $derived(
+-    projects
+-      .flatMap((p) =>
+-        BOARD_COLUMNS.flatMap(({ id }) => boardOf(p, scope)?.[id].cards.map((card) => `${p.id}/${card.id}`) ?? []),
+-      )
+-      .join(' '),
+-  );
+-  $effect(() => {
+-    const query = dashboard.boardQuery.trim();
+-    void boardCards;
+-    if (!query) {
+-      match = null;
+-      return;
+-    }
+-    let current = true;
+-    const timer = setTimeout(
+-      () =>
+-        searchProjects(query)
+-          .then((found) => current && (match = found))
+-          .catch((e) => console.error('Searching the projects failed:', e)),
+-      SEARCH_PAUSE_MS,
+-    );
+-    return () => {
+-      current = false;
+-      clearTimeout(timer);
+-    };
+-  });
+ 
+   // Grouped by project (T-260): a lane per project with something on the board, the most recently active first
+   const columns = $derived(dashboard.boardGroupByProject ? [] : allBoard(projects, undefined, match, scope));
+diff --git a/dashboard/src/lib/overview/AllProjectsList.svelte b/dashboard/src/lib/overview/AllProjectsList.svelte
+new file mode 100644
+index 00000000..8d96babe
+--- /dev/null
++++ b/dashboard/src/lib/overview/AllProjectsList.svelte
+@@ -0,0 +1,129 @@
++<script lang="ts">
++  // All's List (ATM-752, docs/sidebar-overhaul-design.md §1: the Tasks item's List for All projects): the Omniboard's
++  // tasks as a list, grouped by their column, a row per task with its project. The same tasks as the board (each
++  // project's summary: what is ready, at work, waiting and done lately, in the active sprints or all of them), the same
++  // search and options, but no cap per column: every card the summaries carry, and "+ N more" for what they leave out
++  // (they carry a project's first cards of each column). A row opens the task's details over the list, as a card does.
++  import { allBoard, type AllBoardCard } from '../allboard';
++  import { boardSearch } from './board-search.svelte';
++  import type { ProjectEntry } from '../load';
++  import { dashboard } from '../state.svelte';
++  import { followInPlace } from '../new-tab-clicks';
++  import { withTask } from '../routes';
++  import { priorityStyle, typeStyle } from '../theme';
++  import { DEFAULT_VOCABULARY, priorityRank } from '../vocab';
++  import ProjectLogo from '../ui/ProjectLogo.svelte';
++  import TaskKey from '../ui/TaskKey.svelte';
++
++  let { projects }: { projects: ProjectEntry[] } = $props();
++
++  const search = boardSearch(() => projects);
++  // The board's columns without its cap: each a group of rows, with what the summaries leave out ("+ N more")
++  const groups = $derived(
++    allBoard(projects, Infinity, search.match, dashboard.boardScope).filter((g) => g.cards.length || g.more.length),
++  );
++  const tasksText = (n: number) => `${n} ${n === 1 ? 'task' : 'tasks'}`;
++
++  function open(row: AllBoardCard) {
++    void dashboard.openOnBoard(row.project.id, row.card.id);
++  }
++</script>
++
++<div class="all-list" id="all-list">
++  {#each groups as group (group.id)}
++    <section class="list-group" data-group={group.id}>
++      <header class="list-group-header">
++        <strong class="list-group-name">{group.label}</strong>
++        <span class="list-group-count"
++          >{search.match ? `${group.cards.length} of ${group.total}` : tasksText(group.total)}</span
++        >
++      </header>
++      <ul class="all-list-rows">
++        {#each group.cards as row (row.project.id + '/' + row.card.id)}
++          {@const card = row.card}
++          {@const ts = typeStyle(card.type ?? '')}
++          <li class="all-list-row" data-id={card.id} data-project={row.project.id}>
++            <button
++              class="board-project-chip"
++              title="Open {row.project.name}"
++              onclick={() => dashboard.openProject(row.project.id)}
++              ><ProjectLogo project={row.project} size={14} /><span class="board-project-name">{row.project.name}</span
++              ></button
++            >
++            <span class="kanban-card-id"><TaskKey task={card} /></span>
++            <a
++              class="all-list-name card-link"
++              href={withTask(dashboard.projectAddress(row.project.id), card.key ?? card.id)}
++              onclick={(e) => followInPlace(e, () => open(row))}>{card.name}</a
++            >
++            {#if card.type}<span class="badge" style="background:{ts.bg};color:{ts.color}">{card.type}</span>{/if}
++            {#if card.priority}
++              {@const ps = priorityStyle(priorityRank(DEFAULT_VOCABULARY, card.priority))}
++              <span
++                class="badge priority-badge"
++                data-priority={card.priority}
++                style="background:{ps.bg};color:{ps.color}">{card.priority}</span
++              >
++            {/if}
++            {#if card.sprint}<span class="all-list-sprint" title="Sprint: {card.sprint}">{card.sprint}</span>{/if}
++          </li>
++        {/each}
++      </ul>
++      {#each group.more as more (more.project.id)}
++        <button
++          class="kanban-show-all board-more"
++          data-project={more.project.id}
++          title="Open {more.project.name}'s board"
++          onclick={() => dashboard.openProject(more.project.id, { view: 'kanban' })}
++          >+ {more.count} more in {more.project.name}</button
++        >
++      {/each}
++    </section>
++  {:else}
++    <p class="kanban-empty" id="all-list-empty">
++      {search.match
++        ? 'No task matches the search'
++        : dashboard.boardScope === 'active'
++          ? 'Nothing in the active sprints: no task ready, at work, waiting or done lately'
++          : 'Nothing to list: no task ready, at work, waiting or done lately'}
++    </p>
++  {/each}
++</div>
++
++<style>
++  .all-list {
++    display: flex;
++    flex-direction: column;
++    gap: var(--space-6);
++  }
++  .all-list-rows {
++    list-style: none;
++    margin: 0;
++    padding: 0;
++    border: 1px solid var(--border);
++    border-radius: var(--radius-md);
++    background: var(--surface);
++  }
++  .all-list-row {
++    display: flex;
++    align-items: center;
++    gap: var(--space-4);
++    padding: var(--space-3) var(--space-5);
++    min-width: 0;
++  }
++  .all-list-row + .all-list-row {
++    border-top: 1px solid var(--border);
++  }
++  .all-list-name {
++    flex: 1;
++    min-width: 0;
++    overflow: hidden;
++    text-overflow: ellipsis;
++    white-space: nowrap;
++  }
++  .all-list-sprint {
++    color: var(--text-muted);
++    font-size: var(--text-sm);
++    white-space: nowrap;
++  }
++</style>
+diff --git a/dashboard/src/lib/overview/ProjectsOverview.svelte b/dashboard/src/lib/overview/ProjectsOverview.svelte
+index 60a868d3..a880cb0b 100644
+--- a/dashboard/src/lib/overview/ProjectsOverview.svelte
++++ b/dashboard/src/lib/overview/ProjectsOverview.svelte
+@@ -5,10 +5,15 @@
+   // shows only when there is such a project.
+   import { BOARD_SCOPES, withoutActiveSprint } from '../allboard';
+   import { ACTIVE_DAYS, isActive, orderProjects } from '../projects';
+-  import { OVERVIEW_TABS, type OverviewTab } from '../routes';
++  import type { Item } from '../address';
++  import type { OverviewTab } from '../routes';
+   import { dashboard } from '../state.svelte';
++  import { ALL_ITEM_VIEWS, itemOfOverviewTab } from '../tabs';
+   import AllProjectsBoard from './AllProjectsBoard.svelte';
+-  import Icon from '../ui/Icon.svelte';
++  import AllProjectsList from './AllProjectsList.svelte';
++  import Icon, { type IconName } from '../ui/Icon.svelte';
++  import ItemTabs from '../shell/ItemTabs.svelte';
++  import SubTabs from '../shell/SubTabs.svelte';
+   import InfoTip from '../ui/InfoTip.svelte';
+   import OverviewAgents from './OverviewAgents.svelte';
+   import OverviewProgress from './OverviewProgress.svelte';
+@@ -22,62 +27,55 @@
+   const inactive = $derived(ordered.length - active.length);
+   const tab = $derived(dashboard.overviewTab);
+   const noSprint = $derived(withoutActiveSprint(shown, dashboard.boardScope));
++  // The page's items (ATM-752): Overview, Tasks, Code Reviews, Analysis; Tasks' and Analysis' views as sub-tabs
++  const item = $derived(itemOfOverviewTab(tab));
++  const items = Object.keys(ALL_ITEM_VIEWS) as Item[];
+ 
+-  // The board tab is called Omniboard (T-266); its id stays "board", so #view=board links and the saved tab still work
++  // The board's id stays "board", so /board links and the saved tab still work (T-266: it was the Omniboard)
+   const LABELS: Record<OverviewTab, string> = {
+     projects: 'Projects',
+-    board: 'Omniboard',
++    board: 'Board',
++    list: 'List',
+     progress: 'Progress',
+     agents: 'Agents',
+-    reviews: 'Reviews',
++    reviews: 'Code Reviews',
+   };
+   const ICONS = {
+     projects: 'folder',
+     board: 'square-kanban',
++    list: 'list-todo',
+     progress: 'trending-up',
+     agents: 'bot',
+-    reviews: 'message-square',
+-  } as const;
+-  const buttons: Partial<Record<OverviewTab, HTMLButtonElement>> = {};
+-
+-  function onTabKeydown(e: KeyboardEvent) {
+-    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+-    if (!step) return;
+-    e.preventDefault();
+-    const i = OVERVIEW_TABS.indexOf(tab);
+-    const next = OVERVIEW_TABS[(i + step + OVERVIEW_TABS.length) % OVERVIEW_TABS.length];
+-    dashboard.selectOverviewTab(next);
+-    buttons[next]?.focus();
+-  }
++    reviews: 'file-diff',
++  } as const satisfies Record<OverviewTab, IconName>;
++  const subViews = $derived((ALL_ITEM_VIEWS[item] ?? []).map((id) => ({ id, label: LABELS[id], icon: ICONS[id] })));
++  const onTasks = $derived(tab === 'board' || tab === 'list');
++  const selectItem = (next: Item) => next !== item && dashboard.selectOverviewTab(ALL_ITEM_VIEWS[next]![0]);
+ </script>
+ 
+ <!-- On the board, the page doesn't scroll: the board takes the window's height and its columns scroll (T-265) -->
+ <section class="projects-overview" class:on-board={tab === 'board'} id="projects-overview">
+-  <div class="view-tabs overview-tabs" role="tablist" aria-label="Projects Overview">
+-    {#each OVERVIEW_TABS as id (id)}
+-      <button
+-        bind:this={buttons[id]}
+-        class="view-tab"
+-        id="overview-tab-{id}"
+-        role="tab"
+-        aria-selected={tab === id}
+-        aria-controls="overview-panel"
+-        tabindex={tab === id ? 0 : -1}
+-        onclick={() => dashboard.selectOverviewTab(id)}
+-        onkeydown={onTabKeydown}><Icon name={ICONS[id]} size={15} />{LABELS[id]}</button
+-      >
+-    {/each}
+-  </div>
++  <ItemTabs {items} current={item} onselect={selectItem} label="All projects" />
++  {#if subViews.length > 1}
++    <SubTabs
++      views={subViews}
++      current={tab}
++      onselect={(next) => dashboard.selectOverviewTab(next)}
++      idPrefix="overview-tab-"
++      panel={() => 'overview-panel'}
++      label={item === 'tasks' ? 'Tasks' : 'Analysis'}
++    />
++  {/if}
+   <div class="projects-toolbar">
+-    {#if tab === 'board'}
++    {#if onTasks}
+       <!-- Over every project's tasks (T-261): ID, name, description, type, labels, notes and the project's name -->
+       <label class="task-search board-search">
+         <Icon name="search" size={14} />
+         <input
+           type="search"
+           id="board-search"
+-          placeholder="Search the Omniboard"
+-          aria-label="Search the Omniboard's tasks by ID, name, description, type, label, note or project"
++          placeholder="Search all projects’ tasks"
++          aria-label="Search all projects' tasks by ID, name, description, type, label, note or project"
+           value={dashboard.boardQuery}
+           oninput={(e) => dashboard.setBoardQuery(e.currentTarget.value)}
+         />
+@@ -87,20 +85,21 @@
+           >
+         {/if}
+       </label>
+-      <InfoTip label="the Omniboard">
++      <InfoTip label="all projects' tasks">
+         <p>
+           What's happening now across your projects: the tasks <strong>to do</strong> (ready ones first),
+           <strong>in progress</strong>,
+-          <strong>waiting for a review</strong> or <strong>blocked</strong>, and those <strong>done</strong>. At most 30
+-          cards per column; <em>+ N more</em> says how many a project has beyond them.
++          <strong>waiting for a review</strong> or <strong>blocked</strong>, and those <strong>done</strong>. On the
++          Board, at most 30 cards per column; <em>+ N more</em> says how many a project has beyond them. The List shows the
++          same tasks, a row each.
+         </p>
+         <p>
+           <em>Active sprints</em> shows each project's active sprint, all of its tasks, done ones too;
+           <em>All tasks</em>, every sprint and the backlog, with what was done in the last 24 hours.
+         </p>
+         <p>
+-          A card opens its task's details here, over the board. Each project's full board is its own Kanban: the project
+-          chip or <em>+ N more</em> opens the project.
++          A task opens its details here, over the page. Each project's full board is its own: the project chip or
++          <em>+ N more</em> opens the project.
+         </p>
+       </InfoTip>
+       <!-- The active sprints' tasks (the default) or every task, as before (T-340) -->
+@@ -117,14 +116,16 @@
+           >
+         {/each}
+       </span>
+-      <label class="projects-active-only"
+-        ><input
+-          type="checkbox"
+-          id="board-group-by-project"
+-          checked={dashboard.boardGroupByProject}
+-          onchange={(e) => dashboard.setBoardGroupByProject(e.currentTarget.checked)}
+-        /> Group by project</label
+-      >
++      {#if tab === 'board'}
++        <label class="projects-active-only"
++          ><input
++            type="checkbox"
++            id="board-group-by-project"
++            checked={dashboard.boardGroupByProject}
++            onchange={(e) => dashboard.setBoardGroupByProject(e.currentTarget.checked)}
++          /> Group by project</label
++        >
++      {/if}
+     {/if}
+     {#if inactive}
+       <label
+@@ -139,16 +140,22 @@
+         Hide inactive projects <span class="projects-hidden" id="projects-hidden">({inactive})</span></label
+       >
+     {/if}
+-    {#if tab === 'board' && noSprint.length}
++    {#if onTasks && noSprint.length}
+       <!-- So the board isn't empty without a word: these projects have nothing in the active sprints view -->
+       <span class="projects-hidden" id="board-no-active-sprint" title={noSprint.map((p) => p.name).join(', ')}
+         >{noSprint.length} project{noSprint.length === 1 ? ' has' : 's have'} no active sprint</span
+       >
+     {/if}
+   </div>
+-  <div id="overview-panel" role="tabpanel" aria-labelledby="overview-tab-{tab}">
++  <div
++    id="overview-panel"
++    role="tabpanel"
++    aria-labelledby={subViews.length > 1 ? `overview-tab-${tab}` : `item-${item}`}
++  >
+     {#if tab === 'board'}
+       <AllProjectsBoard projects={shown} />
++    {:else if tab === 'list'}
++      <AllProjectsList projects={shown} />
+     {:else if tab === 'agents'}
+       <OverviewAgents projects={shown} />
+     {:else if tab === 'progress'}
+diff --git a/dashboard/src/lib/overview/board-search.svelte.ts b/dashboard/src/lib/overview/board-search.svelte.ts
+new file mode 100644
+index 00000000..07c6b292
+--- /dev/null
++++ b/dashboard/src/lib/overview/board-search.svelte.ts
+@@ -0,0 +1,49 @@
++// The All projects search (T-261), shared by the Omniboard and All's List (ATM-752): the server searches every
++// project's tasks (api/search, their descriptions and notes too, which the summaries' cards don't carry), and the page
++// keeps its cards among the results. Asked once per pause in typing, and again when the cards change (not on every
++// poll).
++import { boardOf, BOARD_COLUMNS, type BoardMatch } from '../allboard';
++import { searchProjects, type ProjectEntry } from '../load';
++import { dashboard } from '../state.svelte';
++
++export const SEARCH_PAUSE_MS = 300;
++
++/** The search's matches for the cards of `projects()`, kept current while the calling component lives: null while
++ * nothing is searched */
++export function boardSearch(projects: () => readonly ProjectEntry[]): { readonly match: BoardMatch } {
++  let match = $state<BoardMatch>(null);
++  const cards = $derived(
++    projects()
++      .flatMap((p) =>
++        BOARD_COLUMNS.flatMap(
++          ({ id }) => boardOf(p, dashboard.boardScope)?.[id].cards.map((card) => `${p.id}/${card.id}`) ?? [],
++        ),
++      )
++      .join(' '),
++  );
++  $effect(() => {
++    const query = dashboard.boardQuery.trim();
++    void cards;
++    if (!query) {
++      match = null;
++      return;
++    }
++    let current = true;
++    const timer = setTimeout(
++      () =>
++        searchProjects(query)
++          .then((found) => current && (match = found))
++          .catch((e) => console.error('Searching the projects failed:', e)),
++      SEARCH_PAUSE_MS,
++    );
++    return () => {
++      current = false;
++      clearTimeout(timer);
++    };
++  });
++  return {
++    get match() {
++      return match;
++    },
++  };
++}
+diff --git a/dashboard/src/lib/places.ts b/dashboard/src/lib/places.ts
+index 1b506ca3..dbc99f2e 100644
+--- a/dashboard/src/lib/places.ts
++++ b/dashboard/src/lib/places.ts
+@@ -10,14 +10,16 @@ const PROJECT_TABS: Record<string, string> = {
+   graph: 'Dependencies',
+   progress: 'Progress',
+   agents: 'Agents',
+-  project: 'Project',
++  project: 'Overview',
+   reviews: 'Reviews',
++  inbox: 'Inbox',
++  documents: 'Documents',
+ };
+ 
+ /** The overview's pages (address.ts OVERVIEW_PATHS), as their buttons name them */
+ const OVERVIEW_TABS: Record<string, string> = {
+   projects: 'Projects',
+-  board: 'Omniboard',
++  board: 'Board',
+   list: 'List',
+   progress: 'Progress',
+   agents: 'Agents',
+diff --git a/dashboard/src/lib/routes.ts b/dashboard/src/lib/routes.ts
+index c8737659..edfc21d2 100644
+--- a/dashboard/src/lib/routes.ts
++++ b/dashboard/src/lib/routes.ts
+@@ -3,6 +3,7 @@
+ // other parameters (the tab, a dialog, a document) are kept (lib/address.ts).
+ import { addressParams, formatAddress, isOverviewTab, OVERVIEW_TABS, type OverviewTab } from './address';
+ import type { ProjectEntry } from './load';
++import { VIEWS } from './tabs';
+ 
+ export { isOverviewTab, OVERVIEW_TABS, type OverviewTab };
+ 
+@@ -37,12 +38,20 @@ export function overviewTabOf(address: string): OverviewTab | null {
+  * project. */
+ export function withProject(address: string, id: string | null, overviewTab?: OverviewTab): string {
+   const params = addressParams(address);
+-  // Whose tab the view is: the page's the address names; on the landing page (neither named), by its value
++  // Whose tab the view is: the page's the address names. On the landing page (neither named) it is kept where it is
++  // one of the page's to go to: a project's `list` and All's are both "list" (ATM-752)
+   const view = params.get('view');
+-  const projectView = params.has('project') || (!params.has('overview') && !isOverviewTab(view));
++  const toProject = id !== null;
++  const keep = params.has('project')
++    ? toProject
++    : params.has('overview')
++      ? !toProject
++      : toProject
++        ? (VIEWS as readonly (string | null)[]).includes(view)
++        : isOverviewTab(view);
+   params.delete('project');
+   params.delete('overview');
+-  if (view !== null && projectView !== (id !== null)) params.delete('view');
++  if (view !== null && !keep) params.delete('view');
+   // A task's details are its project's, and so is a review open on its page (ATM-581: from a review, another project
+   // opened its CR of the same number); that project opens at its Reviews list
+   if (id !== projectOf(address)) {
+diff --git a/dashboard/src/lib/shell/ItemTabs.svelte b/dashboard/src/lib/shell/ItemTabs.svelte
+new file mode 100644
+index 00000000..169eae21
+--- /dev/null
++++ b/dashboard/src/lib/shell/ItemTabs.svelte
+@@ -0,0 +1,66 @@
++<script lang="ts">
++  // The page's items as its tabs (ATM-752, docs/sidebar-overhaul-design.md §5): Overview, Inbox, Tasks, Code Reviews,
++  // Documents, Analysis for a project, four for All projects. A click opens the item in place, on its first view; the
++  // arrow keys move between them. In the app the sidebar takes their place (ATM-753).
++  import type { Item } from '../address';
++  import { ITEM_NAMES } from '../places';
++  import { ITEM_ICONS } from '../tabs';
++  import Icon from '../ui/Icon.svelte';
++  import { adjacent } from '../tabs';
++
++  interface Badge {
++    count: number;
++    /** What the count is, for the accessible name and the tooltip ("waiting for you") */
++    says: string;
++    id?: string;
++  }
++
++  let {
++    items,
++    current,
++    onselect,
++    badges = {},
++    label,
++  }: {
++    items: readonly Item[];
++    current: Item;
++    onselect: (item: Item) => void;
++    badges?: Partial<Record<Item, Badge>>;
++    label: string;
++  } = $props();
++
++  // The buttons, for moving the focus with the arrow keys (`$state`, as `bind:this` into an object's property needs)
++  const buttons: Partial<Record<Item, HTMLButtonElement>> = $state({});
++
++  function onkeydown(e: KeyboardEvent) {
++    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
++    if (!step) return;
++    e.preventDefault();
++    const next = adjacent(items, current, step);
++    onselect(next);
++    buttons[next]?.focus();
++  }
++</script>
++
++<div class="view-tabs item-tabs" role="tablist" aria-label={label}>
++  {#each items as item (item)}
++    {@const badge = badges[item]}
++    <button
++      bind:this={buttons[item]}
++      class="view-tab item-tab"
++      id="item-{item}"
++      data-item={item}
++      role="tab"
++      aria-selected={current === item}
++      tabindex={current === item ? 0 : -1}
++      aria-label={badge?.count ? `${ITEM_NAMES[item]}, ${badge.count} ${badge.says}` : undefined}
++      onclick={() => onselect(item)}
++      {onkeydown}
++      ><Icon name={ITEM_ICONS[item]} size={15} />{ITEM_NAMES[item]}{#if badge?.count}<span
++          class="view-tab-badge"
++          id={badge.id}
++          title="{badge.count} {badge.says}">{badge.count}</span
++        >{/if}</button
++    >
++  {/each}
++</div>
+diff --git a/dashboard/src/lib/shell/SubTabs.svelte b/dashboard/src/lib/shell/SubTabs.svelte
+new file mode 100644
+index 00000000..4768895c
+--- /dev/null
++++ b/dashboard/src/lib/shell/SubTabs.svelte
+@@ -0,0 +1,56 @@
++<script lang="ts" generics="T extends string">
++  // An item's views as sub-tabs under the page's header (ATM-752, docs/sidebar-overhaul-design.md §2.3): Tasks' Board ·
++  // List · Dependencies, Analysis' Progress · Agents. Each is a step in the tab's history, as the items are; the arrow
++  // keys move between them.
++  import { adjacent } from '../tabs';
++  import Icon, { type IconName } from '../ui/Icon.svelte';
++
++  let {
++    views,
++    current,
++    onselect,
++    idPrefix,
++    panel,
++    label,
++  }: {
++    views: readonly { id: T; label: string; icon: IconName }[];
++    current: T;
++    onselect: (view: T) => void;
++    /** The buttons' ids: `<idPrefix><view>` (`tab-kanban`, `overview-tab-board`) */
++    idPrefix: string;
++    /** The id of the panel a sub-tab controls, by its view */
++    panel: (view: T) => string;
++    label: string;
++  } = $props();
++
++  const buttons: Partial<Record<string, HTMLButtonElement>> = $state({});
++
++  function onkeydown(e: KeyboardEvent) {
++    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
++    if (!step) return;
++    e.preventDefault();
++    const next = adjacent(
++      views.map((v) => v.id),
++      current,
++      step,
++    );
++    onselect(next);
++    buttons[next]?.focus();
++  }
++</script>
++
++<div class="sub-tabs" role="tablist" aria-label={label}>
++  {#each views as view (view.id)}
++    <button
++      bind:this={buttons[view.id]}
++      class="sub-tab"
++      id="{idPrefix}{view.id}"
++      role="tab"
++      aria-selected={current === view.id}
++      aria-controls={panel(view.id)}
++      tabindex={current === view.id ? 0 : -1}
++      onclick={() => onselect(view.id)}
++      {onkeydown}><Icon name={view.icon} size={14} />{view.label}</button
++    >
++  {/each}
++</div>
+diff --git a/dashboard/src/lib/shell/ViewPanel.svelte b/dashboard/src/lib/shell/ViewPanel.svelte
+index ef63daf7..bb54f241 100644
+--- a/dashboard/src/lib/shell/ViewPanel.svelte
++++ b/dashboard/src/lib/shell/ViewPanel.svelte
+@@ -1,66 +1,56 @@
+ <script lang="ts">
+-  import { adjacentView, GROUP_END, VIEW_ICONS, VIEW_LABELS, VIEWS, type ViewId } from '../tabs';
++  // A project's page (ATM-752, docs/sidebar-overhaul-design.md §5): its items as tabs, and the views of the item shown
++  // as sub-tabs under them where it has more than one (Tasks: Board · List · Dependencies; Analysis: Progress · Agents)
++  import { ITEMS, type Item } from '../address';
++  import { itemOfView, PROJECT_ITEM_VIEWS, VIEW_ICONS, VIEW_LABELS, type ViewId } from '../tabs';
+   import { reviewsWaiting } from '../projects';
+   import { dashboard } from '../state.svelte';
+   import AgentsTab from '../agents/AgentsTab.svelte';
+   import DepGraph from '../graph/DepGraph.svelte';
+-  import Icon from '../ui/Icon.svelte';
++  import ItemTabs from './ItemTabs.svelte';
+   import KanbanBoard from '../kanban/KanbanBoard.svelte';
+   import ProgressTab from '../progress/ProgressTab.svelte';
+   import ProjectTab from './ProjectTab.svelte';
+   import ReviewsTab from './ReviewsTab.svelte';
+   import ScopeBar from './ScopeBar.svelte';
++  import SubTabs from './SubTabs.svelte';
+   import TaskGrid from '../tasks/TaskGrid.svelte';
+ 
+   const view = $derived(dashboard.tab);
+-  /** The project's code reviews waiting on the user (ATM-606), from its summary: the Reviews tab's badge */
++  const item = $derived(itemOfView(view));
++  const subViews = $derived(
++    PROJECT_ITEM_VIEWS[item].map((id) => ({ id, label: VIEW_LABELS[id], icon: VIEW_ICONS[id] })),
++  );
++  /** The project's code reviews waiting on the user (ATM-606), from its summary: the Code Reviews item's badge */
+   const reviewsForYou = $derived(reviewsWaiting(dashboard.projects.find((p) => p.id === dashboard.projectId)));
+-  // The tab buttons, for moving the focus with the arrow keys. `$state`, as `bind:this` into an object's property
+-  // needs (Svelte's binding_property_non_reactive); elements aren't proxied, only the object holding them
+-  const tabs: Partial<Record<ViewId, HTMLButtonElement>> = $state({});
++  const badges = $derived({
++    reviews: {
++      count: reviewsForYou,
++      says: 'waiting for you: a decision, a round, or an answer to read',
++      id: 'reviews-waiting',
++    },
++  });
+ 
+   // The address is the source of truth (FR-2.2): selecting a tab writes it, back/forward and links read it
+-  // (state.svelte.ts onNavigate).
+-  function select(next: ViewId, focus = false) {
+-    dashboard.selectTab(next);
+-    if (focus) tabs[next]?.focus();
+-  }
+-
+-  function onTabKeydown(e: KeyboardEvent) {
+-    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+-    if (!step) return;
+-    e.preventDefault();
+-    select(adjacentView(view, step), true);
+-  }
++  // (state.svelte.ts onNavigate). An item opens on its first view
++  const selectItem = (next: Item) => next !== item && dashboard.selectTab(PROJECT_ITEM_VIEWS[next][0]);
++  const selectView = (next: ViewId) => dashboard.selectTab(next);
+ </script>
+ 
+ <div class="graph-section" id="graph-section">
+   <div class="view-header">
+-    <div class="view-tabs" role="tablist" aria-label="Views">
+-      {#each VIEWS as id (id)}
+-        <button
+-          bind:this={tabs[id]}
+-          class="view-tab"
+-          id="tab-{id}"
+-          role="tab"
+-          aria-selected={view === id}
+-          aria-controls="panel-{id}"
+-          tabindex={view === id ? 0 : -1}
+-          onclick={() => select(id)}
+-          aria-label={id === 'reviews' && reviewsForYou
+-            ? `${VIEW_LABELS[id]}, ${reviewsForYou} waiting for you`
+-            : undefined}
+-          onkeydown={onTabKeydown}
+-          ><Icon name={VIEW_ICONS[id]} size={15} />{VIEW_LABELS[id]}{#if id === 'reviews' && reviewsForYou}<span
+-              class="view-tab-badge"
+-              id="reviews-waiting"
+-              title="{reviewsForYou} waiting for you: a decision, a round, or an answer to read">{reviewsForYou}</span
+-            >{/if}</button
+-        >
+-        {#if id === GROUP_END}<span class="view-tab-divider" aria-hidden="true"></span>{/if}
+-      {/each}
+-    </div>
++    <ItemTabs items={ITEMS} current={item} onselect={selectItem} {badges} label="Project" />
+   </div>
++  {#if subViews.length > 1}
++    <SubTabs
++      views={subViews}
++      current={view}
++      onselect={selectView}
++      idPrefix="tab-"
++      panel={(id) => `panel-${id}`}
++      label={item === 'tasks' ? 'Tasks' : 'Analysis'}
++    />
++  {/if}
+   <div class="view-panels">
+     {#if view === 'kanban' || view === 'list' || view === 'graph'}<ScopeBar />{/if}
+     <!-- Inactive panels stay mounted (hidden) so each view keeps its state, e.g. the graph's pan/zoom (FR-2.4) -->
+@@ -93,7 +83,7 @@
+       class="view-panel"
+       id="panel-project"
+       role="tabpanel"
+-      aria-labelledby="tab-project"
++      aria-labelledby="item-overview"
+       hidden={view !== 'project'}
+     >
+       <!-- Mounted only while selected, like the Agents tab: it counts the whole history -->
+@@ -103,11 +93,23 @@
+       class="view-panel"
+       id="panel-reviews"
+       role="tabpanel"
+-      aria-labelledby="tab-reviews"
++      aria-labelledby="item-reviews"
+       hidden={view !== 'reviews'}
+     >
+       <!-- Mounted only while selected: it asks the server for the reviews, and again now and then -->
+       {#if view === 'reviews'}<ReviewsTab />{/if}
+     </div>
++    <!-- The Inbox (docs/inbox-design.md) and Documents (docs/documents-design.md) pages come with their own tasks -->
++    {#each ['inbox', 'documents'] as const as id (id)}
++      <div class="view-panel" id="panel-{id}" role="tabpanel" aria-labelledby="item-{id}" hidden={view !== id}>
++        {#if view === id}
++          <p class="view-placeholder" id="{id}-placeholder">
++            {id === 'inbox'
++              ? 'The Inbox is coming: what you note for later, for an agent to make tasks of.'
++              : 'Documents are coming: the project’s documents, listed and searchable, to open in the viewer.'}
++          </p>
++        {/if}
++      </div>
++    {/each}
+   </div>
+ </div>
+diff --git a/dashboard/src/lib/tabs.ts b/dashboard/src/lib/tabs.ts
+index 014acc86..8afb511c 100644
+--- a/dashboard/src/lib/tabs.ts
++++ b/dashboard/src/lib/tabs.ts
+@@ -1,38 +1,92 @@
+ // The selected dashboard view lives in the address (/projects/<id>/kanban, lib/address.ts) so it survives reloads and
+ // can be shared. The address's other parameters are kept.
+-import { addressParams, formatAddress } from './address';
++//
++// The views are grouped by the sidebar's items (docs/sidebar-overhaul-design.md §1, ATM-752): the page shows the items
++// as its tabs, and an item with more than one view (Tasks, Analysis) its views as sub-tabs under them.
++import { addressParams, formatAddress, type Item, type OverviewTab } from './address';
+ 
+-// The task views first, then the views about the project (docs/project-stats-proposal.md §1.1, T-251); a divider
+-// sits between the groups, after GROUP_END
+-export const VIEWS = ['kanban', 'list', 'graph', 'progress', 'agents', 'project', 'reviews'] as const;
++/** A project's views, in their items' order */
++export const VIEWS = [
++  'project',
++  'inbox',
++  'kanban',
++  'list',
++  'graph',
++  'reviews',
++  'documents',
++  'progress',
++  'agents',
++] as const;
+ export type ViewId = (typeof VIEWS)[number];
+ /** A project without a tab in its address opens on its Overview (the `project` tab; docs/sidebar-overhaul-design.md §7,
+  * ATM-751), which links into its Board */
+ export const DEFAULT_VIEW: ViewId = 'project';
+-export const GROUP_END: ViewId = 'graph';
+ 
+-/** The tabs' names: the Kanban is the Board and the graph Dependencies, as the sidebar's Tasks item names them
+- * (ATM-751); their addresses keep `kanban` and `graph`, so old links still work */
++/** The views' names, as their sub-tabs (and a back button, places.ts) name them: the Kanban is the Board and the graph
++ * Dependencies, as the sidebar's Tasks item names them (ATM-751); their addresses keep `kanban` and `graph`, so old
++ * links still work. A view alone in its item is named by its item (ITEM_NAMES) */
+ export const VIEW_LABELS: Record<ViewId, string> = {
+-  graph: 'Dependencies',
++  project: 'Overview',
++  inbox: 'Inbox',
+   kanban: 'Board',
+-  list: 'Task List',
+-  agents: 'Agents',
++  list: 'List',
++  graph: 'Dependencies',
++  reviews: 'Code Reviews',
++  documents: 'Documents',
+   progress: 'Progress',
+-  project: 'Project',
+-  reviews: 'Reviews',
++  agents: 'Agents',
+ };
+ 
+ export const VIEW_ICONS = {
+-  graph: 'network',
++  project: 'layout-dashboard',
++  inbox: 'inbox',
+   kanban: 'square-kanban',
+   list: 'list-todo',
+-  agents: 'bot',
++  graph: 'network',
++  reviews: 'file-diff',
++  documents: 'file-text',
+   progress: 'trending-up',
+-  project: 'folder',
+-  reviews: 'message-square',
++  agents: 'bot',
+ } as const satisfies Record<ViewId, string>;
+ 
++/** The items' icons (docs/sidebar-overhaul-design.md §1) */
++export const ITEM_ICONS = {
++  overview: 'layout-dashboard',
++  inbox: 'inbox',
++  tasks: 'square-kanban',
++  reviews: 'file-diff',
++  documents: 'file-text',
++  analysis: 'trending-up',
++} as const satisfies Record<Item, string>;
++
++/** Each item's views on a project's page: the first is where the item opens */
++export const PROJECT_ITEM_VIEWS: Record<Item, readonly ViewId[]> = {
++  overview: ['project'],
++  inbox: ['inbox'],
++  tasks: ['kanban', 'list', 'graph'],
++  reviews: ['reviews'],
++  documents: ['documents'],
++  analysis: ['progress', 'agents'],
++};
++
++/** Each of All projects' items' views (no Inbox or Documents, Hakan CR-135): the first is where the item opens */
++export const ALL_ITEM_VIEWS: Partial<Record<Item, readonly OverviewTab[]>> = {
++  overview: ['projects'],
++  tasks: ['board', 'list'],
++  reviews: ['reviews'],
++  analysis: ['progress', 'agents'],
++};
++
++/** The item a project's view belongs to */
++export function itemOfView(view: ViewId): Item {
++  return (Object.keys(PROJECT_ITEM_VIEWS) as Item[]).find((item) => PROJECT_ITEM_VIEWS[item].includes(view))!;
++}
++
++/** The item one of All projects' views belongs to */
++export function itemOfOverviewTab(tab: OverviewTab): Item {
++  return (Object.keys(ALL_ITEM_VIEWS) as Item[]).find((item) => ALL_ITEM_VIEWS[item]!.includes(tab))!;
++}
++
+ function isView(value: string | null): value is ViewId {
+   return (VIEWS as readonly string[]).includes(value ?? '');
+ }
+@@ -55,8 +109,8 @@ export function withView(address: string, view: ViewId): string {
+   return formatAddress(params);
+ }
+ 
+-/** The neighbouring view for arrow-key navigation, wrapping around at the ends. */
+-export function adjacentView(view: ViewId, step: 1 | -1): ViewId {
+-  const i = VIEWS.indexOf(view);
+-  return VIEWS[(i + step + VIEWS.length) % VIEWS.length];
++/** The neighbour of `value` in `values` for arrow-key navigation, wrapping around at the ends */
++export function adjacent<T>(values: readonly T[], value: T, step: 1 | -1): T {
++  const i = Math.max(0, values.indexOf(value));
++  return values[(i + step + values.length) % values.length];
+ }
+diff --git a/dashboard/src/lib/ui/Icon.svelte b/dashboard/src/lib/ui/Icon.svelte
+index efa5ef1a..a23bb570 100644
+--- a/dashboard/src/lib/ui/Icon.svelte
++++ b/dashboard/src/lib/ui/Icon.svelte
+@@ -29,7 +29,9 @@
+     Folder,
+     GitBranch,
+     GitCommitHorizontal,
++    Inbox,
+     Info,
++    LayoutDashboard,
+     LayoutGrid,
+     List,
+     ListTodo,
+@@ -89,7 +91,9 @@
+     'git-branch': GitBranch,
+     'git-commit': GitCommitHorizontal,
+     history: RotateCcwClock,
++    inbox: Inbox,
+     info: Info,
++    'layout-dashboard': LayoutDashboard,
+     'layout-grid': LayoutGrid,
+     list: List,
+     'list-todo': ListTodo,
+diff --git a/dashboard/src/params.ts b/dashboard/src/params.ts
+index 57acc23f..5c278a54 100644
+--- a/dashboard/src/params.ts
++++ b/dashboard/src/params.ts
+@@ -6,8 +6,18 @@
+ // tests/unit/address.test.ts checks them against.
+ import type { ParamMatcher } from '@sveltejs/kit/params';
+ 
+-export const PROJECT_TABS = ['kanban', 'list', 'graph', 'progress', 'agents', 'project', 'reviews'];
+-export const OVERVIEW_PATHS = ['board', 'progress', 'agents', 'reviews', 'list'];
++export const PROJECT_TABS = [
++  'project',
++  'inbox',
++  'kanban',
++  'list',
++  'graph',
++  'reviews',
++  'documents',
++  'progress',
++  'agents',
++];
++export const OVERVIEW_PATHS = ['board', 'list', 'progress', 'agents', 'reviews'];
+ /** A review page's sub-tabs after its path (ATM-697: /projects/<id>/reviews/<CR>/[section=section]); the Overview is
+  * the review's own path (lib/address.ts REVIEW_SECTIONS) */
+ export const REVIEW_SECTION_PATHS = ['diffs', 'comments'];
+diff --git a/dashboard/tests/e2e/about.spec.ts b/dashboard/tests/e2e/about.spec.ts
+index 385097c5..1e63288c 100644
+--- a/dashboard/tests/e2e/about.spec.ts
++++ b/dashboard/tests/e2e/about.spec.ts
+@@ -30,8 +30,8 @@ test.describe('About', () => {
+   test('a tab switch keeps it open', async ({ page, tasksServer }) => {
+     await openDashboard(page, tasksServer, 'standard');
+     await page.locator('#footer-about').click();
+-    await page.locator('#tab-list').evaluate((tab: HTMLElement) => tab.click());
+-    await expect(page.locator('#tab-list')).toHaveAttribute('aria-selected', 'true');
++    await page.locator('#item-tasks').evaluate((tab: HTMLElement) => tab.click());
++    await expect(page.locator('#item-tasks')).toHaveAttribute('aria-selected', 'true');
+     await expect(page.locator(overlay)).toBeVisible();
+   });
+ 
+diff --git a/dashboard/tests/e2e/agents.spec.ts b/dashboard/tests/e2e/agents.spec.ts
+index 56f7361f..1b625836 100644
+--- a/dashboard/tests/e2e/agents.spec.ts
++++ b/dashboard/tests/e2e/agents.spec.ts
+@@ -1,5 +1,14 @@
+ import type { Page } from '@playwright/test';
+-import { expect, loadFixture, openDashboard, openFilters, filterButton, test, type TasksServer } from './helpers';
++import {
++  expect,
++  loadFixture,
++  openDashboard,
++  openFilters,
++  openView,
++  filterButton,
++  test,
++  type TasksServer,
++} from './helpers';
+ 
+ // The Agents tab: a lane per agent, a bar per task from start to completion. Expected numbers: fixtures/agents.md.
+ const NOW = new Date('2026-04-01T12:00:00Z');
+@@ -190,11 +199,11 @@ test.describe('Agents tab: time range', () => {
+   test('the range is remembered and keeps following live work', async ({ page, tasksServer }) => {
+     await openAgents(page, tasksServer);
+     await page.locator('[data-preset="1h"]').click();
+-    await page.locator('#tab-graph').click();
++    await openView(page, 'graph');
+     // Half an hour later, the "last hour" is still the last hour
+     await page.clock.setFixedTime(new Date('2026-04-01T12:30:00Z'));
+     await page.goto('/');
+-    await page.locator('#tab-agents').click();
++    await openView(page, 'agents');
+     await expect(range(page)).toHaveText('11:30 AM – now');
+ 
+     // A window in the past stays where it was
+diff --git a/dashboard/tests/e2e/all-projects-board.spec.ts b/dashboard/tests/e2e/all-projects-board.spec.ts
+index 97f89931..678f643f 100644
+--- a/dashboard/tests/e2e/all-projects-board.spec.ts
++++ b/dashboard/tests/e2e/all-projects-board.spec.ts
+@@ -1,6 +1,6 @@
+ // The All projects page's Board tab (T-259, docs/all-projects-kanban-proposal.md §3, §4): every project's tasks in
+ // one board, from the projects' board summaries.
+-import { board, boardCard, expect, openDashboard, summary, test, type TasksServer } from './helpers';
++import { board, boardCard, expect, openDashboard, openView, summary, test, type TasksServer } from './helpers';
+ import type { Page } from '@playwright/test';
+ 
+ const NOW = new Date('2026-03-01T12:00:00Z');
+@@ -53,7 +53,7 @@ async function openBoard(page: Page, tasksServer: TasksServer) {
+   await page.clock.setFixedTime(NOW);
+   addProjects(tasksServer);
+   await openDashboard(page, tasksServer, 'standard');
+-  await page.locator('#overview-tab-board').click();
++  await openView(page, 'board', { overview: true });
+   await expect(page.locator('#all-board')).toBeVisible();
+ }
+ 
+@@ -65,7 +65,7 @@ async function openBusyBoard(page: Page, tasksServer: TasksServer) {
+     tasksServer.addProject(name.toLowerCase(), 'minimal', name, summary({ board: board({ todo }) }));
+   }
+   await openDashboard(page, tasksServer, 'standard');
+-  await page.locator('#overview-tab-board').click();
++  await openView(page, 'board', { overview: true });
+   await expect(page.locator('#all-board .board-card')).toHaveCount(30);
+ }
+ 
+@@ -80,9 +80,9 @@ test.describe('All projects board', () => {
+     await page.clock.setFixedTime(NOW);
+     addProjects(tasksServer);
+     await openDashboard(page, tasksServer, 'standard');
+-    await expect(page.locator('#overview-tab-projects')).toHaveAttribute('aria-selected', 'true');
++    await expect(page.locator('#item-overview')).toHaveAttribute('aria-selected', 'true');
+     await expect(page.locator('#projects-grid')).toBeVisible();
+-    await page.locator('#overview-tab-board').click();
++    await openView(page, 'board', { overview: true });
+     await expect(page).toHaveURL(/\/board(\?|$)/);
+     await expect(page.locator('#projects-grid')).toHaveCount(0);
+ 
+@@ -173,7 +173,7 @@ test.describe('All projects board', () => {
+     tasksServer,
+   }) => {
+     await openBoard(page, tasksServer);
+-    await page.locator('#overview-tab-projects').click();
++    await page.locator('#item-overview').click();
+     await expect(page.locator('#projects-grid')).toBeVisible();
+     await page.goBack();
+     await expect(page.locator('#all-board')).toBeVisible();
+@@ -309,19 +309,53 @@ test.describe('All projects board', () => {
+     expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThan(720);
+   });
+ 
+-  test('the tab is called Omniboard; its ⓘ says what it shows and where the details are (T-266)', async ({
++  test('Tasks’ Board and List (ATM-752); the ⓘ says what they show and where the details are (T-266)', async ({
+     page,
+     tasksServer,
+   }) => {
+     await openBoard(page, tasksServer);
+-    await expect(page.locator('#overview-tab-board')).toHaveText('Omniboard');
++    await expect(page.locator('#item-tasks')).toHaveAttribute('aria-selected', 'true');
++    await expect(page.locator('.sub-tab')).toHaveText(['Board', 'List']);
++    await expect(page.locator('#overview-tab-board')).toHaveAttribute('aria-selected', 'true');
+     // The link keeps its name
+     await expect(page).toHaveURL(/\/board(\?|$)/);
+-    await page.getByRole('button', { name: 'About the Omniboard' }).click();
+-    const about = page.getByRole('dialog', { name: 'About the Omniboard' });
++    await page.getByRole('button', { name: "About all projects' tasks" }).click();
++    const about = page.getByRole('dialog', { name: "About all projects' tasks" });
+     await expect(about).toContainText('done in the last 24 hours');
+-    await expect(about).toContainText("A card opens its task's details here, over the board");
+-    await expect(about).toContainText("Each project's full board is its own Kanban");
++    await expect(about).toContainText('A task opens its details here, over the page');
++    await expect(about).toContainText('The List shows the same tasks, a row each');
++  });
++
++  test('All’s List (ATM-752): the board’s tasks a row each, by column, and what the summaries leave out; a row opens its details; Back returns to the Board', async ({
++    page,
++    tasksServer,
++  }) => {
++    await openBoard(page, tasksServer);
++    await page.locator('#overview-tab-list').click();
++    await expect(page).toHaveURL(/\/list(\?|$)/);
++    await expect(page.locator('#all-board')).toHaveCount(0);
++    const list = page.locator('#all-list');
++    await expect(list.locator('.list-group-name')).toHaveText(['To Do', 'In progress', 'Blocked', 'Done']);
++    // Every card the summaries carry, in the board's order: To Do's 3 of its 13, and the 10 Shop's summary leaves out
++    const todo = list.locator('.list-group[data-group="todo"]');
++    await expect(todo.locator('.all-list-row .kanban-card-id')).toHaveText(['B-1', 'T-008', 'T-009']);
++    await expect(todo.locator('.all-list-row').first().locator('.board-project-name')).toHaveText('Blog');
++    await expect(todo.locator('.list-group-count')).toHaveText('13 tasks');
++    await expect(todo.locator('.board-more')).toHaveText(['+ 10 more in Shop']);
++    // The options are the board's: the search narrows it
++    await page.locator('#board-search').fill('transactional');
++    await expect(list.locator('.all-list-row')).toHaveCount(1);
++    await page.locator('.board-search .search-clear').click();
++    // A row opens its task's details over the list, which stays
++    const url = page.url();
++    await list.locator('.all-list-row[data-project="shop"][data-id="T-007"] .card-link').click();
++    await expect(page.locator('#detail-overlay.open #detail-panel h3')).toHaveText('T-007 Two-factor sign-in');
++    expect(page.url()).toBe(url);
++    await page.keyboard.press('Escape');
++    // A sub-tab is a step in the tab's history
++    await page.goBack();
++    await expect(page.locator('#all-board')).toBeVisible();
++    await expect(page.locator('#overview-tab-board')).toHaveAttribute('aria-selected', 'true');
+   });
+ 
+   test('Active only applies to the board too', async ({ page, tasksServer }) => {
+@@ -335,7 +369,7 @@ test.describe('All projects board', () => {
+     });
+     tasksServer.addProject('idle', 'minimal', 'Idle', idle);
+     await openDashboard(page, tasksServer, 'standard');
+-    await page.locator('#overview-tab-board').click();
++    await openView(page, 'board', { overview: true });
+     await expect(page.locator('#all-board .board-card')).toHaveCount(0);
+     await page.locator('#active-projects-only').uncheck();
+     await expect(page.locator('#all-board .board-card[data-id="I-1"]')).toHaveCount(1);
+@@ -367,7 +401,7 @@ test.describe('All projects board', () => {
+         }),
+       );
+     await openDashboard(page, tasksServer, 'standard');
+-    await page.locator('#overview-tab-board').click();
++    await openView(page, 'board', { overview: true });
+     const scope = (s: string) => page.locator(`#board-scope [data-scope="${s}"]`);
+     await expect(scope('active')).toHaveAttribute('aria-pressed', 'true');
+     await expect(ids(page, 'todo')).toHaveText(['S-1']);
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index fe0deb1a..3b7018ed 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -1,6 +1,6 @@
+ // The dashboard in the atm app (T-457): the same page, its data from the app's commands over Tauri's IPC (mocked here
+ // as `@tauri-apps/api/mocks` does, backed by the fixture's data), never from HTTP.
+-import { addressOf, expect, loadFixture, test } from './helpers';
++import { addressOf, expect, loadFixture, openView, test } from './helpers';
+ 
+ test.describe('the dashboard in the atm app', () => {
+   test('loads its projects and their tasks through the app’s commands, with no request to a server', async ({
+@@ -164,7 +164,7 @@ test.describe('the dashboard in the atm app', () => {
+       await expect(page.locator('#version-chip')).toHaveCount(0);
+       await expect(page.locator('#window-buttons')).toHaveCount(0);
+       await expect(page.locator('#app-menus')).toHaveCount(0);
+-      await page.locator('#tab-list').click();
++      await openView(page, 'list');
+       await expect.poll(() => addressOf(page)).toMatch(/\/list(\?|$)/);
+       // A drag on the bar's free space moves the window; a double click maximizes it
+       // The bar's free space: just past the +
+@@ -917,7 +917,7 @@ test.describe('the dashboard in the atm app', () => {
+     await tabs.nth(0).click();
+     await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+     // A project opens on its Overview (ATM-751): to its board
+-    await page.locator('#tab-kanban').click();
++    await openView(page, 'kanban');
+     const card = page.locator('#kanban .kanban-card').first();
+     const id = await card.getAttribute('data-id');
+     await card.click({ modifiers: ['ControlOrMeta'] });
+diff --git a/dashboard/tests/e2e/compat.spec.ts b/dashboard/tests/e2e/compat.spec.ts
+index d21e025f..60bb3292 100644
+--- a/dashboard/tests/e2e/compat.spec.ts
++++ b/dashboard/tests/e2e/compat.spec.ts
+@@ -1,4 +1,4 @@
+-import { expect, openDashboard, test } from './helpers';
++import { expect, openDashboard, openView, test } from './helpers';
+ 
+ // NFR-5: tasks.json files from before 0.7.0 (no started_at/completed_at; some without timestamps or meta) must
+ // render in every tab without errors, with sensible fallbacks.
+@@ -8,16 +8,16 @@ for (const fixture of ['standard', 'minimal', 'no-meta', 'edge-cases', 'empty'])
+     page.on('pageerror', (e) => errors.push(e.message));
+     await openDashboard(page, tasksServer, fixture);
+ 
+-    await page.locator('#tab-kanban').click();
++    await openView(page, 'kanban');
+     await expect(page.locator('#kanban')).toBeVisible();
+     await expect(page.locator('.kanban-column[data-status="todo"]')).toBeVisible();
+ 
+-    await page.locator('#tab-progress').click();
++    await openView(page, 'progress');
+     await expect(page.locator('#progress')).toBeVisible();
+     if (fixture === 'empty') await expect(page.locator('#progress')).toContainText('No tasks match current filters');
+     else await expect(page.locator('#sprint-table')).toBeVisible();
+ 
+-    await page.locator('#tab-graph').click();
++    await openView(page, 'graph');
+     await expect(page.locator('#dep-graph')).toBeVisible();
+     expect(errors).toEqual([]);
+   });
+@@ -28,6 +28,6 @@ test('without start/complete times, estimates fall back to gaps between updated_
+   tasksServer,
+ }) => {
+   await openDashboard(page, tasksServer, 'standard');
+-  await page.locator('#tab-progress').click();
++  await openView(page, 'progress');
+   await expect(page.locator('#progress-basis')).toContainText('last 4 tasks');
+ });
+diff --git a/dashboard/tests/e2e/footer.spec.ts b/dashboard/tests/e2e/footer.spec.ts
+index 078178c1..01f3f99b 100644
+--- a/dashboard/tests/e2e/footer.spec.ts
++++ b/dashboard/tests/e2e/footer.spec.ts
+@@ -1,6 +1,6 @@
+ import { readFileSync } from 'node:fs';
+ import { CARGO_TOML, workspacePackage } from '../../build/workspace';
+-import { expect, openDashboard, test } from './helpers';
++import { expect, openDashboard, openView, test } from './helpers';
+ 
+ const { repository } = workspacePackage(readFileSync(CARGO_TOML, 'utf8'));
+ 
+@@ -12,7 +12,7 @@ test.describe('Footer', () => {
+   test('shows the logo and name, the copyright, the version and a GitHub link on every view', async ({ page }) => {
+     const footer = page.locator('#site-footer');
+     for (const view of ['graph', 'kanban', 'list', 'agents', 'progress']) {
+-      await page.locator(`#tab-${view}`).click();
++      await openView(page, view);
+       await expect(footer).toBeVisible();
+       // The ATM logo and name come first, before the copyright
+       await expect(footer.locator('#footer-brand')).toHaveText('Agentic Task Manager (atm)');
+@@ -30,7 +30,7 @@ test.describe('Footer', () => {
+ 
+   test('stays at the bottom of the window while the page scrolls', async ({ page, tasksServer }) => {
+     await openDashboard(page, tasksServer, 'large-90');
+-    await page.locator('#tab-list').click();
++    await openView(page, 'list');
+     const viewport = page.viewportSize()!;
+     expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThan(viewport.height);
+     for (const y of [0, 600, 100_000]) {
+diff --git a/dashboard/tests/e2e/helpers.ts b/dashboard/tests/e2e/helpers.ts
+index e6908f2d..c20eb7cf 100644
+--- a/dashboard/tests/e2e/helpers.ts
++++ b/dashboard/tests/e2e/helpers.ts
+@@ -1357,6 +1357,29 @@ export function addressOf(page: Page): string {
+   return url.pathname + url.search;
+ }
+ 
++/** A project's view, or one of All projects' (`overview: true`), as a user reaches it (ATM-752): its item, then its
++ * sub-tab where the item has several */
++const ITEM_OF_VIEW: Record<string, string> = {
++  project: 'overview',
++  projects: 'overview',
++  inbox: 'inbox',
++  kanban: 'tasks',
++  board: 'tasks',
++  list: 'tasks',
++  graph: 'tasks',
++  reviews: 'reviews',
++  documents: 'documents',
++  progress: 'analysis',
++  agents: 'analysis',
++};
++const WITH_SUB_TABS = new Set(['tasks', 'analysis']);
++
++export async function openView(page: Page, view: string, { overview = false } = {}) {
++  const item = ITEM_OF_VIEW[view];
++  await page.locator(`#item-${item}`).click();
++  if (WITH_SUB_TABS.has(item)) await page.locator(overview ? `#overview-tab-${view}` : `#tab-${view}`).click();
++}
++
+ /** Open the filter panel (Phase, Type and Status buttons) under the search line, if it isn't open yet. */
+ export async function openFilters(page: Page) {
+   const toggle = page.locator('#filters-toggle');
+diff --git a/dashboard/tests/e2e/kanban.spec.ts b/dashboard/tests/e2e/kanban.spec.ts
+index 020cea6e..9af49d71 100644
+--- a/dashboard/tests/e2e/kanban.spec.ts
++++ b/dashboard/tests/e2e/kanban.spec.ts
+@@ -1,5 +1,5 @@
+ import type { Page } from '@playwright/test';
+-import { expect, filterButton, loadFixture, openDashboard, openFilters, test } from './helpers';
++import { expect, filterButton, loadFixture, openDashboard, openFilters, openView, test } from './helpers';
+ 
+ const column = (page: Page, status: string) => page.locator(`.kanban-column[data-status="${status}"]`);
+ const cardIds = (page: Page, status: string) =>
+@@ -15,7 +15,7 @@ async function openKanban(
+ ) {
+   // Next up is atm's answer, from the project's summary in api/projects (T-321)
+   await openDashboard(page, tasksServer.withAtmSummary(), data);
+-  await page.locator('#tab-kanban').click();
++  await openView(page, 'kanban');
+   await expect(page.locator('#kanban')).toBeVisible();
+ }
+ 
+@@ -124,7 +124,7 @@ test.describe('Kanban board', () => {
+ 
+   test('no Next up without one from atm (a summary without next)', async ({ page, tasksServer }) => {
+     await openDashboard(page, tasksServer, 'kanban');
+-    await page.locator('#tab-kanban').click();
++    await openView(page, 'kanban');
+     await expect(card(page, 'T-028')).toBeVisible();
+     await expect(page.locator('.kanban-card.next-up')).toHaveCount(0);
+   });
+diff --git a/dashboard/tests/e2e/overview-agents.spec.ts b/dashboard/tests/e2e/overview-agents.spec.ts
+index 75b48288..23ead7bd 100644
+--- a/dashboard/tests/e2e/overview-agents.spec.ts
++++ b/dashboard/tests/e2e/overview-agents.spec.ts
+@@ -1,4 +1,4 @@
+-import { expect, test } from './helpers';
++import { expect, openView, test } from './helpers';
+ 
+ // T-333: the overview's Agents tab, every project's agents on one timeline
+ test.describe('Projects Overview: the Agents tab', () => {
+@@ -9,7 +9,7 @@ test.describe('Projects Overview: the Agents tab', () => {
+   });
+ 
+   test('a lane per agent across projects, naming them; a bar opens its task in its project', async ({ page }) => {
+-    await page.locator('#overview-tab-agents').click();
++    await openView(page, 'agents', { overview: true });
+     await expect(page).toHaveURL(/\/agents(\?|$)/);
+     const lanes = page.locator('#overview-agents .agent-info');
+     // alice and bob worked in both projects (the same fixture twice); T-004 has no agent
+@@ -24,24 +24,28 @@ test.describe('Projects Overview: the Agents tab', () => {
+     await expect(page.locator('#detail-overlay.open')).toContainText('T-001');
+   });
+ 
+-  test('the tab is remembered, and the arrow keys move between the tabs, round from the last to the first', async ({
++  test('the tab is remembered; the arrow keys move between the items, round from the last to the first, and between Analysis’ sub-tabs (ATM-752)', async ({
+     page,
+   }) => {
+-    await page.locator('#overview-tab-agents').click();
++    await openView(page, 'agents', { overview: true });
+     await expect(page.locator('#overview-agents .agent-info').first()).toBeVisible();
+     await page.reload();
++    await expect(page.locator('#item-analysis')).toHaveAttribute('aria-selected', 'true');
+     await expect(page.locator('#overview-tab-agents')).toHaveAttribute('aria-selected', 'true');
+-    // Reviews (ATM-575) after Agents, the last; then round to Projects, and back
++    // Analysis' sub-tabs: Progress and Agents, round
+     await page.locator('#overview-tab-agents').press('ArrowRight');
+-    await expect(page.locator('#overview-tab-reviews')).toHaveAttribute('aria-selected', 'true');
+-    await page.locator('#overview-tab-reviews').press('ArrowRight');
+-    await expect(page.locator('#overview-tab-projects')).toHaveAttribute('aria-selected', 'true');
+-    await page.locator('#overview-tab-projects').press('ArrowLeft');
+-    await expect(page.locator('#overview-tab-reviews')).toHaveAttribute('aria-selected', 'true');
++    await expect(page.locator('#overview-tab-progress')).toHaveAttribute('aria-selected', 'true');
++    // The items: Analysis is the last, then round to Overview, and back; an item opens on its first view
++    await page.locator('#item-analysis').press('ArrowRight');
++    await expect(page.locator('#item-overview')).toHaveAttribute('aria-selected', 'true');
++    await expect(page.locator('#projects-grid')).toBeVisible();
++    await page.locator('#item-overview').press('ArrowLeft');
++    await expect(page.locator('#item-analysis')).toHaveAttribute('aria-selected', 'true');
++    await expect(page.locator('#overview-tab-progress')).toHaveAttribute('aria-selected', 'true');
+   });
+ 
+   test('a project’s own Agents tab does not change the overview’s tab', async ({ page }) => {
+-    await page.locator('#overview-tab-board').click();
++    await openView(page, 'board', { overview: true });
+     await page.goto('/projects/second/agents');
+     await expect(page.locator('#agents .agent-info').first()).toBeVisible();
+     // The landing page: the overview on its last tab
+diff --git a/dashboard/tests/e2e/overview-progress.spec.ts b/dashboard/tests/e2e/overview-progress.spec.ts
+index 7ddf2559..3c1c1654 100644
+--- a/dashboard/tests/e2e/overview-progress.spec.ts
++++ b/dashboard/tests/e2e/overview-progress.spec.ts
+@@ -1,4 +1,4 @@
+-import { atmSummaryOf, expect, test } from './helpers';
++import { atmSummaryOf, expect, openView, test } from './helpers';
+ 
+ // T-329: a Progress tab on the Projects Overview, every project's progress, from the projects' summaries (ATM-722:
+ // atm's figures, so the overview loads no project's tasks for it)
+@@ -10,7 +10,7 @@ test.describe('Projects Overview: the Progress tab', () => {
+     tasksServer.use('agents').withAtmSummary();
+     tasksServer.addProject('second', 'sprints', 'Second Project', atmSummaryOf('sprints'));
+     await page.goto('/projects');
+-    await page.locator('#overview-tab-progress').click();
++    await openView(page, 'progress', { overview: true });
+     await expect(page).toHaveURL(/\/progress(\?|$)/);
+     const rows = page.locator('#overview-progress .overview-progress-row');
+     await expect(rows).toHaveCount(2);
+@@ -37,7 +37,7 @@ test.describe('Projects Overview: the Progress tab', () => {
+     tasksServer.use('agents');
+     tasksServer.addProject('second', 'sprints', 'Second Project');
+     await page.goto('/projects');
+-    await page.locator('#overview-tab-board').click();
++    await openView(page, 'board', { overview: true });
+     await page.goto('/projects/second/progress');
+     await expect(page.locator('#progress')).toBeVisible();
+     // The landing page: the overview on its last tab
+diff --git a/dashboard/tests/e2e/overview-reviews.spec.ts b/dashboard/tests/e2e/overview-reviews.spec.ts
+index c6c3d6d7..4fb697d9 100644
+--- a/dashboard/tests/e2e/overview-reviews.spec.ts
++++ b/dashboard/tests/e2e/overview-reviews.spec.ts
+@@ -31,7 +31,7 @@ test.describe('Projects Overview: the Reviews tab', () => {
+     tasksServer.setReviews({ reviews: [entry(1, 'Ours', { updated: '2026-11-18T10:00:00Z' })], you: 'Ana' });
+     tasksServer.setProjectReviews('second', { reviews: [entry(1, 'Theirs')], you: 'Ana' });
+     await page.goto('/projects');
+-    await page.locator('#overview-tab-reviews').click();
++    await page.locator('#item-reviews').click();
+     await expect(page).toHaveURL(/\/reviews(\?|$)/);
+     const rows = page.locator('#overview-reviews .review-row');
+     await expect(rows).toHaveCount(2);
+diff --git a/dashboard/tests/e2e/performance.spec.ts b/dashboard/tests/e2e/performance.spec.ts
+index 46270bd4..d2578f3b 100644
+--- a/dashboard/tests/e2e/performance.spec.ts
++++ b/dashboard/tests/e2e/performance.spec.ts
+@@ -1,5 +1,5 @@
+ import type { Page } from '@playwright/test';
+-import { expect, loadFixture, openDashboard, test } from './helpers';
++import { expect, loadFixture, openDashboard, openView, test } from './helpers';
+ 
+ // NFR-2: with 500 tasks, switching tabs and refreshing data render within 200 ms. Measured inside the page from the
+ // action until two animation frames later (so layout and paint are included). Shared CI runners are slower and
+@@ -135,19 +135,20 @@ test.describe('performance with 500 tasks and a large archive', { tag: '@timed'
+   });
+ 
+   test('the views that need history load it once, then switch within budget', async ({ page, tasksServer }) => {
+-    // Graph, Kanban, List and Agents don't fetch it (unless "Include archived" is on)
++    // Graph, Kanban and List don't fetch it (unless "Include archived" is on)
+     await timeAction(page, '#tab-kanban', "document.querySelector('#kanban .kanban-card')?.offsetParent");
+-    await timeAction(page, '#tab-agents', "document.querySelector('#panel-agents .agents-grid')");
++    await timeAction(page, '#tab-graph', "document.querySelector('#panel-graph:not([hidden]) #dep-graph')");
+     expect(tasksServer.archiveRequests).toBe(0);
+-    // The first visit to Progress loads it (once); after that, switches are measured with it loaded
+-    await page.locator('#tab-progress').click();
++    // The first visit to Progress (Analysis' first view, ATM-752) loads it (once); after that, switches are measured
++    // with it loaded
++    await page.locator('#item-analysis').click();
+     await expect.poll(() => tasksServer.archiveRequests).toBe(1);
+     await expect(page.locator('#sprint-table')).toBeVisible();
+-    await page.locator('#tab-graph').click();
++    await page.locator('#item-tasks').click();
+     const timings = {
+-      progress: await timeAction(page, '#tab-progress', "document.querySelector('#burndown svg')?.isConnected"),
++      progress: await timeAction(page, '#item-analysis', "document.querySelector('#burndown svg')?.isConnected"),
+       agents: await timeAction(page, '#tab-agents', "document.querySelector('#panel-agents .agents-grid')"),
+-      kanban: await timeAction(page, '#tab-kanban', "document.querySelector('#kanban .kanban-card')?.offsetParent"),
++      kanban: await timeAction(page, '#item-tasks', "document.querySelector('#kanban .kanban-card')?.offsetParent"),
+     };
+     console.log(`tab switch with ${ARCHIVE_SIZE} archived (ms):`, JSON.stringify(timings));
+     for (const [tab, ms] of Object.entries(timings)) expect(ms, tab).toBeLessThan(BUDGET_MS);
+@@ -162,11 +163,9 @@ test.describe('performance with 500 tasks', { tag: '@timed' }, () => {
+   });
+ 
+   test('switching tabs', async ({ page }) => {
++    // Tasks' sub-tabs, then Analysis' (its item opens on Progress, ATM-752)
+     const timings = {
+       kanban: await timeAction(page, '#tab-kanban', "document.querySelector('#kanban .kanban-card')?.offsetParent"),
+-      progress: await timeAction(page, '#tab-progress', "document.querySelector('#burndown svg')?.isConnected"),
+-      // Mounted when selected: the timeline is built from scratch
+-      agents: await timeAction(page, '#tab-agents', "document.querySelector('#panel-agents .agents-grid')"),
+       // Drawn when selected (T-525): its nodes, as the List's rows; fitted, 500 tasks are at 10%, where a node's labels
+       // are too small to read and aren't drawn (ATM-629: shaping their text was half of it)
+       graph: await timeAction(
+@@ -175,6 +174,9 @@ test.describe('performance with 500 tasks', { tag: '@timed' }, () => {
+         "document.querySelector('#panel-graph:not([hidden]) #dep-graph .graph-node')",
+       ),
+       list: await timeAction(page, '#tab-list', "document.querySelector('#panel-list .task-card')?.offsetParent"),
++      progress: await timeAction(page, '#item-analysis', "document.querySelector('#burndown svg')?.isConnected"),
++      // Mounted when selected: the timeline is built from scratch
++      agents: await timeAction(page, '#tab-agents', "document.querySelector('#panel-agents .agents-grid')"),
+     };
+     console.log('tab switch (ms):', JSON.stringify(timings));
+     for (const [tab, ms] of Object.entries(timings)) expect(ms, tab).toBeLessThan(BUDGET_MS);
+@@ -207,7 +209,7 @@ test.describe('performance with 500 tasks', { tag: '@timed' }, () => {
+       `document.querySelector('#kanban .kanban-column[data-status="${status}"] .kanban-card[data-id="T-301"]')`;
+     const timings: Record<string, number> = {};
+     for (const tab of ['graph', 'kanban', 'progress']) {
+-      await page.locator(`#tab-${tab}`).click();
++      await openView(page, tab);
+       // Alternate the data so every reload really changes something
+       const status = tab === 'kanban' ? 'in_progress' : 'blocked';
+       data.tasks.find((t) => t.id === 'T-301')!.status = status;
+diff --git a/dashboard/tests/e2e/progress.spec.ts b/dashboard/tests/e2e/progress.spec.ts
+index 21e34075..5ea10018 100644
+--- a/dashboard/tests/e2e/progress.spec.ts
++++ b/dashboard/tests/e2e/progress.spec.ts
+@@ -1,5 +1,14 @@
+ import type { Page } from '@playwright/test';
+-import { expect, filterButton, loadFixture, openDashboard, test, type TasksData, openFilters } from './helpers';
++import {
++  expect,
++  filterButton,
++  loadFixture,
++  openDashboard,
++  openView,
++  test,
++  type TasksData,
++  openFilters,
++} from './helpers';
+ 
+ // Expected numbers: tests/fixtures/progress.md (now = 2026-04-06 12:00 UTC; the tests run in UTC, en-US)
+ const NOW = new Date('2026-04-06T12:00:00Z');
+@@ -11,7 +20,7 @@ const cells = (page: Page, phase: number | string) => row(page, phase).locator('
+ async function openProgress(page: Page, tasksServer: Parameters<typeof openDashboard>[1], data: string | TasksData) {
+   await page.clock.setFixedTime(NOW);
+   await openDashboard(page, tasksServer, data);
+-  await page.locator('#tab-progress').click();
++  await openView(page, 'progress');
+   await expect(page.locator('#progress')).toBeVisible();
+ }
+ 
+@@ -131,7 +140,7 @@ test.describe('Progress tab: sprint table', () => {
+     // Phase 4 finished too: three closed sprints
+     data.tasks.push({ ...data.tasks.at(-1)!, id: 'T-100', phase: 4 });
+     await openProgress(page, tasksServer, data);
+-    await page.locator('#tab-kanban').click();
++    await openView(page, 'kanban');
+ 
+     await page.locator('#progress-card').click();
+     const panel = page.locator('#progress-panel');
+@@ -368,7 +377,7 @@ test.describe('Progress tab: burndown title, info and range (T-240)', () => {
+       .poll(async () => (await page.locator('#burndown text.burndown-axis').allTextContents()).join())
+       .not.toBe(sinceLabels.join());
+     await page.reload();
+-    await page.locator('#tab-progress').click();
++    await openView(page, 'progress');
+     await expect(page.locator('#burndown-range [aria-pressed="true"]')).toHaveText('All time');
+   });
+ });
+diff --git a/dashboard/tests/e2e/projects.spec.ts b/dashboard/tests/e2e/projects.spec.ts
+index 5374e016..83377819 100644
+--- a/dashboard/tests/e2e/projects.spec.ts
++++ b/dashboard/tests/e2e/projects.spec.ts
+@@ -569,7 +569,7 @@ test.describe('projects', () => {
+     await page.locator('#footer-about').click();
+     await page.locator('#about-project-details').click();
+     await expect(page.locator('#about-overlay.open')).toHaveCount(0);
+-    await expect(page.locator('#tab-project')).toHaveAttribute('aria-selected', 'true');
++    await expect(page.locator('#item-overview')).toHaveAttribute('aria-selected', 'true');
+     // The project's Overview: its address without a tab, or with `project` (ATM-751)
+     await expect(page).toHaveURL(/\/projects\/busy(\/project)?(\?|$)/);
+   });
+diff --git a/dashboard/tests/e2e/refresh.spec.ts b/dashboard/tests/e2e/refresh.spec.ts
+index 2e7bf033..c03d9f62 100644
+--- a/dashboard/tests/e2e/refresh.spec.ts
++++ b/dashboard/tests/e2e/refresh.spec.ts
+@@ -1,5 +1,15 @@
+ import type { Page } from '@playwright/test';
+-import { expect, filterButton, loadFixture, matchCount, openDashboard, openFilters, openMenu, test } from './helpers';
++import {
++  expect,
++  filterButton,
++  loadFixture,
++  matchCount,
++  openDashboard,
++  openFilters,
++  openMenu,
++  openView,
++  test,
++} from './helpers';
+ 
+ /** standard.json with T-005 marked done. */
+ function standardWithT005Done() {
+@@ -90,7 +100,7 @@ test.describe('auto-refresh', () => {
+   }) => {
+     // A marker on a rendered card survives only if the card isn't rendered again
+     await page.keyboard.press('Escape'); // the settings menu
+-    await page.getByRole('tab', { name: 'Task List' }).click();
++    await openView(page, 'list');
+     await page.locator('.task-card[data-id="T-005"]').evaluate((el) => el.setAttribute('data-marker', '1'));
+     await page.clock.runFor(10_000);
+     await requests(tasksServer).toBe(3);
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 939c9077..1a57cedf 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -183,7 +183,7 @@ test.describe('the reviews tab', () => {
+     tasksServer,
+   }) => {
+     await openReviews(page, tasksServer);
+-    await expect(page.locator('#tab-reviews')).toHaveAttribute('aria-selected', 'true');
++    await expect(page.locator('#item-reviews')).toHaveAttribute('aria-selected', 'true');
+     const rows = page.locator('.review-row');
+     await expect(rows).toHaveCount(2);
+     await expect(rows.first()).toHaveAttribute('data-review', 'CR-2');
+@@ -195,7 +195,7 @@ test.describe('the reviews tab', () => {
+     await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('?q=names&status=open');
+   });
+ 
+-  test('what waits for you (ATM-606): a count on the Reviews tab, and a review answered since you wrote marked', async ({
++  test('what waits for you (ATM-606): a count on the Code Reviews item, and a review answered since you wrote marked', async ({
+     page,
+     tasksServer,
+   }) => {
+@@ -203,9 +203,11 @@ test.describe('the reviews tab', () => {
+       summary({ needs_you: { review: 0, blocked_on_user: 0, together: 0, code_reviews: 2 }, needs_you_reviews: [] }),
+     );
+     await openReviews(page, tasksServer);
+-    const tab = page.locator('#tab-reviews');
++    const tab = page.locator('#item-reviews');
+     await expect(page.locator('#reviews-waiting')).toHaveText('2');
+-    await expect(tab).toHaveAccessibleName('Reviews, 2 waiting for you');
++    await expect(tab).toHaveAccessibleName(
++      'Code Reviews, 2 waiting for you: a decision, a round, or an answer to read',
++    );
+     // CR-1, decided by nobody yet: answered since you last wrote
+     tasksServer.setReviews({
+       reviews: [
+@@ -231,7 +233,7 @@ test.describe('the reviews tab', () => {
+     await page.reload();
+     await expect(page.locator('.review-row')).toHaveCount(2);
+     await expect(page.locator('#reviews-waiting')).toHaveCount(0);
+-    await expect(tab).toHaveAccessibleName('Reviews');
++    await expect(tab).toHaveAccessibleName('Code Reviews');
+   });
+ 
+   // ATM-610: unfiltered, the reviews in groups, what waits for you first; a filter shows the plain list
+@@ -568,12 +570,12 @@ test.describe('a review’s page', () => {
+     await openReviews(page, tasksServer, 'CR-2');
+     await expect(page.locator('#review-window #review-page')).toBeVisible();
+     await expect(page).toHaveTitle(/^\S.* CR-2: Review 2$/);
+-    await expect(page.locator('#tab-reviews')).toHaveCount(0);
++    await expect(page.locator('#item-reviews')).toHaveCount(0);
+     await expect(page.locator('.review-project')).not.toBeEmpty();
+     // Back to the list, in the dashboard again
+     await page.getByRole('link', { name: 'Reviews', exact: true }).click();
+     await expect(page.locator('#review-list')).toBeVisible();
+-    await expect(page.locator('#tab-reviews')).toHaveAttribute('aria-selected', 'true');
++    await expect(page.locator('#item-reviews')).toHaveAttribute('aria-selected', 'true');
+   });
+ 
+   // ATM-593: a task named in a review opens its details over the review, closed back to the review as it was
+diff --git a/dashboard/tests/e2e/saved-view.spec.ts b/dashboard/tests/e2e/saved-view.spec.ts
+index 06f305c1..5af5a7cb 100644
+--- a/dashboard/tests/e2e/saved-view.spec.ts
++++ b/dashboard/tests/e2e/saved-view.spec.ts
+@@ -6,6 +6,7 @@ import {
+   matchCount,
+   openDashboard,
+   openFilters,
++  openView,
+   test,
+ } from './helpers';
+ 
+@@ -39,10 +40,10 @@ test.describe('saved view', () => {
+     await expect(page.locator('.filter-chip')).toHaveText(['Sprint: Phase 1', 'Type: Feature']);
+     await expect(page.locator('#task-search')).toHaveValue('user');
+     await expect(matchCount(page)).toHaveText('1 of 12 tasks');
+-    await expect(page.locator('#tab-project')).toHaveAttribute('aria-selected', 'true');
++    await expect(page.locator('#item-overview')).toHaveAttribute('aria-selected', 'true');
+     // The project's address, with the saved Sprint filter in it (?sprint=, T-323)
+     await expect(page).toHaveURL(/\/projects\/p1\?sprint=Phase%201$/);
+-    await page.locator('#tab-kanban').click();
++    await openView(page, 'kanban');
+     await expect(page.locator('#kanban-show-skipped')).toBeChecked();
+     await openFilters(page);
+     await expect(filterButton(page, 'sprint', 'Phase 1')).toHaveClass(/\bactive\b/);
+@@ -76,7 +77,7 @@ test.describe('saved view', () => {
+     const data = loadFixture('progress');
+     data.meta = { ...data.meta, id: 'prog' };
+     await openDashboard(page, tasksServer, data);
+-    await page.locator('#tab-progress').click();
++    await openView(page, 'progress');
+     await page.locator('#sprint-table tbody tr').nth(1).click();
+     const focused = await page.locator('#burndown-focus').textContent();
+     expect(focused).toMatch(/^Phase \d+$/);
+@@ -99,7 +100,7 @@ test.describe('saved view', () => {
+ 
+   test('a #view= link wins over the saved tab', async ({ page, tasksServer }) => {
+     await openDashboard(page, tasksServer, project('p1'));
+-    await page.locator('#tab-progress').click();
++    await openView(page, 'progress');
+     await page.goto('/?view=kanban');
+     await page.reload();
+     await expect(page.locator('#tab-kanban')).toHaveAttribute('aria-selected', 'true');
+@@ -124,7 +125,7 @@ test.describe('saved view', () => {
+     await filterButton(page, 'status', 'todo').click();
+     await page.locator('#task-search').fill('editor');
+     await closeFilters(page);
+-    await page.locator('#tab-progress').click();
++    await openView(page, 'progress');
+     // In the ⋯ settings menu, apart from Clear filters (T-323)
+     await page.locator('#settings-btn').click();
+     await page.locator('#reset-view').click();
+@@ -132,7 +133,7 @@ test.describe('saved view', () => {
+     await expect(page.locator('.filter-btn.active')).toHaveCount(0);
+     await expect(page.locator('#task-search')).toHaveValue('');
+     // The default tab: the Overview (ATM-751)
+-    await expect(page.locator('#tab-project')).toHaveAttribute('aria-selected', 'true');
++    await expect(page.locator('#item-overview')).toHaveAttribute('aria-selected', 'true');
+     await page.goto('/');
+     await expect(matchCount(page)).toHaveText('12 of 12 tasks');
+   });
+diff --git a/dashboard/tests/e2e/sprints.spec.ts b/dashboard/tests/e2e/sprints.spec.ts
+index ab87dfd8..860a7989 100644
+--- a/dashboard/tests/e2e/sprints.spec.ts
++++ b/dashboard/tests/e2e/sprints.spec.ts
+@@ -6,6 +6,7 @@ import {
+   loadFixture,
+   openDashboard,
+   openFilters,
++  openView,
+   test,
+   type TasksData,
+ } from './helpers';
+@@ -45,11 +46,11 @@ test.describe('scope bar (T-323)', () => {
+       await expect(bar).toBeVisible();
+     }
+     for (const tab of ['progress', 'agents', 'project']) {
+-      await page.locator(`#tab-${tab}`).click();
++      await openView(page, tab);
+       await expect(bar).toHaveCount(0);
+     }
+     // The Progress tab shows every sprint whatever the board's scope
+-    await page.locator('#tab-progress').click();
++    await openView(page, 'progress');
+     await expect(page.locator('#sprint-table tbody tr')).toHaveCount(3);
+   });
+ 
+diff --git a/dashboard/tests/e2e/tabs.spec.ts b/dashboard/tests/e2e/tabs.spec.ts
+index f2c14c99..4820ebe1 100644
+--- a/dashboard/tests/e2e/tabs.spec.ts
++++ b/dashboard/tests/e2e/tabs.spec.ts
+@@ -1,43 +1,83 @@
+ import type { Page } from '@playwright/test';
+-import { expect, filterButton, matchCount, openDashboard, openFilters, test } from './helpers';
++import { expect, filterButton, matchCount, openDashboard, openFilters, openView, test } from './helpers';
+ 
+-const tab = (page: Page, id: string) => page.locator(`#tab-${id}`);
++// A project's page by item (ATM-752, docs/sidebar-overhaul-design.md §5): its items as tabs, Tasks' and Analysis' views
++// as sub-tabs under them
++
++const ITEMS = ['overview', 'inbox', 'tasks', 'reviews', 'documents', 'analysis'];
++const VIEWS: Record<string, string> = {
++  project: 'overview',
++  inbox: 'inbox',
++  kanban: 'tasks',
++  list: 'tasks',
++  graph: 'tasks',
++  reviews: 'reviews',
++  documents: 'documents',
++  progress: 'analysis',
++  agents: 'analysis',
++};
++const SUB_TABS: Record<string, string[]> = { tasks: ['kanban', 'list', 'graph'], analysis: ['progress', 'agents'] };
++
++const item = (page: Page, id: string) => page.locator(`#item-${id}`);
++const subTab = (page: Page, id: string) => page.locator(`#tab-${id}`);
+ const panel = (page: Page, id: string) => page.locator(`#panel-${id}`);
+ const zoomLabel = (page: Page) => page.locator('#graph-zoom-level');
+ 
++/** View `id` shown: its item selected (the only one in the tab order), its sub-tab where it has one, its panel alone */
+ async function expectSelected(page: Page, id: string) {
+-  await expect(tab(page, id)).toHaveAttribute('aria-selected', 'true');
+-  await expect(tab(page, id)).toHaveAttribute('tabindex', '0');
+-  await expect(panel(page, id)).toBeVisible();
+-  for (const other of ['graph', 'kanban', 'list', 'agents', 'progress', 'project', 'reviews'].filter((x) => x !== id)) {
+-    await expect(tab(page, other)).toHaveAttribute('aria-selected', 'false');
+-    await expect(tab(page, other)).toHaveAttribute('tabindex', '-1');
+-    await expect(panel(page, other)).toBeHidden();
++  const selected = VIEWS[id];
++  for (const other of ITEMS) {
++    await expect(item(page, other)).toHaveAttribute('aria-selected', String(other === selected));
++    await expect(item(page, other)).toHaveAttribute('tabindex', other === selected ? '0' : '-1');
+   }
++  const subs = SUB_TABS[selected] ?? [];
++  await expect(page.locator('.sub-tab')).toHaveCount(subs.length);
++  for (const sub of subs) await expect(subTab(page, sub)).toHaveAttribute('aria-selected', String(sub === id));
++  await expect(panel(page, id)).toBeVisible();
++  for (const other of Object.keys(VIEWS).filter((x) => x !== id)) await expect(panel(page, other)).toBeHidden();
+ }
+ 
+-test.describe('view tabs', () => {
+-  test('a tablist: the task views, a divider, the project views; the Project tab, its Overview, by default (ATM-751)', async ({
++test.describe('the page by item', () => {
++  test('the items as tabs; Tasks’ and Analysis’ views as sub-tabs; the Overview by default (ATM-751)', async ({
+     page,
+     tasksServer,
+   }) => {
+     await openDashboard(page, tasksServer, 'standard');
+-    await expect(page.getByRole('tablist')).toBeVisible();
+-    // The Kanban is the Board, the graph Dependencies (ATM-751)
+-    await expect(page.getByRole('tab')).toHaveText([
++    await expect(page.getByRole('tablist', { name: 'Project' }).getByRole('tab')).toHaveText([
++      'Overview',
++      'Inbox',
++      'Tasks',
++      'Code Reviews',
++      'Documents',
++      'Analysis',
++    ]);
++    await expectSelected(page, 'project');
++    await item(page, 'tasks').click();
++    // The Kanban is the Board, the graph Dependencies (ATM-751); an item opens on its first view
++    await expect(page.getByRole('tablist', { name: 'Tasks' }).getByRole('tab')).toHaveText([
+       'Board',
+-      'Task List',
++      'List',
+       'Dependencies',
+-      'Progress',
+-      'Agents',
+-      'Project',
+-      'Reviews',
+     ]);
+-    // The divider sits between the graph and Progress
+-    await expect(page.locator('#tab-graph + .view-tab-divider + #tab-progress')).toHaveCount(1);
+-    await expectSelected(page, 'project');
++    await expectSelected(page, 'kanban');
+     await expect(panel(page, 'kanban')).toHaveAttribute('role', 'tabpanel');
+     await expect(panel(page, 'kanban')).toHaveAttribute('aria-labelledby', 'tab-kanban');
++    await expect(subTab(page, 'kanban')).toHaveAttribute('aria-controls', 'panel-kanban');
++    await item(page, 'analysis').click();
++    await expect(page.getByRole('tablist', { name: 'Analysis' }).getByRole('tab')).toHaveText(['Progress', 'Agents']);
++    await expectSelected(page, 'progress');
++    await expect(panel(page, 'project')).toHaveAttribute('aria-labelledby', 'item-overview');
++  });
++
++  test('Inbox and Documents say their pages are coming', async ({ page, tasksServer }) => {
++    await openDashboard(page, tasksServer, 'standard');
++    await item(page, 'inbox').click();
++    await expectSelected(page, 'inbox');
++    await expect(page).toHaveURL(/\/projects\/[^/]+\/inbox(\?|$)/);
++    await expect(page.locator('#inbox-placeholder')).toContainText('The Inbox is coming');
++    await item(page, 'documents').click();
++    await expectSelected(page, 'documents');
++    await expect(page.locator('#documents-placeholder')).toContainText('Documents are coming');
+   });
+ 
+   test('a project’s address without a tab is its Overview, whatever tab was seen last (ATM-751)', async ({
+@@ -59,30 +99,41 @@ test.describe('view tabs', () => {
+     await expect(page.locator('#dep-graph')).toBeVisible();
+   });
+ 
+-  test("clicking a tab switches views and writes the project's address", async ({ page, tasksServer }) => {
++  test("an item or a sub-tab switches views and writes the project's address", async ({ page, tasksServer }) => {
+     await openDashboard(page, tasksServer, 'standard');
+-    await tab(page, 'graph').click();
++    await openView(page, 'graph');
+     await expectSelected(page, 'graph');
+     // /projects/<id>/<tab> (T-429); the query holds the Sprint filter (?sprint=, T-323)
+     const view = () => new URL(page.url()).pathname.split('/')[3] ?? null;
+     expect(view()).toBe('graph');
+-    await tab(page, 'progress').click();
+-    await expectSelected(page, 'progress');
+-    expect(view()).toBe('progress');
++    await openView(page, 'agents');
++    await expectSelected(page, 'agents');
++    expect(view()).toBe('agents');
++    // The item already shown: a click on it stays where it is
++    await item(page, 'analysis').click();
++    await expectSelected(page, 'agents');
+   });
+ 
+-  test('arrow keys move between tabs and wrap', async ({ page, tasksServer }) => {
++  test('arrow keys move between the items, and between an item’s sub-tabs, wrapping', async ({ page, tasksServer }) => {
+     await openDashboard(page, tasksServer, 'standard', { tab: 'kanban' });
+-    await tab(page, 'kanban').focus();
++    await subTab(page, 'kanban').focus();
+     await page.keyboard.press('ArrowRight');
+     await expectSelected(page, 'list');
+-    await expect(tab(page, 'list')).toBeFocused();
++    await expect(subTab(page, 'list')).toBeFocused();
+     await page.keyboard.press('ArrowLeft');
+     await page.keyboard.press('ArrowLeft');
++    await expectSelected(page, 'graph');
++    await expect(subTab(page, 'graph')).toBeFocused();
++    await item(page, 'tasks').focus();
++    await page.keyboard.press('ArrowRight');
+     await expectSelected(page, 'reviews');
+-    await expect(tab(page, 'reviews')).toBeFocused();
++    await expect(item(page, 'reviews')).toBeFocused();
++    await page.keyboard.press('ArrowLeft');
++    await page.keyboard.press('ArrowLeft');
+     await page.keyboard.press('ArrowLeft');
+     await expectSelected(page, 'project');
++    await page.keyboard.press('ArrowLeft');
++    await expectSelected(page, 'progress');
+   });
+ 
+   test('a deep link opens that view, and it survives a reload', async ({ page, tasksServer }) => {
+@@ -91,16 +142,25 @@ test.describe('view tabs', () => {
+     await expectSelected(page, 'kanban');
+     await page.reload();
+     await expectSelected(page, 'kanban');
++    // The landing page's List is the project's, though All projects has one too
++    await page.goto('/?view=list');
++    await expectSelected(page, 'list');
+   });
+ 
+-  test('back and forward follow the selected tab', async ({ page, tasksServer }) => {
++  test('back and forward follow the items and the sub-tabs', async ({ page, tasksServer }) => {
+     await openDashboard(page, tasksServer, 'standard');
+-    await tab(page, 'kanban').click();
+-    await tab(page, 'progress').click();
++    await openView(page, 'kanban');
++    await subTab(page, 'graph').click();
++    await openView(page, 'progress');
++    await page.goBack();
++    await expectSelected(page, 'graph');
+     await page.goBack();
+     await expectSelected(page, 'kanban');
++    await page.goBack();
++    await expectSelected(page, 'project');
+     await page.goForward();
+-    await expectSelected(page, 'progress');
++    await page.goForward();
++    await expectSelected(page, 'graph');
+   });
+ 
+   // ATM-696: closing a task's details goes Back to the page under them, so Back after it goes to the page before
+@@ -109,7 +169,7 @@ test.describe('view tabs', () => {
+     tasksServer,
+   }) => {
+     await openDashboard(page, tasksServer, 'standard', { tab: 'list' });
+-    await tab(page, 'kanban').click();
++    await subTab(page, 'kanban').click();
+     await expectSelected(page, 'kanban');
+     const depth = await page.evaluate(() => history.length);
+     await page.locator('.kanban-card[data-id="T-004"]').click({ position: { x: 10, y: 10 } });
+@@ -129,8 +189,8 @@ test.describe('view tabs', () => {
+     await page.keyboard.press('+');
+     await expect(zoomLabel(page)).toHaveText('75%');
+     const viewBox = await page.locator('#dep-graph').getAttribute('viewBox');
+-    await tab(page, 'kanban').click();
+-    await tab(page, 'graph').click();
++    await openView(page, 'progress');
++    await openView(page, 'graph');
+     await expect(zoomLabel(page)).toHaveText('75%');
+     await expect(page.locator('#dep-graph')).toHaveAttribute('viewBox', viewBox!);
+   });
+@@ -144,7 +204,7 @@ test.describe('view tabs', () => {
+     await filterButton(page, 'sprint', 'Phase 1').click();
+     await page.keyboard.press('Escape');
+     for (const id of ['graph', 'kanban', 'list', 'agents', 'progress']) {
+-      await tab(page, id).click();
++      await openView(page, id);
+       await expect(page.locator('.topbar #filters-toggle')).toBeVisible();
+       await expect(matchCount(page)).toHaveText('4 of 12 tasks');
+     }
+@@ -153,7 +213,7 @@ test.describe('view tabs', () => {
+   test('the List tab shows the task cards', async ({ page, tasksServer }) => {
+     await openDashboard(page, tasksServer, 'standard');
+     await expect(page.locator('.task-card').first()).toBeHidden();
+-    await tab(page, 'list').click();
++    await openView(page, 'list');
+     await expectSelected(page, 'list');
+     await expect(page.locator('.task-card')).toHaveCount(12);
+     await expect(page.locator('.task-card').first()).toBeVisible();
+diff --git a/dashboard/tests/e2e/visual.spec.ts b/dashboard/tests/e2e/visual.spec.ts
+index 300a7fda..776e08b6 100644
+--- a/dashboard/tests/e2e/visual.spec.ts
++++ b/dashboard/tests/e2e/visual.spec.ts
+@@ -1,6 +1,17 @@
+ import path from 'node:path';
+ import type { Page } from '@playwright/test';
+-import { board, boardCard, expect, loadFixture, openDashboard, sprintNumbers, summary, test, follow } from './helpers';
++import {
++  board,
++  boardCard,
++  expect,
++  loadFixture,
++  openDashboard,
++  openView,
++  sprintNumbers,
++  summary,
++  test,
++  follow,
++} from './helpers';
+ 
+ /**
+  * Screenshot of the view shown, its panel only: not the tabs or the title bar above it, so a change there (spacing,
+@@ -75,7 +86,7 @@ test('visual: detail panel', async ({ page, tasksServer }) => {
+ for (const fixture of ['standard', 'kanban']) {
+   test(`visual: kanban board (${fixture})`, async ({ page, tasksServer }) => {
+     await openDashboard(page, tasksServer.withAtmSummary(), fixture);
+-    await page.locator('#tab-kanban').click();
++    await openView(page, 'kanban');
+     await expect(page.locator('#kanban .kanban-card').first()).toBeVisible();
+     await sectionScreenshot(page, `${fixture}-kanban.png`);
+   });
+@@ -84,7 +95,7 @@ for (const fixture of ['standard', 'kanban']) {
+ test('visual: progress tab', async ({ page, tasksServer }) => {
+   await page.clock.setFixedTime(new Date('2026-04-06T12:00:00Z'));
+   await openDashboard(page, tasksServer, 'progress');
+-  await page.locator('#tab-progress').click();
++  await openView(page, 'progress');
+   await expect(page.locator('#burndown svg')).toBeVisible();
+   await sectionScreenshot(page, 'progress-progress.png');
+ });
+@@ -162,7 +173,7 @@ test.describe('visual: light mode', () => {
+ 
+   test('kanban board', async ({ page, tasksServer }) => {
+     await openDashboard(page, tasksServer.withAtmSummary(), 'kanban');
+-    await page.locator('#tab-kanban').click();
++    await openView(page, 'kanban');
+     await expect(page.locator('#kanban .kanban-card').first()).toBeVisible();
+     await sectionScreenshot(page, 'light-kanban.png');
+   });
+@@ -170,7 +181,7 @@ test.describe('visual: light mode', () => {
+   test('progress tab', async ({ page, tasksServer }) => {
+     await page.clock.setFixedTime(new Date('2026-04-06T12:00:00Z'));
+     await openDashboard(page, tasksServer, 'progress');
+-    await page.locator('#tab-progress').click();
++    await openView(page, 'progress');
+     await expect(page.locator('#burndown svg')).toBeVisible();
+     await sectionScreenshot(page, 'light-progress.png');
+   });
+@@ -457,7 +468,7 @@ for (const mode of ['dark', 'light'] as const) {
+         }),
+       );
+     await openDashboard(page, tasksServer, 'standard');
+-    await page.locator('#overview-tab-board').click();
++    await openView(page, 'board', { overview: true });
+     await expect(page.locator('#projects-overview')).toHaveScreenshot(`all-projects-board-${mode}.png`);
+     // Grouped by project (T-260): a lane each, no chips on the cards
+     await page.locator('#board-group-by-project').check();
+@@ -488,7 +499,7 @@ for (const theme of [
+         [theme, mode],
+       );
+       await openDashboard(page, tasksServer.withAtmSummary(), 'kanban');
+-      await page.locator('#tab-kanban').click();
++      await openView(page, 'kanban');
+       await expect(page.locator('#kanban .kanban-card').first()).toBeVisible();
+       await expect(page.locator('#kanban .kanban-column').first()).toHaveScreenshot(`theme-${theme}-${mode}.png`);
+     });
+diff --git a/dashboard/tests/unit/ItemTabs.component.test.ts b/dashboard/tests/unit/ItemTabs.component.test.ts
+new file mode 100644
+index 00000000..f23b62be
+--- /dev/null
++++ b/dashboard/tests/unit/ItemTabs.component.test.ts
+@@ -0,0 +1,106 @@
++import { fireEvent, render } from '@testing-library/svelte';
++import { describe, expect, it, vi } from 'vitest';
++import { ALL_ITEMS, ITEMS, type Item } from '../../src/lib/address';
++import ItemTabs from '../../src/lib/shell/ItemTabs.svelte';
++import SubTabs from '../../src/lib/shell/SubTabs.svelte';
++
++// The page's items as tabs, and an item's views as sub-tabs (ATM-752, docs/sidebar-overhaul-design.md §5)
++
++const names = (container: HTMLElement, selector: string) =>
++  [...container.querySelectorAll(selector)].map((b) => b.textContent?.trim());
++
++describe('ItemTabs', () => {
++  it('a project’s six items in the sidebar’s order, the current one selected and the only one in the tab order', () => {
++    const { container } = render(ItemTabs, { items: ITEMS, current: 'tasks', onselect: () => {}, label: 'Project' });
++    expect(names(container, '[role=tab]')).toEqual([
++      'Overview',
++      'Inbox',
++      'Tasks',
++      'Code Reviews',
++      'Documents',
++      'Analysis',
++    ]);
++    const tasks = container.querySelector('#item-tasks')!;
++    expect(tasks).toHaveAttribute('aria-selected', 'true');
++    expect(tasks).toHaveAttribute('tabindex', '0');
++    expect(container.querySelector('#item-overview')).toHaveAttribute('tabindex', '-1');
++    expect(container.querySelector('[role=tablist]')).toHaveAttribute('aria-label', 'Project');
++  });
++
++  it('All projects’ four: no Inbox or Documents', () => {
++    const { container } = render(ItemTabs, { items: ALL_ITEMS, current: 'overview', onselect: () => {}, label: 'All' });
++    expect(names(container, '[role=tab]')).toEqual(['Overview', 'Tasks', 'Code Reviews', 'Analysis']);
++  });
++
++  it('a click selects the item; the arrow keys the next or previous one, wrapping, and move the focus', async () => {
++    const onselect = vi.fn<(item: Item) => void>();
++    const { container } = render(ItemTabs, { items: ITEMS, current: 'overview', onselect, label: 'Project' });
++    await fireEvent.click(container.querySelector('#item-reviews')!);
++    expect(onselect).toHaveBeenLastCalledWith('reviews');
++    await fireEvent.keyDown(container.querySelector('#item-overview')!, { key: 'ArrowLeft' });
++    expect(onselect).toHaveBeenLastCalledWith('analysis');
++    expect(document.activeElement).toBe(container.querySelector('#item-analysis'));
++    await fireEvent.keyDown(container.querySelector('#item-overview')!, { key: 'ArrowRight' });
++    expect(onselect).toHaveBeenLastCalledWith('inbox');
++    onselect.mockClear();
++    await fireEvent.keyDown(container.querySelector('#item-overview')!, { key: 'Enter' });
++    expect(onselect).not.toHaveBeenCalled();
++  });
++
++  it('a badge with a count names it; none without one', () => {
++    const { container } = render(ItemTabs, {
++      items: ITEMS,
++      current: 'overview',
++      onselect: () => {},
++      label: 'Project',
++      badges: {
++        reviews: { count: 2, says: 'waiting for you', id: 'reviews-waiting' },
++        inbox: { count: 0, says: 'new' },
++      },
++    });
++    expect(container.querySelector('#reviews-waiting')).toHaveTextContent('2');
++    expect(container.querySelector('#item-reviews')).toHaveAttribute('aria-label', 'Code Reviews, 2 waiting for you');
++    expect(container.querySelector('#item-inbox .view-tab-badge')).toBeNull();
++    expect(container.querySelector('#item-inbox')).not.toHaveAttribute('aria-label');
++  });
++});
++
++describe('SubTabs', () => {
++  const views = [
++    { id: 'kanban', label: 'Board', icon: 'square-kanban' },
++    { id: 'list', label: 'List', icon: 'list-todo' },
++    { id: 'graph', label: 'Dependencies', icon: 'network' },
++  ] as const;
++
++  it('the item’s views, with their ids and panels, the current one selected', () => {
++    const { container } = render(SubTabs, {
++      views,
++      current: 'list',
++      onselect: () => {},
++      idPrefix: 'tab-',
++      panel: (id: string) => `panel-${id}`,
++      label: 'Tasks',
++    });
++    expect(names(container, '.sub-tab')).toEqual(['Board', 'List', 'Dependencies']);
++    expect(container.querySelector('#tab-list')).toHaveAttribute('aria-selected', 'true');
++    expect(container.querySelector('#tab-graph')).toHaveAttribute('aria-controls', 'panel-graph');
++    expect(container.querySelector('[role=tablist]')).toHaveAttribute('aria-label', 'Tasks');
++  });
++
++  it('a click or an arrow key selects a view, wrapping at the ends', async () => {
++    const onselect = vi.fn();
++    const { container } = render(SubTabs, {
++      views,
++      current: 'kanban',
++      onselect,
++      idPrefix: 'tab-',
++      panel: () => 'p',
++      label: 'Tasks',
++    });
++    await fireEvent.click(container.querySelector('#tab-graph')!);
++    expect(onselect).toHaveBeenLastCalledWith('graph');
++    await fireEvent.keyDown(container.querySelector('#tab-kanban')!, { key: 'ArrowLeft' });
++    expect(onselect).toHaveBeenLastCalledWith('graph');
++    expect(document.activeElement).toBe(container.querySelector('#tab-graph'));
++  });
++});
+diff --git a/dashboard/tests/unit/allboard.test.ts b/dashboard/tests/unit/allboard.test.ts
+index 3e4ddb00..d3c91f7f 100644
+--- a/dashboard/tests/unit/allboard.test.ts
++++ b/dashboard/tests/unit/allboard.test.ts
+@@ -168,6 +168,14 @@ describe('the active sprints or all tasks (T-340)', () => {
+     expect(withoutActiveSprint([a, b], 'all')).toEqual([]);
+   });
+ 
++  it('without a cap (All’s List, ATM-752): every card the summaries carry, and “+ N more” what they leave out', () => {
++    const many = project('m', null, { todo: Array.from({ length: 40 }, (_, i) => card(`M-${i}`)) }, { todo: 45 });
++    const [todo] = allBoard([many], Infinity);
++    expect(todo.cards).toHaveLength(40);
++    expect(todo.more).toEqual([{ project: many, count: 5 }]);
++    expect(allBoard([many])[0].cards).toHaveLength(30);
++  });
++
+   it('an older server without the active sprint’s board shows the whole board, and is not listed as without one', () => {
+     const full = project('o', null, { todo: [card('O-1')] });
+     const older = { ...full, summary: olderServer(full.summary!, 'board_active_sprint') };
+diff --git a/dashboard/tests/unit/history-list.test.ts b/dashboard/tests/unit/history-list.test.ts
+index aa285232..fb173875 100644
+--- a/dashboard/tests/unit/history-list.test.ts
++++ b/dashboard/tests/unit/history-list.test.ts
+@@ -17,7 +17,7 @@ describe('historyItems', () => {
+ 
+   it('lists the entries after it, nearest first, with negative steps (forward)', () => {
+     expect(historyItems({ entries, at: 1 }, 1, name)).toEqual([
+-      { address: '/board', name: 'Omniboard', steps: -1 },
++      { address: '/board', name: 'Board', steps: -1 },
+       { address: '/projects/api/reviews/CR-7', name: 'CR-7 — api', steps: -2 },
+     ]);
+   });
+diff --git a/dashboard/tests/unit/places.test.ts b/dashboard/tests/unit/places.test.ts
+index ac0fa388..dd5100ac 100644
+--- a/dashboard/tests/unit/places.test.ts
++++ b/dashboard/tests/unit/places.test.ts
+@@ -5,23 +5,25 @@ import { placeName } from '../../src/lib/places';
+ 
+ describe('placeName', () => {
+   it.each([
+-    // A project without a tab is on its Overview, the Project tab (ATM-751); the Kanban is the Board, the graph
+-    // Dependencies
+-    ['/projects/abc', 'Project'],
++    // A project without a tab is on its Overview (ATM-751, ATM-752: the Project tab is the Overview item); the Kanban
++    // is the Board, the graph Dependencies, and All's board the Board too
++    ['/projects/abc', 'Overview'],
+     ['/projects/abc/kanban', 'Board'],
+     ['/projects/abc/list', 'List'],
+     ['/projects/abc/graph', 'Dependencies'],
+     ['/projects/abc/progress', 'Progress'],
+     ['/projects/abc/agents', 'Agents'],
+-    ['/projects/abc/project', 'Project'],
++    ['/projects/abc/project', 'Overview'],
+     ['/projects/abc/reviews', 'Reviews'],
++    ['/projects/abc/inbox', 'Inbox'],
++    ['/projects/abc/documents', 'Documents'],
+     ['/projects', 'Projects'],
+-    ['/board', 'Omniboard'],
++    ['/board', 'Board'],
+     ['/list', 'List'],
+     ['/reviews', 'All reviews'],
+     ['/progress', 'Progress'],
+     ['/agents', 'Agents'],
+-    ['/w/work/board', 'Omniboard'],
++    ['/w/work/board', 'Board'],
+     ['/', 'Projects'],
+   ])('a page: %s is %s', (address, name) => {
+     expect(placeName(address)).toBe(name);
+diff --git a/dashboard/tests/unit/routes.test.ts b/dashboard/tests/unit/routes.test.ts
+index 3ec1ba04..68688ccc 100644
+--- a/dashboard/tests/unit/routes.test.ts
++++ b/dashboard/tests/unit/routes.test.ts
+@@ -33,6 +33,11 @@ describe('the project in the address (T-429)', () => {
+ 
+   it('is set or replaced by the overview, keeping dialogs, and the view where the page has it', () => {
+     expect(withProject('/?view=kanban', 'abc')).toBe('/projects/abc/kanban');
++    // The landing page's view is kept where the page gone to has it: `list` is a project's and All's (ATM-752)
++    expect(withProject('/?view=list', 'abc')).toBe('/projects/abc/list');
++    expect(withProject('/?view=list', null)).toBe('/list');
++    expect(withProject('/?view=kanban', null)).toBe('/projects');
++    expect(withProject('/?view=board', 'abc')).toBe('/projects/abc');
+     expect(withProject('/projects/abc/list?about', 'def')).toBe('/projects/def/list?about');
+     expect(withProject('/projects', 'a b')).toBe('/projects/a%20b');
+     // A project's tab stays out of the overview, the overview's out of a project
+diff --git a/dashboard/tests/unit/tabs.test.ts b/dashboard/tests/unit/tabs.test.ts
+index 54689daa..2233bfd5 100644
+--- a/dashboard/tests/unit/tabs.test.ts
++++ b/dashboard/tests/unit/tabs.test.ts
+@@ -1,5 +1,18 @@
+ import { describe, expect, it } from 'vitest';
+-import { adjacentView, DEFAULT_VIEW, namesView, viewOf, VIEWS, withView } from '../../src/lib/tabs';
++import { ALL_ITEMS, itemOf, ITEMS, OVERVIEW_TABS } from '../../src/lib/address';
++import { withProject } from '../../src/lib/routes';
++import {
++  adjacent,
++  ALL_ITEM_VIEWS,
++  DEFAULT_VIEW,
++  itemOfOverviewTab,
++  itemOfView,
++  namesView,
++  PROJECT_ITEM_VIEWS,
++  viewOf,
++  VIEWS,
++  withView,
++} from '../../src/lib/tabs';
+ 
+ describe('viewOf', () => {
+   it("reads the project's tab from its address (T-429)", () => {
+@@ -32,12 +45,41 @@ describe('withView', () => {
+   });
+ });
+ 
+-describe('adjacentView', () => {
+-  it('moves left/right and wraps, in the tab order: Kanban, List, Graph, Progress, Agents, Project, Reviews', () => {
+-    expect(VIEWS).toEqual(['kanban', 'list', 'graph', 'progress', 'agents', 'project', 'reviews']);
+-    expect(adjacentView('graph', 1)).toBe('progress');
+-    expect(adjacentView('project', 1)).toBe('reviews');
+-    expect(adjacentView('reviews', 1)).toBe('kanban');
+-    expect(adjacentView('kanban', -1)).toBe('reviews');
++describe('adjacent', () => {
++  it('moves left/right and wraps; from a value not in the list, from the first', () => {
++    const items = ['a', 'b', 'c'];
++    expect(adjacent(items, 'a', 1)).toBe('b');
++    expect(adjacent(items, 'c', 1)).toBe('a');
++    expect(adjacent(items, 'a', -1)).toBe('c');
++    expect(adjacent(items, 'x', 1)).toBe('b');
++  });
++});
++
++// The views by the sidebar's items (ATM-752, docs/sidebar-overhaul-design.md §1)
++describe('the items’ views', () => {
++  it('a project’s views are its items’ in order; each view is in exactly one item', () => {
++    expect(ITEMS.flatMap((item) => PROJECT_ITEM_VIEWS[item])).toEqual([...VIEWS]);
++    expect(PROJECT_ITEM_VIEWS.tasks).toEqual(['kanban', 'list', 'graph']);
++    expect(PROJECT_ITEM_VIEWS.analysis).toEqual(['progress', 'agents']);
++    for (const view of VIEWS) expect(PROJECT_ITEM_VIEWS[itemOfView(view)]).toContain(view);
++  });
++
++  it('All projects has four items, Tasks with the Board and the List; every overview tab is in one', () => {
++    expect(Object.keys(ALL_ITEM_VIEWS)).toEqual(ALL_ITEMS);
++    expect(ALL_ITEM_VIEWS.tasks).toEqual(['board', 'list']);
++    expect(ALL_ITEM_VIEWS.analysis).toEqual(['progress', 'agents']);
++    expect(OVERVIEW_TABS.map(itemOfOverviewTab)).toEqual([
++      'overview',
++      'tasks',
++      'tasks',
++      'analysis',
++      'analysis',
++      'reviews',
++    ]);
++  });
++
++  it('a view’s item is the one address.ts gives its address', () => {
++    for (const view of VIEWS) expect(itemOf(`/projects/p1/${view}`)).toBe(itemOfView(view));
++    for (const tab of OVERVIEW_TABS) expect(itemOf(withProject('/', null, tab))).toBe(itemOfOverviewTab(tab));
+   });
+ });

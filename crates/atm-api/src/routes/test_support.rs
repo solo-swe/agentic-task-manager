@@ -5,6 +5,7 @@
 use std::sync::{Arc, Mutex};
 
 use atm_common::{Error, Result};
+use atm_lib::inbox::{ItemDecision, ItemEdit, Listing, NewItem};
 use atm_lib::query::Filters;
 use atm_lib::review_drafts::{Draft, DraftUpdate, NewDraft, Place};
 use atm_lib::review_pages::ReviewQuery;
@@ -19,7 +20,9 @@ use axum::response::Response;
 use serde_json::{Map, Value, json};
 
 use super::Projects;
-use super::source::{ProjectList, ProjectSource, ReviewChanges, Source, WorkspaceSource};
+use super::source::{
+    InboxChanges, ProjectList, ProjectSource, ReviewChanges, Source, WorkspaceSource,
+};
 
 /// One call a route made of atm-lib.
 #[derive(Debug, Clone)]
@@ -38,6 +41,8 @@ pub(super) enum Call {
     FileVersion(String),
     Head,
     Document(String),
+    Documents(String),
+    DocumentsStamp,
     Image(String),
     DocumentAt(String, String),
     ImageAt(String, String),
@@ -56,6 +61,11 @@ pub(super) enum Call {
     AddDraft(ReviewRef, NewDraft),
     UpdateDraft(ReviewRef, String, DraftUpdate),
     RemoveDraft(ReviewRef, String),
+    Inbox(Listing, bool),
+    InboxAsUser,
+    AddItem(NewItem),
+    EditItem(String, ItemEdit),
+    DecideItem(String, ItemDecision),
 }
 
 impl PartialEq for Call {
@@ -151,6 +161,14 @@ pub(super) struct FakeProject {
     pub page: Result<Value>,
     /// What a live review's page is made from (ATM-607): none, a page that isn't tagged
     pub live_stamp: Result<Option<Value>>,
+    /// What listing its inbox answers (ATM-761)
+    pub inbox: Result<Value>,
+    /// What a change of its inbox answers (the item); an error refuses to open the project as the user
+    pub inbox_changes: Result<Result<Value>>,
+    /// What listing its documents answers (ATM-765)
+    pub documents: Result<Value>,
+    /// What its documents' listing is made from: none without git
+    pub documents_stamp: Result<Option<String>>,
 }
 
 impl Default for FakeProject {
@@ -171,6 +189,12 @@ impl Default for FakeProject {
             listed: Ok(json!({"reviews": [], "you": "Ana"})),
             page: Ok(json!({"review": {"reference": "CR-1"}, "view": {"files": []}})),
             live_stamp: Ok(None),
+            inbox: Ok(json!({"items": [], "created": 0, "discarded": 0, "injected": 0})),
+            inbox_changes: Ok(Ok(json!({"id": "IN-1", "state": "created"}))),
+            documents: Ok(
+                json!({"documents": [{"path": "README.md", "title": "Read me"}], "submodules": [], "more": 0}),
+            ),
+            documents_stamp: Ok(Some("s1".into())),
         }
     }
 }
@@ -373,6 +397,16 @@ impl ProjectSource for Bound<FakeProject> {
         self.file(path)?.document
     }
 
+    fn documents(&self, query: &str) -> Result<Value> {
+        self.calls.note(Call::Documents(query.into()));
+        self.fake.documents.clone()
+    }
+
+    fn documents_stamp(&self) -> Result<Option<String>> {
+        self.calls.note(Call::DocumentsStamp);
+        self.fake.documents_stamp.clone()
+    }
+
     fn document_at(&self, path: &str, revision: &str) -> Result<Value> {
         self.calls
             .note(Call::DocumentAt(path.into(), revision.into()));
@@ -421,6 +455,41 @@ impl ProjectSource for Bound<FakeProject> {
             id: self.id.clone(),
             calls: self.calls.clone(),
         }))
+    }
+
+    fn inbox(&self, which: Listing, archived: bool) -> Result<Value> {
+        self.calls.note(Call::Inbox(which, archived));
+        self.fake.inbox.clone()
+    }
+
+    fn inbox_as_user(&self) -> Result<Box<dyn InboxChanges>> {
+        self.calls.note(Call::InboxAsUser);
+        Ok(Box::new(Bound {
+            fake: FakeInbox(self.fake.inbox_changes.clone()?),
+            id: self.id.clone(),
+            calls: self.calls.clone(),
+        }))
+    }
+}
+
+/// What a fake project's inbox changes answer: the item.
+pub(super) struct FakeInbox(Result<Value>);
+
+impl InboxChanges for Bound<FakeInbox> {
+    fn add_item(&mut self, item: &NewItem) -> Result<Value> {
+        self.calls.note(Call::AddItem(item.clone()));
+        self.fake.0.clone()
+    }
+
+    fn edit_item(&mut self, id: &str, edit: &ItemEdit) -> Result<Value> {
+        self.calls.note(Call::EditItem(id.into(), edit.clone()));
+        self.fake.0.clone()
+    }
+
+    fn decide_item(&mut self, id: &str, decision: &ItemDecision) -> Result<Value> {
+        self.calls
+            .note(Call::DecideItem(id.into(), decision.clone()));
+        self.fake.0.clone()
     }
 }
 

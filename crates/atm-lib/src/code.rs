@@ -189,6 +189,19 @@ pub fn commit_task(
     if !picked.contains(&task_file) {
         picked.push(task_file);
     }
+    // The inbox goes along too (ATM-760): an injection changes it with the tasks it names. Only a file there or tracked
+    // (git refuses to commit a path it knows nothing of); one unchanged commits nothing
+    for name in [
+        atm_common::inbox::INBOX_FILE,
+        atm_common::inbox::INBOX_ARCHIVE_FILE,
+    ] {
+        let file = format!("{TASK_DIR}/{name}");
+        if !picked.contains(&file)
+            && (vcs.tracked(&file) == Some(true) || vcs.file_stamp(&file).is_some())
+        {
+            picked.push(file);
+        }
+    }
     let sha = vcs.commit(&picked, &text)?;
     let task = record_on_task(project, task_id, &sha)?;
     Ok(json!({"task": task.get("id"), "commit": sha, "message": text, "files": picked}))

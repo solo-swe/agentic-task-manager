@@ -1,0 +1,78 @@
+diff --git a/dashboard/src/lib/state.svelte.ts b/dashboard/src/lib/state.svelte.ts
+index e1e349a5..944ee260 100644
+--- a/dashboard/src/lib/state.svelte.ts
++++ b/dashboard/src/lib/state.svelte.ts
+@@ -534,13 +534,15 @@ export class DashboardState {
+     return this.showRoute();
+   }
+ 
+-  /** The app's first load (ATM-776): the workspace's projects as kept at the last start, if any, shown at once, the page
+-   * decided from them as from a fresh list; its tag asked with the fresh list, so an unchanged one costs atm nothing.
+-   * The project to load, at once, beside the fresh list; null for a page without one; undefined when nothing was kept */
+-  private showKeptProjects(): string | null | undefined {
+-    if (!inApp || this.projectsLoaded) return undefined;
++  /** The page decided from the projects the page knows, before the fresh list (ATM-776, ATM-777): those listed already
++   * (a switch to another project's tab, a reload), else at the app's first load those kept at its last start, its tag
++   * asked with the fresh list so an unchanged one costs atm nothing. The project to load at once, before the fresh
++   * list; null for a page without one; undefined when the page knows no projects of this workspace yet */
++  private showKnownProjects(): string | null | undefined {
+     const workspace = workspaceOf(currentAddress());
+     if (workspace !== apiWorkspace()) return undefined;
++    if (this.projectsLoaded) return this.workspace === workspace ? this.showRoute() : undefined;
++    if (!inApp) return undefined;
+     const kept = keptProjects(workspace);
+     if (!kept) return undefined;
+     this.workspace = workspace;
+@@ -832,10 +834,13 @@ export class DashboardState {
+     if (this.projectsLoaded) void this.refreshWorkspaces();
+     else await this.refreshWorkspaces();
+     if (!ticket.current()) return;
+-    // The app's start (ATM-776): from the projects kept at the last one, the page at once, and its project's data first,
+-    // shown as soon as it is in; the fresh list after it, not before (asked together, they slowed each other down)
+-    const early = this.showKeptProjects();
+-    const shownEarly = early ? await this.loadProjectData(early, ticket) : false;
++    // From the projects the page knows (listed already, or kept at the app's last start: ATM-776, ATM-777), the page at
++    // once, and its project's data first, shown as soon as it is in; the fresh list after it, not before (waiting on it
++    // first, a switch to another project's tab showed the last project's board; asked together, they slowed each other
++    // down). A list out of date (a project gone) only means it wasn't shown early: the path below loads it, and says why
++    // it can't
++    const early = this.showKnownProjects();
++    const shownEarly = early ? await this.loadProjectData(early, ticket).catch(() => false) : false;
+     if (shownEarly) this.showProjectData();
+     if (!ticket.current()) return;
+     const project = await this.refreshProjects(ticket);
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index 70e19f2f..b8b2a2e4 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -1507,6 +1507,30 @@ test.describe('the dashboard in the atm app', () => {
+     ).toEqual([]);
+   });
+ 
++  test('a switch to a project not shown before shows its board without waiting for the project list (ATM-777)', async ({
++    page,
++    tasksServer,
++  }) => {
++    await tasksServer.asApp();
++    tasksServer.addProject('second', 'minimal', 'Second Project');
++    tasksServer.use('standard');
++    tasksServer.restoredTabs = {
++      addresses: [`/projects/${tasksServer.projectId}/kanban`, '/projects/second/kanban'],
++      active: 0,
++    };
++    await page.goto('/');
++    await expect(page.locator('#kanban .kanban-card').first()).toBeVisible();
++    // The list held: the other project's board comes from its own data, the list it has deciding the page
++    let answer = () => {};
++    tasksServer.listProjectsHeld = new Promise<void>((resolve) => (answer = resolve));
++    await page.locator('.title-bar-tab [role="tab"]').nth(1).click();
++    await expect(page.locator('#dashboard-title')).toHaveText(/^(Second|Minimal) Project - Tasks/);
++    // Its own board: the minimal project's one task
++    await expect(page.locator('#kanban .kanban-card')).toHaveCount(1);
++    await expect.poll(() => tasksServer.commands.filter((c) => c.project === 'second').length).toBeGreaterThan(0);
++    answer();
++  });
++
+   test('Reload (ATM-584) loads the window again through the app, back at its tabs and the one it showed', async ({
+     page,
+     tasksServer,

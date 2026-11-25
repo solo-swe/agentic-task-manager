@@ -1,0 +1,279 @@
+diff --git a/crates/atm-lib/src/lib.rs b/crates/atm-lib/src/lib.rs
+index 38f4318d..36fb0240 100644
+--- a/crates/atm-lib/src/lib.rs
++++ b/crates/atm-lib/src/lib.rs
+@@ -31,6 +31,7 @@ pub mod review_pages;
+ pub mod review_requests;
+ pub mod reviews;
+ pub mod settings;
++pub mod shown;
+ pub mod sprints;
+ pub mod state;
+ pub mod stats;
+diff --git a/crates/atm-lib/src/shown.rs b/crates/atm-lib/src/shown.rs
+new file mode 100644
+index 00000000..f23e5701
+--- /dev/null
++++ b/crates/atm-lib/src/shown.rs
+@@ -0,0 +1,70 @@
++//! What a page shows of a project, and whether it changed (ATM-767, docs/memory-growth-analysis.md §3b): a change of
++//! the project's folders that leaves it the same is no change for the page. Every atm command an agent runs renews its
++//! lease, rewriting the claims store; the page shows a claim's holder, not its lease's end, so a renewal alone reloads
++//! nothing. The app's subscriptions are told of a project's changes through [`on_shown_change`].
++
++use std::path::{Path, PathBuf};
++use std::sync::{Arc, Mutex};
++
++use atm_common::subscription::OnChange;
++use serde_json::{Map, Value};
++
++use crate::project::Project;
++
++/// A claim's fields a renewal moves: the page shows neither
++const LEASE_FIELDS: [&str; 2] = ["lease_expires_at", "renewed_at"];
++
++/// The claims store as the page sees it: each claim without its lease's end and its last renewal.
++#[must_use]
++pub fn shown_claims(claims: &Map<String, Value>) -> Value {
++    let mut shown = claims.clone();
++    if let Some(Value::Object(held)) = shown.get_mut("claims") {
++        for claim in held.values_mut().filter_map(Value::as_object_mut) {
++            for field in LEASE_FIELDS {
++                claim.shift_remove(field);
++            }
++        }
++    }
++    Value::Object(shown)
++}
++
++/// What the page shows of the project at `root`, cheap to read: the store's stamp (its files' sizes and times), the
++/// claims store's by what it holds but the leases' ends. Null when the project can't be opened.
++#[must_use]
++pub fn shown_stamp(root: &Path) -> Value {
++    let Ok(project) = Project::open(root) else {
++        return Value::Null;
++    };
++    let mut stamp = project.store().stamp();
++    if let Some(parts) = stamp.as_object_mut() {
++        parts.insert(
++            "claims".into(),
++            shown_claims(&project.store().read_claims()),
++        );
++    }
++    stamp
++}
++
++/// `on_change`, called only when what the page shows of the project at `root` changed since the last call (or the
++/// subscription's start): a lease renewed, or a file written the same, calls nothing.
++#[must_use]
++pub fn on_shown_change(root: PathBuf, on_change: OnChange) -> OnChange {
++    let last = Mutex::new(shown_stamp(&root));
++    Arc::new(move || {
++        let now = shown_stamp(&root);
++        let changed = {
++            let mut last = last
++                .lock()
++                .unwrap_or_else(std::sync::PoisonError::into_inner);
++            let changed = *last != now;
++            *last = now;
++            changed
++        };
++        if changed {
++            on_change();
++        }
++    })
++}
++
++#[cfg(test)]
++mod tests;
+diff --git a/crates/atm-lib/src/shown/tests.rs b/crates/atm-lib/src/shown/tests.rs
+new file mode 100644
+index 00000000..26942e0a
+--- /dev/null
++++ b/crates/atm-lib/src/shown/tests.rs
+@@ -0,0 +1,104 @@
++use std::sync::atomic::{AtomicUsize, Ordering};
++
++use serde_json::json;
++
++use super::*;
++
++struct Dir(PathBuf);
++impl Drop for Dir {
++    fn drop(&mut self) {
++        let _ = std::fs::remove_dir_all(&self.0);
++    }
++}
++
++/// A project with one task, claimed by `claude:a` until `until`
++fn project(name: &str, until: &str) -> Dir {
++    let root = std::env::temp_dir().join(format!("atm-lib-shown-{name}-{}", std::process::id()));
++    let _ = std::fs::remove_dir_all(&root);
++    std::fs::create_dir_all(root.join(".agentic-task-manager")).unwrap();
++    std::fs::write(
++        root.join(".agentic-task-manager/tasks.json"),
++        json!({"tasks": [{"id": "T-1", "name": "One", "status": "in_progress"}]}).to_string(),
++    )
++    .unwrap();
++    claims(&root, "claude:a", until);
++    Dir(root)
++}
++
++fn claims(root: &Path, agent: &str, until: &str) {
++    std::fs::write(
++        root.join(".agentic-task-manager/claims-store.json"),
++        json!({"claims": {"T-1": {
++            "task": "T-1", "agent": agent, "claimed_at": "2026-11-24T08:00:00Z",
++            "lease_expires_at": until, "renewed_at": until,
++        }}})
++        .to_string(),
++    )
++    .unwrap();
++}
++
++/// An `OnChange` counting its calls, and the count
++fn counted() -> (OnChange, Arc<AtomicUsize>) {
++    let count = Arc::new(AtomicUsize::new(0));
++    let seen = Arc::clone(&count);
++    (
++        Arc::new(move || {
++            seen.fetch_add(1, Ordering::SeqCst);
++        }),
++        count,
++    )
++}
++
++#[test]
++fn the_claims_the_page_sees_have_no_lease_s_end_or_renewal() {
++    let store = json!({
++        "claims": {"T-1": {"task": "T-1", "agent": "a", "lease_expires_at": "x", "renewed_at": "y"}},
++        "waiting": {"T-2": {"lease_expires_at": "kept: not a claim"}},
++    });
++    assert_eq!(
++        shown_claims(store.as_object().unwrap()),
++        json!({
++            "claims": {"T-1": {"task": "T-1", "agent": "a"}},
++            "waiting": {"T-2": {"lease_expires_at": "kept: not a claim"}},
++        })
++    );
++    assert_eq!(shown_claims(&Map::new()), json!({}));
++}
++
++#[test]
++fn a_lease_renewed_tells_nothing_a_new_holder_or_a_task_changed_tells_once_each() {
++    let dir = project("renewal", "2026-11-24T10:00:00Z");
++    let (on_change, count) = counted();
++    let shown = on_shown_change(dir.0.clone(), on_change);
++    // A renewal: the claims store rewritten, only the lease moved
++    claims(&dir.0, "claude:a", "2026-11-24T10:05:00Z");
++    shown();
++    assert_eq!(count.load(Ordering::SeqCst), 0);
++    // Told twice of the same change: once
++    claims(&dir.0, "claude:b", "2026-11-24T10:05:00Z");
++    shown();
++    shown();
++    assert_eq!(count.load(Ordering::SeqCst), 1);
++    // The tasks changed
++    std::fs::write(
++        dir.0.join(".agentic-task-manager/tasks.json"),
++        json!({"tasks": [{"id": "T-1", "name": "One", "status": "in_review"}, {"id": "T-2", "name": "Two"}]})
++            .to_string(),
++    )
++    .unwrap();
++    shown();
++    assert_eq!(count.load(Ordering::SeqCst), 2);
++}
++
++#[test]
++fn a_project_whose_files_appear_is_a_change() {
++    let root = std::env::temp_dir().join(format!("atm-lib-shown-none-{}", std::process::id()));
++    let _ = std::fs::remove_dir_all(&root);
++    let (on_change, count) = counted();
++    let shown = on_shown_change(root.clone(), on_change);
++    let dir = project("none", "2026-11-24T10:00:00Z");
++    std::fs::rename(&dir.0, &root).unwrap();
++    shown();
++    assert_eq!(count.load(Ordering::SeqCst), 1);
++    let _ = std::fs::remove_dir_all(&root);
++}
+diff --git a/crates/atm-lib/src/workspaces.rs b/crates/atm-lib/src/workspaces.rs
+index bd60ac0e..6db84422 100644
+--- a/crates/atm-lib/src/workspaces.rs
++++ b/crates/atm-lib/src/workspaces.rs
+@@ -479,7 +479,9 @@ impl Member {
+     /// # Errors
+     /// As [`Project::open`]; a store that can't be watched.
+     pub fn subscribe(&self, on_change: OnChange) -> Result<Subscription> {
+-        self.project()?.store().subscribe(on_change)
++        // Only what the page shows changing (ATM-767): a lease renewed alone tells nothing
++        let shown = crate::shown::on_shown_change(folder(&self.entry), on_change);
++        self.project()?.store().subscribe(shown)
+     }
+ 
+     /// Be told when its working copy changes as a live review shows it (ATM-607), until the subscription is dropped.
+@@ -642,7 +644,9 @@ impl Workspace {
+         let mut parts = Vec::new();
+         for entry in self.entries() {
+             if let Ok(project) = Self::project(&entry) {
+-                parts.push(project.store().subscribe(Arc::clone(&on_change))?);
++                // Only what the page shows changing (ATM-767): a lease renewed alone tells nothing
++                let shown = crate::shown::on_shown_change(folder(&entry), Arc::clone(&on_change));
++                parts.push(project.store().subscribe(shown)?);
+                 // Its reviews too, when it has some (ATM-606: what waits on the user is in its summary); a project
+                 // without a reviews folder isn't given one
+                 let has_reviews = project
+@@ -1046,4 +1050,54 @@ mod tests {
+         assert!(quiet(&received), "nothing once dropped");
+         std::fs::remove_dir_all(&home).unwrap();
+     }
++
++    /// ATM-767: through the real watcher, a lease renewed (the claims store rewritten, only the lease moved) tells a
++    /// project's subscription nothing; another holder tells it
++    #[test]
++    fn a_project_subscription_is_told_of_what_the_page_shows_not_a_lease_renewed() {
++        use std::sync::mpsc::channel;
++        use std::time::Duration;
++        let home = state("subscribe-lease");
++        let project = home.join("project");
++        let folder = project.join(atm_common::TASK_DIR);
++        std::fs::create_dir_all(&folder).unwrap();
++        std::fs::write(
++            folder.join("tasks.json"),
++            r#"{"meta": {"id": "one"}, "tasks": [{"id": "T-1", "status": "in_progress"}]}"#,
++        )
++        .unwrap();
++        let claims = |agent: &str, until: &str| {
++            std::fs::write(
++                folder.join("claims-store.json"),
++                json!({"claims": {"T-1": {"task": "T-1", "agent": agent,
++                    "lease_expires_at": until, "renewed_at": until}}})
++                .to_string(),
++            )
++            .unwrap();
++        };
++        claims("claude:a", "2026-11-24T10:00:00Z");
++        let workspaces = Workspaces::at(&home);
++        let workspace = workspaces.default_workspace();
++        workspace
++            .add_project(Some(&project.to_string_lossy()), &home)
++            .unwrap();
++        let member = workspace.member("one").unwrap();
++        let (sent, received) = channel();
++        let on_change: OnChange = Arc::new(move || {
++            let _ = sent.send(());
++        });
++        let subscription = member.subscribe(on_change).unwrap();
++        std::thread::sleep(Duration::from_millis(200));
++        claims("claude:a", "2026-11-24T10:05:00Z");
++        assert!(
++            received.recv_timeout(Duration::from_secs(2)).is_err(),
++            "a renewal tells nothing"
++        );
++        claims("claude:b", "2026-11-24T10:05:00Z");
++        received
++            .recv_timeout(Duration::from_secs(10))
++            .expect("told of the new holder");
++        drop(subscription);
++        std::fs::remove_dir_all(&home).unwrap();
++    }
+ }

@@ -1,0 +1,635 @@
+diff --git a/dashboard/src/App.svelte b/dashboard/src/App.svelte
+index 1ced996a..4e076869 100644
+--- a/dashboard/src/App.svelte
++++ b/dashboard/src/App.svelte
+@@ -22,6 +22,7 @@
+   import { addressOf, reviewOf } from './lib/address';
+   import AppTitleBar from './lib/shell/AppTitleBar.svelte';
+   import ReviewsTab from './lib/shell/ReviewsTab.svelte';
++  import NewTabPage from './lib/shell/NewTabPage.svelte';
+   import { reviewWindow } from './lib/reviews/window.svelte';
+   import SettingsMenu from './lib/shell/SettingsMenu.svelte';
+ 
+@@ -66,6 +67,10 @@
+   <Sidebar />
+   <AppTitleBar title={reviewWindow.title || dashboard.projectName} end={reviewEnd} />
+   <main class="review-tab-main" id="app-main"><ReviewsTab /></main>
++{:else if dashboard.route.page === 'new'}
++  <!-- The new tab (ATM-755): its chooser of scope and item, under the window's sidebar and title bar -->
++  {#if inApp}<Sidebar /><AppTitleBar title="New Tab" end={reviewEnd} />{/if}
++  <main class="new-tab-main" id="app-main"><NewTabPage /></main>
+ {:else if reviewing}
+   <!-- A review's page in the browser (ATM-574): the whole window -->
+   <div class="review-window" id="review-window">
+@@ -121,4 +126,8 @@
+     flex: 1;
+     min-height: 0;
+   }
++  /* The new tab's chooser, under the app's title bar */
++  .new-tab-main {
++    min-height: calc(100vh - 40px);
++  }
+ </style>
+diff --git a/dashboard/src/lib/new-tab.ts b/dashboard/src/lib/new-tab.ts
+new file mode 100644
+index 00000000..c9349dd9
+--- /dev/null
++++ b/dashboard/src/lib/new-tab.ts
+@@ -0,0 +1,66 @@
++// The app's new tab (`/new`, ATM-755, docs/sidebar-overhaul-design.md §3): a chooser of scope and item, as a browser's
++// new tab page is. Two columns, the scopes (All, then the workspace's projects) and the chosen scope's items; the keys
++// move in a column and between them, typing filters the projects, Enter opens. Its state and the keys' rules, apart
++// from the component.
++import type { Item } from './address';
++import { itemsOf, type Scope } from './sidebar';
++
++/** What the chooser shows: the scope and the item chosen, the column the keys move in, and the projects' filter */
++export interface Chooser {
++  scope: Scope;
++  item: number;
++  column: 0 | 1;
++  filter: string;
++}
++
++/** A project as the chooser lists it */
++export interface ChooserProject {
++  id: string;
++  name: string;
++}
++
++/** The scopes listed: All projects, then the projects the filter keeps (by name or ID, any case); All is left out
++ * while a filter is typed that it doesn't match */
++export function scopesOf(projects: readonly ChooserProject[], filter: string): Scope[] {
++  const words = filter.trim().toLowerCase();
++  if (!words) return [null, ...projects.map((p) => p.id)];
++  const kept = projects
++    .filter((p) => p.name.toLowerCase().includes(words) || p.id.toLowerCase().includes(words))
++    .map((p) => p.id);
++  return 'all projects'.includes(words) ? [null, ...kept] : kept;
++}
++
++/** The chooser after the filter is `filter`: its scope the first listed when the one chosen is gone, its item the
++ * first, the keys in the scopes' column */
++export function filtered(state: Chooser, projects: readonly ChooserProject[], filter: string): Chooser {
++  const scopes = scopesOf(projects, filter);
++  const scope = scopes.includes(state.scope) ? state.scope : (scopes[0] ?? state.scope);
++  return { scope, item: scope === state.scope ? state.item : 0, column: 0, filter };
++}
++
++/** What a key does (nothing for a key it doesn't take): the chooser after it, or the item to open */
++export function keyed(
++  state: Chooser,
++  projects: readonly ChooserProject[],
++  key: string,
++): { state: Chooser } | { open: Item } | null {
++  const scopes = scopesOf(projects, state.filter);
++  const items = itemsOf(state.scope);
++  const step = key === 'ArrowDown' ? 1 : key === 'ArrowUp' ? -1 : 0;
++  if (step && state.column === 0) {
++    if (!scopes.length) return null;
++    const at = Math.max(0, scopes.indexOf(state.scope));
++    const scope = scopes[Math.min(scopes.length - 1, Math.max(0, at + step))];
++    const item = Math.min(state.item, itemsOf(scope).length - 1);
++    return { state: { ...state, scope, item } };
++  }
++  if (step) return { state: { ...state, item: Math.min(items.length - 1, Math.max(0, state.item + step)) } };
++  if (key === 'ArrowRight') return { state: { ...state, column: 1 } };
++  if (key === 'ArrowLeft') return { state: { ...state, column: 0 } };
++  if (key === 'Enter') return scopes.includes(state.scope) && items[state.item] ? { open: items[state.item] } : null;
++  if (key === 'Backspace' && state.filter) return { state: filtered(state, projects, state.filter.slice(0, -1)) };
++  if (key === 'Escape' && state.filter) return { state: filtered(state, projects, '') };
++  // A character typed: the projects' filter
++  if (key.length === 1 && key !== ' ') return { state: filtered(state, projects, state.filter + key) };
++  return null;
++}
+diff --git a/dashboard/src/lib/routes.ts b/dashboard/src/lib/routes.ts
+index edfc21d2..250591bb 100644
+--- a/dashboard/src/lib/routes.ts
++++ b/dashboard/src/lib/routes.ts
+@@ -1,7 +1,7 @@
+ // Which page the dashboard shows: a project (/projects/<id>), the overview of all projects (/projects, /board, …), or,
+ // with neither in the address, the landing page's choice (docs/multi-project-dashboard-proposal.md 3.5). The address's
+ // other parameters (the tab, a dialog, a document) are kept (lib/address.ts).
+-import { addressParams, formatAddress, isOverviewTab, OVERVIEW_TABS, type OverviewTab } from './address';
++import { addressParams, formatAddress, isOverviewTab, namesNewTab, OVERVIEW_TABS, type OverviewTab } from './address';
+ import type { ProjectEntry } from './load';
+ import { VIEWS } from './tabs';
+ 
+@@ -13,7 +13,9 @@ export type Route =
+   /** No project is registered (or none of them is there): how to add one */
+   | { page: 'none' }
+   /** The address names a project the server doesn't list, or one whose folder is gone */
+-  | { page: 'unknown'; id: string };
++  | { page: 'unknown'; id: string }
++  /** The app's new tab (`/new`, ATM-755): its chooser of scope and item, no project's page */
++  | { page: 'new' };
+ 
+ /** The project an address names, if any. */
+ export function projectOf(address: string): string | null {
+@@ -90,6 +92,8 @@ export function routeFor(projects: readonly ProjectEntry[], address: string): Ro
+     return present.some((p) => p.id === named) ? { page: 'project', id: named } : { page: 'unknown', id: named };
+   }
+   if (namesOverview(address)) return { page: 'overview' };
++  // The new tab is its own page, whatever the projects: never the landing page's one project (ATM-755)
++  if (namesNewTab(address)) return { page: 'new' };
+   if (present.length === 0) return { page: 'none' };
+   if (present.length === 1) return { page: 'project', id: present[0].id };
+   return { page: 'overview' };
+diff --git a/dashboard/src/lib/shell/NewTabPage.svelte b/dashboard/src/lib/shell/NewTabPage.svelte
+new file mode 100644
+index 00000000..05347590
+--- /dev/null
++++ b/dashboard/src/lib/shell/NewTabPage.svelte
+@@ -0,0 +1,171 @@
++<script lang="ts">
++  // The app's new tab (`/new`, ATM-755, docs/sidebar-overhaul-design.md §3): Open, a chooser of scope and item. The
++  // scopes on the left (All projects, then the workspace's projects, with their logos and what needs you), the chosen
++  // scope's items on the right (with their badges). An item opens in this tab, in place of the chooser, which stays
++  // its first entry: Back returns to it. Keys: ↑↓ in a column, ←→ between them, typing filters the projects, Enter
++  // opens (lib/new-tab.ts). The sidebar's scope is chosen when it opens.
++  import { onMount } from 'svelte';
++  import type { Item } from '../address';
++  import { keyed, scopesOf, type Chooser } from '../new-tab';
++  import { navigate } from '../navigation';
++  import { ITEM_NAMES } from '../places';
++  import { getPref } from '../prefs';
++  import { needsYou, reviewsWaiting } from '../projects';
++  import { itemAddress, itemsOf, scopeFromPref, type Scope } from '../sidebar';
++  import { dashboard } from '../state.svelte';
++  import { ITEM_ICONS } from '../tabs';
++  import Icon from '../ui/Icon.svelte';
++  import ProjectLogo from '../ui/ProjectLogo.svelte';
++
++  const present = $derived(dashboard.projects.filter((p) => !p.missing));
++  let chooser = $state<Chooser>({
++    scope: scopeFromPref(getPref('sidebarScope', ''), dashboard.projects),
++    item: 0,
++    column: 0,
++    filter: '',
++  });
++  const scopes = $derived(scopesOf(present, chooser.filter));
++  const items = $derived(itemsOf(chooser.scope));
++  const address = (scope: Scope, item: Item) => itemAddress(dashboard.workspace, scope, item) ?? '/';
++  const projectOf = (id: string) => present.find((p) => p.id === id);
++
++  /** An item's badge: Code Reviews, the reviews waiting on you (All's sums its projects') */
++  function badgeOf(item: Item): number {
++    if (item !== 'reviews') return 0;
++    return chooser.scope === null
++      ? present.reduce((n, p) => n + reviewsWaiting(p), 0)
++      : reviewsWaiting(projectOf(chooser.scope));
++  }
++
++  let root = $state<HTMLElement>();
++  onMount(() => root?.focus());
++
++  function onkeydown(e: KeyboardEvent) {
++    if (e.metaKey || e.ctrlKey || e.altKey) return;
++    const done = keyed(chooser, present, e.key);
++    if (!done) return;
++    e.preventDefault();
++    if ('open' in done) navigate(address(chooser.scope, done.open));
++    else chooser = done.state;
++  }
++</script>
++
++<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (the keys move the chooser while it has focus) -->
++<section class="new-tab" id="new-tab" aria-label="Open" tabindex="0" bind:this={root} {onkeydown}>
++  <h2 class="new-tab-title">Open</h2>
++  {#if chooser.filter}<p class="new-tab-filter" id="new-tab-filter">Projects matching “{chooser.filter}”</p>{/if}
++  <div class="new-tab-columns">
++    <ul class="new-tab-column" id="new-tab-scopes" aria-label="Scopes" class:keyed={chooser.column === 0}>
++      {#each scopes as scope (scope ?? '')}
++        {@const project = scope === null ? undefined : projectOf(scope)}
++        {@const waiting = project ? needsYou(project) : present.reduce((n, p) => n + needsYou(p), 0)}
++        <li>
++          <button
++            class="new-tab-row"
++            class:chosen={chooser.scope === scope}
++            data-scope={scope ?? ''}
++            aria-pressed={chooser.scope === scope}
++            onclick={() => (chooser = { ...chooser, scope, item: 0, column: 0 })}
++          >
++            {#if project}<ProjectLogo {project} size={18} />{:else}<Icon name="layout-grid" size={18} />{/if}
++            <span class="new-tab-name">{project?.name ?? 'All projects'}</span>
++            {#if waiting}<span class="new-tab-badge" title="{waiting} need you">{waiting}</span>{/if}
++          </button>
++        </li>
++      {:else}
++        <li class="new-tab-none">No project matches</li>
++      {/each}
++    </ul>
++    <ul class="new-tab-column" id="new-tab-items" aria-label="Pages" class:keyed={chooser.column === 1}>
++      {#each items as item, i (item)}
++        {@const badge = badgeOf(item)}
++        <li>
++          <!-- A link: in place in this tab (⌘-click, a tab of its own, as every link in the app) -->
++          <a class="new-tab-row" class:chosen={chooser.item === i} data-item={item} href={address(chooser.scope, item)}
++            ><Icon name={ITEM_ICONS[item]} size={18} /><span class="new-tab-name">{ITEM_NAMES[item]}</span
++            >{#if badge}<span class="new-tab-badge" title="{badge} waiting for you">{badge}</span>{/if}</a
++          >
++        </li>
++      {/each}
++    </ul>
++  </div>
++  <p class="new-tab-hint">↑↓ choose · ←→ between the columns · type to find a project · Enter opens</p>
++</section>
++
++<style>
++  .new-tab {
++    display: flex;
++    flex-direction: column;
++    gap: var(--space-6);
++    max-width: 640px;
++    margin: var(--space-9) auto;
++    padding: var(--space-7);
++    outline: none;
++  }
++  .new-tab-title {
++    margin: 0;
++    font-size: var(--text-lg);
++  }
++  .new-tab-filter,
++  .new-tab-hint,
++  .new-tab-none {
++    margin: 0;
++    color: var(--text-muted);
++    font-size: var(--text-sm);
++  }
++  .new-tab-columns {
++    display: grid;
++    grid-template-columns: 1fr 1fr;
++    gap: var(--space-6);
++  }
++  .new-tab-column {
++    list-style: none;
++    margin: 0;
++    padding: var(--space-3);
++    border: 1px solid var(--border);
++    border-radius: var(--radius-lg);
++    background: var(--surface);
++    display: flex;
++    flex-direction: column;
++    gap: var(--space-1);
++  }
++  .new-tab-column.keyed {
++    border-color: var(--accent);
++  }
++  .new-tab-row {
++    display: flex;
++    align-items: center;
++    gap: var(--space-4);
++    width: 100%;
++    padding: var(--space-4) var(--space-5);
++    border: none;
++    border-radius: var(--radius-md);
++    background: none;
++    color: var(--text);
++    font: inherit;
++    text-align: left;
++    text-decoration: none;
++    cursor: pointer;
++  }
++  .new-tab-row:hover {
++    background: var(--surface2);
++  }
++  .new-tab-row.chosen {
++    background: color-mix(in srgb, var(--accent) 14%, transparent);
++  }
++  .new-tab-name {
++    flex: 1;
++    min-width: 0;
++    overflow: hidden;
++    text-overflow: ellipsis;
++    white-space: nowrap;
++  }
++  .new-tab-badge {
++    padding: 0 var(--space-3);
++    border-radius: var(--radius-pill);
++    background: var(--purple);
++    color: var(--on-accent);
++    font-size: var(--text-xs);
++    font-weight: 600;
++  }
++</style>
+diff --git a/dashboard/src/lib/tab-actions.ts b/dashboard/src/lib/tab-actions.ts
+index 17f84c35..7b5c1c29 100644
+--- a/dashboard/src/lib/tab-actions.ts
++++ b/dashboard/src/lib/tab-actions.ts
+@@ -6,6 +6,9 @@ import { closeWindow, openWindow } from './api/shell';
+ import { rememberScroll, showTab } from './navigation';
+ import { forgetTab } from './tab-parked';
+ 
++/** Where + (and File ▸ New Tab, ⌘T) opens a tab: the chooser of scope and item (ATM-755) */
++export const NEW_TAB_ADDRESS = '/new';
++
+ /** A click that asks for a new tab: ⌘-click, Ctrl-click or a middle click, as in a browser */
+ export function wantsNewTab(e: MouseEvent): boolean {
+   return e.metaKey || e.ctrlKey || e.button === 1;
+@@ -17,8 +20,9 @@ export function inBackground(e: MouseEvent): boolean {
+ }
+ 
+ export interface TabActions {
+-  /** A new tab at `address` (the workspace's overview by default), shown; in the `background`, right of this one,
+-   * which stays shown (ATM-698: ⌘-click and a middle click; ⇧⌘-click brings it forward) */
++  /** A new tab at `address` (by default the new tab's chooser of scope and item, `/new`: ATM-755), shown; in the
++   * `background`, right of this one, which stays shown (ATM-698: ⌘-click and a middle click; ⇧⌘-click brings it
++   * forward) */
+   open(address?: string, background?: boolean): void;
+   select(id: string): void;
+   /** Close tab `id`, the active one by default */
+@@ -54,7 +58,7 @@ export function tabActions(tabs: AppTabs = appTabs, win: TabWindow = window_): T
+     return change();
+   };
+   return {
+-    open: (address = '/', background = false) =>
++    open: (address = NEW_TAB_ADDRESS, background = false) =>
+       background ? void tabs.open(address, true) : go(leaving(() => tabs.open(address))),
+     select: (id) => go(id === tabs.active ? undefined : (leaving(() => tabs.select(id)) ?? undefined)),
+     close: (id = tabs.active) => {
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index fb64cce1..87b18bea 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -568,7 +568,7 @@ test.describe('the dashboard in the atm app', () => {
+     await expect(page.locator('#app-tab-t2-label')).toContainText('Standard Project - CR-2');
+   });
+ 
+-  test('tabs are addresses (T-514): + opens the overview, a click goes back, × closes, the menu steps', async ({
++  test('tabs are addresses (T-514): + opens the chooser, a click goes back, × closes, the menu steps', async ({
+     page,
+     tasksServer,
+   }) => {
+@@ -581,11 +581,29 @@ test.describe('the dashboard in the atm app', () => {
+     await expect(page.locator('#dashboard-title')).toHaveText(/^Standard Project - /);
+     await expect(tabs).toHaveCount(1);
+ 
+-    // + : a second tab, on the overview
++    // + : a second tab, on the chooser of scope and item (ATM-755)
+     await page.locator('#app-tab-new').click();
+     await expect(tabs).toHaveCount(2);
+-    await expect(page.locator('#dashboard-title')).toHaveText(/^All - /);
++    await expect(page.locator('#dashboard-title')).toHaveText('New Tab');
+     await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
++    await expect.poll(() => addressOf(page)).toBe('/new');
++    await expect(page.locator('#new-tab-scopes [data-scope]')).toHaveCount(3);
++    // Choosing: the page in this tab; Back returns to the chooser
++    await page.locator('#new-tab-scopes [data-scope="second"]').click();
++    await page.locator('#new-tab-items [data-item="tasks"]').click();
++    await expect(tabs).toHaveCount(2);
++    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project - Tasks');
++    // (with its Sprint filter, as the board writes it: T-323)
++    await expect.poll(() => addressOf(page)).toMatch(/^\/projects\/second\/kanban(\?|$)/);
++    await tasksServer.chooseMenu({ kind: 'back' });
++    await expect(page.locator('#new-tab')).toBeVisible();
++    await expect(page.locator('#dashboard-title')).toHaveText('New Tab');
++    // And the keys: All, its Overview, Enter
++    await page.locator('#new-tab').focus();
++    await page.keyboard.press('ArrowUp');
++    await page.keyboard.press('ArrowUp');
++    await page.keyboard.press('Enter');
++    await expect(page.locator('#dashboard-title')).toHaveText(/^All - /);
+     // The other tab keeps its project's name, and a click goes back to where it was
+     await expect(page.locator('#app-tab-t1-label')).toContainText('Standard Project');
+     await tabs.nth(0).click();
+@@ -769,9 +787,9 @@ test.describe('the dashboard in the atm app', () => {
+ 
+     // A new tab: its own history, Back going nowhere
+     await page.locator('#app-tab-new').click();
+-    await expect(page.locator('#dashboard-title')).toHaveText(/^All - /);
++    await expect(page.locator('#dashboard-title')).toHaveText('New Tab');
+     await tasksServer.chooseMenu({ kind: 'back' });
+-    await expect(page.locator('#dashboard-title')).toHaveText(/^All - /);
++    await expect(page.locator('#dashboard-title')).toHaveText('New Tab');
+     // Back to the first tab: as it was left, and its Back still the list (the switch added nothing)
+     await page.locator('#app-titlebar [role="tab"]').nth(0).click();
+     await expect.poll(at).toBe(`${base}/kanban`);
+@@ -855,7 +873,7 @@ test.describe('the dashboard in the atm app', () => {
+ 
+     // A new tab: its own history, both disabled; back to the first, the arrows follow it
+     await page.locator('#app-tab-new').click();
+-    await expect(page.locator('#dashboard-title')).toHaveText(/^All - /);
++    await expect(page.locator('#dashboard-title')).toHaveText('New Tab');
+     await expect(backArrow).toBeDisabled();
+     await expect(forwardArrow).toBeDisabled();
+     await page.locator('#app-titlebar [role="tab"]').nth(0).click();
+diff --git a/dashboard/tests/unit/NewTabPage.component.test.ts b/dashboard/tests/unit/NewTabPage.component.test.ts
+new file mode 100644
+index 00000000..d557d9af
+--- /dev/null
++++ b/dashboard/tests/unit/NewTabPage.component.test.ts
+@@ -0,0 +1,103 @@
++import { fireEvent, render } from '@testing-library/svelte';
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
++import NewTabPage from '../../src/lib/shell/NewTabPage.svelte';
++import { setPref } from '../../src/lib/prefs';
++import { dashboard } from '../../src/lib/state.svelte';
++
++const navigate = vi.hoisted(() => vi.fn());
++vi.mock('../../src/lib/navigation', async (actual) => ({ ...(await actual()), navigate }));
++
++// The new tab's chooser (lib/shell/NewTabPage.svelte, ATM-755): the scopes and the chosen scope's items, an item a
++// link to its page in this tab, the keys moving it
++
++const project = (id: string, name: string, waiting = { review: 0, code_reviews: 0 }) => ({
++  id,
++  name,
++  path: `/p/${id}`,
++  missing: false,
++  logo: null,
++  worktrees: [],
++  summary: {
++    needs_you: { review: waiting.review, blocked_on_user: 0, together: 0, code_reviews: waiting.code_reviews },
++  },
++});
++
++describe('NewTabPage', () => {
++  beforeEach(() => {
++    dashboard.projects = [
++      project('atm', 'Agentic Task Manager', { review: 1, code_reviews: 2 }),
++      project('compmd', 'CompMD'),
++      { ...project('gone', 'Gone'), missing: true },
++    ] as unknown as typeof dashboard.projects;
++    setPref('sidebarScope', '');
++    navigate.mockClear();
++  });
++  afterEach(() => {
++    dashboard.projects = [];
++    setPref('sidebarScope', '');
++  });
++
++  const scopes = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>('#new-tab-scopes [data-scope]')];
++  const items = (c: HTMLElement) => [...c.querySelectorAll<HTMLAnchorElement>('#new-tab-items [data-item]')];
++
++  it('lists All, then the projects there, with what needs you; All’s four items, each a link to its page', () => {
++    const { container } = render(NewTabPage);
++    expect(scopes(container).map((s) => s.dataset.scope)).toEqual(['', 'atm', 'compmd']);
++    expect(scopes(container)[0]).toHaveAttribute('aria-pressed', 'true');
++    // All sums its projects'; a project its own
++    expect(scopes(container)[0].querySelector('.new-tab-badge')).toHaveTextContent('3');
++    expect(scopes(container)[1].querySelector('.new-tab-badge')).toHaveTextContent('3');
++    expect(scopes(container)[2].querySelector('.new-tab-badge')).toBeNull();
++    expect(items(container).map((a) => [a.dataset.item, a.getAttribute('href')])).toEqual([
++      ['overview', '/projects'],
++      ['tasks', '/board'],
++      ['reviews', '/reviews'],
++      ['analysis', '/progress'],
++    ]);
++    // Code Reviews: the reviews waiting on you
++    expect(items(container)[2].querySelector('.new-tab-badge')).toHaveTextContent('2');
++  });
++
++  it('opens on the sidebar’s scope; a scope clicked shows its six items', async () => {
++    setPref('sidebarScope', 'compmd');
++    const { container } = render(NewTabPage);
++    expect(container.querySelector('[data-scope="compmd"]')).toHaveAttribute('aria-pressed', 'true');
++    await fireEvent.click(container.querySelector('[data-scope="atm"]')!);
++    expect(items(container).map((a) => a.getAttribute('href'))).toEqual([
++      '/projects/atm/project',
++      '/projects/atm/inbox',
++      '/projects/atm/kanban',
++      '/projects/atm/reviews',
++      '/projects/atm/documents',
++      '/projects/atm/progress',
++    ]);
++  });
++
++  it('has the focus, so the keys move it at once; Enter opens the item in this tab', async () => {
++    const { container } = render(NewTabPage);
++    const root = container.querySelector<HTMLElement>('#new-tab')!;
++    expect(document.activeElement).toBe(root);
++    await fireEvent.keyDown(root, { key: 'ArrowDown' });
++    await fireEvent.keyDown(root, { key: 'ArrowRight' });
++    await fireEvent.keyDown(root, { key: 'ArrowDown' });
++    await fireEvent.keyDown(root, { key: 'ArrowDown' });
++    expect(container.querySelector('#new-tab-items .chosen')).toHaveAttribute('data-item', 'tasks');
++    await fireEvent.keyDown(root, { key: 'Enter' });
++    expect(navigate).toHaveBeenCalledWith('/projects/atm/kanban');
++  });
++
++  it('typing filters the projects, and says so; ⌘ with a key is left to the app', async () => {
++    const { container } = render(NewTabPage);
++    const root = container.querySelector<HTMLElement>('#new-tab')!;
++    await fireEvent.keyDown(root, { key: 'c' });
++    await fireEvent.keyDown(root, { key: 'o' });
++    expect(scopes(container).map((s) => s.dataset.scope)).toEqual(['compmd']);
++    expect(container.querySelector('#new-tab-filter')).toHaveTextContent('“co”');
++    await fireEvent.keyDown(root, { key: 'z' });
++    expect(container.querySelector('.new-tab-none')).toHaveTextContent('No project matches');
++    await fireEvent.keyDown(root, { key: 'Escape' });
++    expect(scopes(container)).toHaveLength(3);
++    await fireEvent.keyDown(root, { key: 't', metaKey: true });
++    expect(container.querySelector('#new-tab-filter')).toBeNull();
++  });
++});
+diff --git a/dashboard/tests/unit/app-tabs.test.ts b/dashboard/tests/unit/app-tabs.test.ts
+index 3035f240..9de86b80 100644
+--- a/dashboard/tests/unit/app-tabs.test.ts
++++ b/dashboard/tests/unit/app-tabs.test.ts
+@@ -188,14 +188,14 @@ describe('what the tabs do (T-514)', () => {
+     return { tabs, actions: tabActions(tabs, win), win, went };
+   }
+ 
+-  it('a new tab goes to the overview; select, step and close go where the tab is', () => {
++  it('a new tab goes to the chooser of scope and item (ATM-755); select, step and close go where the tab is', () => {
+     const { tabs, actions, went } = setup();
+     actions.open();
+     actions.open('/projects/b');
+     actions.select(tabs.tabs[0].id);
+     actions.step(1);
+     actions.close();
+-    expect(went).toEqual(['/', '/projects/b', '/projects/a', '/', '/projects/b']);
++    expect(went).toEqual(['/new', '/projects/b', '/projects/a', '/new', '/projects/b']);
+   });
+ 
+   it('closing the last tab closes the window', () => {
+diff --git a/dashboard/tests/unit/new-tab.test.ts b/dashboard/tests/unit/new-tab.test.ts
+new file mode 100644
+index 00000000..d164b1be
+--- /dev/null
++++ b/dashboard/tests/unit/new-tab.test.ts
+@@ -0,0 +1,69 @@
++import { describe, expect, it } from 'vitest';
++import { filtered, keyed, scopesOf, type Chooser } from '../../src/lib/new-tab';
++
++// The new tab's chooser (lib/new-tab.ts, ATM-755): the scopes it lists, and what each key does
++
++const projects = [
++  { id: 'atm', name: 'Agentic Task Manager' },
++  { id: 'compmd', name: 'CompMD' },
++  { id: 'lfb', name: 'Learn Forever Blog' },
++];
++const start: Chooser = { scope: null, item: 0, column: 0, filter: '' };
++const after = (state: Chooser, ...keys: string[]) =>
++  keys.reduce((s, key) => {
++    const done = keyed(s, projects, key);
++    if (!done || !('state' in done)) throw new Error(`${key}: ${JSON.stringify(done)}`);
++    return done.state;
++  }, state);
++
++describe('the scopes listed', () => {
++  it('All, then every project; a filter keeps those it names (name or ID, any case), All only when it matches', () => {
++    expect(scopesOf(projects, '')).toEqual([null, 'atm', 'compmd', 'lfb']);
++    expect(scopesOf(projects, 'COMP')).toEqual(['compmd']);
++    expect(scopesOf(projects, 'lfb')).toEqual(['lfb']);
++    expect(scopesOf(projects, 'task')).toEqual(['atm']);
++    expect(scopesOf(projects, 'all')).toEqual([null]);
++    expect(scopesOf(projects, 'zzz')).toEqual([]);
++  });
++});
++
++describe('the keys', () => {
++  it('↑↓ move in the scopes, at the ends staying; the item follows within the new scope’s', () => {
++    expect(after(start, 'ArrowDown').scope).toBe('atm');
++    expect(after(start, 'ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowDown').scope).toBe('lfb');
++    expect(after(start, 'ArrowUp').scope).toBe(null);
++    // On a project's sixth item, back to All (four): its last
++    expect(after({ ...start, scope: 'atm', item: 5 }, 'ArrowUp')).toMatchObject({ scope: null, item: 3 });
++  });
++
++  it('→ goes to the items, where ↑↓ move within them; ← back to the scopes', () => {
++    const items = after({ ...start, scope: 'atm' }, 'ArrowRight');
++    expect(items.column).toBe(1);
++    expect(after(items, 'ArrowDown', 'ArrowDown').item).toBe(2);
++    expect(after(items, 'ArrowUp').item).toBe(0);
++    expect(after(items, ...Array(9).fill('ArrowDown')).item).toBe(5);
++    expect(after(items, 'ArrowLeft').column).toBe(0);
++  });
++
++  it('Enter opens the chosen item of the chosen scope', () => {
++    expect(keyed({ ...start, scope: 'atm', item: 2 }, projects, 'Enter')).toEqual({ open: 'tasks' });
++    expect(keyed({ ...start, item: 2 }, projects, 'Enter')).toEqual({ open: 'reviews' });
++    // Nothing to open while the filter lists nothing
++    expect(keyed({ ...start, scope: 'atm', filter: 'zzz' }, projects, 'Enter')).toBeNull();
++  });
++
++  it('typing filters the projects and chooses the first kept; Backspace and Escape undo it', () => {
++    const typed = after(start, 'c', 'o');
++    expect(typed).toEqual({ scope: 'compmd', item: 0, column: 0, filter: 'co' });
++    expect(after(typed, 'Backspace')).toMatchObject({ filter: 'c', scope: 'compmd' });
++    expect(after(typed, 'Escape')).toMatchObject({ filter: '', scope: 'compmd' });
++    // Typed from the items' column: back to the scopes
++    expect(after({ ...start, column: 1 }, 'l').column).toBe(0);
++  });
++
++  it('a scope still listed keeps its item; other keys do nothing', () => {
++    expect(filtered({ ...start, scope: 'atm', item: 4 }, projects, 'a')).toMatchObject({ scope: 'atm', item: 4 });
++    for (const key of [' ', 'Tab', 'Shift', 'F5']) expect(keyed(start, projects, key), key).toBeNull();
++    expect(keyed(start, projects, 'Backspace')).toBeNull();
++  });
++});
+diff --git a/dashboard/tests/unit/routes.test.ts b/dashboard/tests/unit/routes.test.ts
+index 68688ccc..c7ab98c5 100644
+--- a/dashboard/tests/unit/routes.test.ts
++++ b/dashboard/tests/unit/routes.test.ts
+@@ -114,4 +114,10 @@ describe('routeFor', () => {
+     expect(routeFor([project('gone', true)], '/')).toEqual({ page: 'none' });
+     expect(routeFor([], '/')).toEqual({ page: 'none' });
+   });
++
++  it('the new tab is its own page, whatever the projects: never the one project’s (ATM-755)', () => {
++    for (const projects of [[], [project('a')], two])
++      expect(routeFor(projects, '/new'), String(projects.length)).toEqual({ page: 'new' });
++    expect(routeFor(two, '/w/work/new')).toEqual({ page: 'new' });
++  });
+ });

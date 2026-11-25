@@ -1,0 +1,27 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "384ba962d25df2c439e8178a8c1167f23e85f070",
+    "head": "f4216fe0b9a90f2f6c089c5454130e30b943f0aa"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/lib/overview/ProjectsOverview.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/shell/ViewPanel.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/app.spec.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:33cba067",
+  "at": "2026-11-24T22:56:40Z"
+}

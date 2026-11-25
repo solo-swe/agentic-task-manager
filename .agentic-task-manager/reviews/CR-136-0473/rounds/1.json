@@ -1,0 +1,20 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "files"
+  },
+  "files": [
+    {
+      "path": "docs/documents-design.md",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "docs/inbox-design.md",
+      "status": "added",
+      "binary": false
+    }
+  ],
+  "by": "claude:ba530ebb",
+  "at": "2026-11-23T23:21:00Z"
+}

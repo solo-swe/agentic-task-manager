@@ -1,0 +1,17 @@
+{
+  "number": 2,
+  "kind": {
+    "kind": "range",
+    "base": "64f728612375a3a1d7d9be6983d197912b5f0c6e",
+    "head": "0dec7e4862fb30da4391108a011c9ac6ce31c61f"
+  },
+  "files": [
+    {
+      "path": "dashboard/tests/e2e/performance.spec.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:ba530ebb",
+  "at": "2026-11-24T15:58:14Z"
+}

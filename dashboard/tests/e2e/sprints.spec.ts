@@ -6,6 +6,7 @@ import {
   loadFixture,
   openDashboard,
   openFilters,
+  openView,
   test,
   type TasksData,
 } from './helpers';
@@ -28,7 +29,7 @@ test.describe('scope bar (T-323)', () => {
     page,
     tasksServer,
   }) => {
-    await openDashboard(page, tasksServer, 'sprints');
+    await openDashboard(page, tasksServer, 'sprints', { tab: 'kanban' });
     const bar = page.locator('#scope-bar');
     await expect(bar).toHaveAttribute('data-state', 'active');
     await expect(bar.locator('#scope-trigger')).toHaveText('Ada Lovelace');
@@ -45,11 +46,11 @@ test.describe('scope bar (T-323)', () => {
       await expect(bar).toBeVisible();
     }
     for (const tab of ['progress', 'agents', 'project']) {
-      await page.locator(`#tab-${tab}`).click();
+      await openView(page, tab);
       await expect(bar).toHaveCount(0);
     }
     // The Progress tab shows every sprint whatever the board's scope
-    await page.locator('#tab-progress').click();
+    await openView(page, 'progress');
     await expect(page.locator('#sprint-table tbody tr')).toHaveCount(3);
   });
 
@@ -122,7 +123,7 @@ test.describe('scope bar (T-323)', () => {
     const name = 'Library, gallery and blog';
     for (const sprint of sprintsOf(data)) if (sprint.id === 'Alan Turing') sprint.id = name;
     for (const task of data.tasks) if (task.sprint === 'Alan Turing') task.sprint = name;
-    await openDashboard(page, tasksServer, data);
+    await openDashboard(page, tasksServer, data, { tab: 'kanban' });
     const trigger = page.locator('#scope-trigger');
     await trigger.click();
     await page.locator(`.scope-choice[data-scope="${name}"]`).click();
@@ -136,7 +137,7 @@ test.describe('scope bar (T-323)', () => {
     page,
     tasksServer,
   }) => {
-    await openDashboard(page, tasksServer, 'sprints');
+    await openDashboard(page, tasksServer, 'sprints', { tab: 'kanban' });
     await page.locator('#task-search').fill('Sessions');
     await expect(page.locator('#scope-filtered')).toHaveText('showing 1, filtered: “Sessions”');
     await expect(page.locator('#scope-bar .sprint-progress')).toHaveText('0 of 3 done');
@@ -151,7 +152,7 @@ test.describe('scope bar (T-323)', () => {
   }) => {
     const data = loadFixture('sprints');
     for (const task of data.tasks) if (String(task.sprint).toLowerCase() === 'ada lovelace') task.status = 'done';
-    await openDashboard(page, tasksServer, data);
+    await openDashboard(page, tasksServer, data, { tab: 'kanban' });
     await expect(page.locator('#scope-done')).toHaveText('All 3 tasks done');
     await expect(page.locator('#scope-hint')).toHaveText(
       'Close it with /atm-close-sprint · release 1.0 is ready to ship',
@@ -168,7 +169,7 @@ test.describe('scope bar (T-323)', () => {
     const data = loadFixture('sprints');
     const ada = sprintsOf(data).find((s) => s.id === 'Ada Lovelace')!;
     Object.assign(ada, { state: 'closed', end: '2026-04-08T18:00:00Z' });
-    await openDashboard(page, tasksServer, data);
+    await openDashboard(page, tasksServer, data, { tab: 'kanban' });
     await expect(page.locator('#scope-trigger')).toHaveText('All tasks');
     await expect(page.locator('#scope-hint')).toHaveText(
       /^No active sprint\s·\slast: Ada Lovelace, closed .+\s·\snext planned: Alan Turing \(0 tasks\)\s·\sstart\s+it with \/atm-plan-sprint$/,
@@ -288,7 +289,7 @@ test.describe('scope bar (T-323)', () => {
     const later = new Date('2026-04-14T12:00:00Z');
     await page.clock.setFixedTime(later);
     atmNowFor(later);
-    await openDashboard(page, tasksServer, 'sprints');
+    await openDashboard(page, tasksServer, 'sprints', { tab: 'kanban' });
     const due = page.locator('#scope-bar .sprint-due');
     await expect(due).toHaveText('2 days overdue');
     await expect(due).toHaveClass(/overdue/);
@@ -301,7 +302,7 @@ test.describe('scope bar (T-323)', () => {
     const data = loadFixture('standard');
     for (const task of data.tasks) delete task.phase;
     delete data.meta?.phases;
-    await openDashboard(page, tasksServer, data);
+    await openDashboard(page, tasksServer, data, { tab: 'kanban' });
     await expect(page.locator('#kanban .kanban-card').first()).toBeVisible();
     await expect(page.locator('#scope-bar')).toHaveCount(0);
     await expect(page.locator('#kanban-show-skipped')).toBeVisible();
@@ -313,7 +314,7 @@ test.describe('scope bar (T-323)', () => {
       if (task.id === 'T-003') task.with = 'user';
       if (task.id === 'T-004') Object.assign(task, { status: 'in_review', review_state: 'changes_requested' });
     }
-    await openDashboard(page, tasksServer, data);
+    await openDashboard(page, tasksServer, data, { tab: 'kanban' });
     const card = (id: string) => page.locator(`.kanban-card[data-id="${id}"]`);
     await expect(card('T-003').locator('.with-user-chip')).toHaveText('with you');
     await expect(card('T-004').locator('.review-state-chip')).toHaveText('Changes requested');

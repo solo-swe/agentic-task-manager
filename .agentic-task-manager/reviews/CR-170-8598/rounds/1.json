@@ -1,0 +1,32 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "9dde7899f875d14951cdb3459e8641c8ffb6db48",
+    "head": "a2da819764efa635693ae396badabd5871b2ad03"
+  },
+  "files": [
+    {
+      "path": "dashboard/tests/unit/skills.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/security-architecture.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "skills/atm-triage-inbox/SKILL.md",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "skills/claude-code.json",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:ba530ebb",
+  "at": "2026-11-24T18:53:37Z"
+}

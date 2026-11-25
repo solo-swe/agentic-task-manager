@@ -1,0 +1,520 @@
+diff --git a/dashboard/src/lib/address.ts b/dashboard/src/lib/address.ts
+index 149213ab..46d8f57e 100644
+--- a/dashboard/src/lib/address.ts
++++ b/dashboard/src/lib/address.ts
+@@ -291,6 +291,26 @@ export function withReviewList(address: string, query: ReviewListAddress): strin
+   return formatAddress(params);
+ }
+ 
++/** All reviews' project filter (ATM-757, docs/sidebar-overhaul-design.md §2.5): the projects `?projects=atm,compmd`
++ * names, those among `known` in its order; none (every project) when it names none of them */
++export function reviewProjectsOf(address: string, known: readonly string[]): string[] {
++  const named = new Set(
++    (addressParams(address).get('projects') ?? '')
++      .split(',')
++      .map((id) => id.trim())
++      .filter(Boolean),
++  );
++  return known.filter((id) => named.has(id));
++}
++
++/** `address` (All reviews') narrowed to `projects`; none is every project, and no parameter */
++export function withReviewProjects(address: string, projects: readonly string[]): string {
++  const params = addressParams(address);
++  params.delete('projects');
++  if (projects.length) params.set('projects', projects.join(','));
++  return formatAddress(params);
++}
++
+ /** The page of review `review` of `project`, in the workspace `address` is in, with nothing else open over it (a task's
+  * details or a document: ATM-585, a task linking to its review) */
+ export function reviewPageOf(address: string, project: string, review: string): string {
+diff --git a/dashboard/src/lib/overview/OverviewReviews.svelte b/dashboard/src/lib/overview/OverviewReviews.svelte
+index ba507085..2d1210bf 100644
+--- a/dashboard/src/lib/overview/OverviewReviews.svelte
++++ b/dashboard/src/lib/overview/OverviewReviews.svelte
+@@ -2,8 +2,9 @@
+   // Every project's reviews in one list (ATM-575, Hakan: a fourth tab on the overview): the reviews list of a project's
+   // Reviews tab (search, filters, in groups when unfiltered, what waits for you first), over the projects shown, each
+   // row saying its project; a project picker narrows it to one. A row opens its review's page, in its project.
++  import { page as router } from '$app/state';
+   import { onDestroy, untrack } from 'svelte';
+-  import { reviewPageOf } from '../address';
++  import { addressOf, reviewPageOf, reviewProjectsOf, withReviewProjects } from '../address';
+   import { inApp } from '../api/http';
+   import type { ProjectEntry } from '../load';
+   import { currentAddress, navigate } from '../navigation';
+@@ -12,6 +13,7 @@
+   import { keepFilter, keptFilter } from '../review-filter';
+   import { mergeProjectReviews } from '../reviews/page';
+   import ReviewList from '../reviews/ReviewList.svelte';
++  import ReviewProjects from './ReviewProjects.svelte';
+   import type { ListQuery, ReviewEntry } from '../reviews/types';
+   import { tabActions } from '../tab-actions';
+ 
+@@ -19,9 +21,17 @@
+ 
+   /** The projects it can list: those there (a missing one has no reviews to read) */
+   const present = $derived(projects.filter((p) => !p.missing));
+-  /** The project picked, or every project ('') */
+-  let picked = $state('');
+-  const listed = $derived(picked ? present.filter((p) => p.id === picked) : present);
++  /** The projects chosen (ATM-757): the address's `?projects=`, so a reload, Back and a link keep them; none is every
++   * project, and one the workspace doesn't list is left out */
++  const chosen = $derived(
++    reviewProjectsOf(
++      addressOf(router.url),
++      present.map((p) => p.id),
++    ),
++  );
++  const listed = $derived(chosen.length ? present.filter((p) => chosen.includes(p.id)) : present);
++  /** Other projects chosen: a step in the tab's history, as another filter is */
++  const choose = (ids: string[]) => navigate(withReviewProjects(currentAddress(), ids));
+ 
+   // The filter is kept as a project's is (ATM-604), under the overview's own name
+   const KEPT = '__overview';
+@@ -91,16 +101,12 @@
+   }
+ </script>
+ 
++<!-- The project filter, beside the search in the title bar (docs/sidebar-overhaul-design.md §2.5, §6) -->
++{#snippet projectsFilter()}
++  <ReviewProjects projects={present} {chosen} onchoose={choose} />
++{/snippet}
++
+ <div class="overview-reviews" id="overview-reviews">
+-  {#if present.length > 1}
+-    <label class="overview-reviews-project">
+-      <span>Project</span>
+-      <select id="overview-reviews-project" aria-label="Project" bind:value={picked}>
+-        <option value="">All projects</option>
+-        {#each present as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
+-      </select>
+-    </label>
+-  {/if}
+   <!-- A project that couldn't answer is named here, above the others' reviews (ReviewList's own problem shows instead of
+        its rows) -->
+   {#if problem}<p class="overview-reviews-problem" role="alert">{problem}</p>{/if}
+@@ -111,6 +117,7 @@
+     href={(reference, entry) => pageOf(entry, reference)}
+     onquery={chooseQuery}
+     onopen={open}
++    searchAside={present.length > 1 ? projectsFilter : undefined}
+   />
+ </div>
+ 
+@@ -119,25 +126,8 @@
+     display: flex;
+     flex-direction: column;
+   }
+-  .overview-reviews-project {
+-    display: flex;
+-    align-items: center;
+-    gap: var(--space-4);
+-    padding: var(--space-6) var(--space-6) 0;
+-    color: var(--text-muted);
+-    font-size: var(--text-sm);
+-  }
+   .overview-reviews-problem {
+     margin: var(--space-6) var(--space-6) 0;
+     color: var(--text-muted);
+   }
+-  .overview-reviews-project select {
+-    height: 28px;
+-    padding: 0 var(--space-4);
+-    border: 1px solid var(--border);
+-    border-radius: var(--radius-md);
+-    background: var(--surface);
+-    color: var(--text);
+-    font: inherit;
+-  }
+ </style>
+diff --git a/dashboard/src/lib/overview/ReviewProjects.svelte b/dashboard/src/lib/overview/ReviewProjects.svelte
+new file mode 100644
+index 00000000..2025d803
+--- /dev/null
++++ b/dashboard/src/lib/overview/ReviewProjects.svelte
+@@ -0,0 +1,141 @@
++<script lang="ts">
++  // All reviews' project filter (ATM-757, docs/sidebar-overhaul-design.md §2.5): All projects, or one or more of
++  // them. The page keeps the choice in its address (`?projects=`); this shows it and says what is chosen
++  import { DropdownMenu } from 'bits-ui';
++  import Icon from '../ui/Icon.svelte';
++
++  let {
++    projects,
++    chosen,
++    onchoose,
++  }: {
++    /** The projects it can narrow to, in the workspace's order */
++    projects: readonly { id: string; name: string }[];
++    /** Those chosen; none is every project */
++    chosen: readonly string[];
++    /** Another choice: the projects chosen, in the projects' order (none: every project) */
++    onchoose: (ids: string[]) => void;
++  } = $props();
++
++  let open = $state(false);
++  const picked = $derived(new Set(chosen));
++  const label = $derived(
++    chosen.length === 0
++      ? 'All projects'
++      : chosen.length === 1
++        ? (projects.find((p) => p.id === chosen[0])?.name ?? chosen[0])
++        : `${chosen.length} projects`,
++  );
++
++  /** `id` added to the choice, or taken out, in the projects' order */
++  function toggle(id: string) {
++    const chosenNext = (p: { id: string }) => (p.id === id ? !picked.has(id) : picked.has(p.id));
++    onchoose(projects.filter(chosenNext).map((p) => p.id));
++  }
++</script>
++
++<span class="review-projects-anchor">
++  <DropdownMenu.Root bind:open>
++    <DropdownMenu.Trigger>
++      {#snippet child({ props })}
++        <button
++          {...props}
++          class="review-projects"
++          id="review-projects"
++          aria-label="Projects: {label}; choose others"
++          data-chosen={chosen.join(',')}
++          ><Icon name="folder" size={14} /><span class="review-projects-label">{label}</span><Icon
++            name="chevron-down"
++            size={14}
++          /></button
++        >
++      {/snippet}
++    </DropdownMenu.Trigger>
++    <DropdownMenu.ContentStatic preventScroll={false} aria-label="Projects">
++      {#snippet child({ props })}
++        <span {...props} class="menu review-projects-menu" id="review-projects-menu">
++          <DropdownMenu.Item onSelect={() => onchoose([])}>
++            {#snippet child({ props })}
++              <button {...props} class="menu-item" data-project="" aria-current={chosen.length ? undefined : 'true'}
++                ><span class="review-projects-check"
++                  >{#if !chosen.length}<Icon name="check" size={14} />{/if}</span
++                >All projects</button
++              >
++            {/snippet}
++          </DropdownMenu.Item>
++          {#each projects as project (project.id)}
++            <DropdownMenu.CheckboxItem
++              checked={picked.has(project.id)}
++              closeOnSelect={false}
++              onCheckedChange={() => toggle(project.id)}
++            >
++              {#snippet child({ props, checked })}
++                <button {...props} class="menu-item" data-project={project.id}
++                  ><span class="review-projects-check"
++                    >{#if checked}<Icon name="check" size={14} />{/if}</span
++                  >{project.name}</button
++                >
++              {/snippet}
++            </DropdownMenu.CheckboxItem>
++          {/each}
++        </span>
++      {/snippet}
++    </DropdownMenu.ContentStatic>
++  </DropdownMenu.Root>
++</span>
++
++<style>
++  .review-projects-anchor {
++    position: relative;
++    display: inline-flex;
++  }
++  .review-projects {
++    display: inline-flex;
++    align-items: center;
++    gap: var(--space-3);
++    height: 32px;
++    padding: 0 var(--space-5);
++    border: 1px solid var(--border);
++    border-radius: var(--radius-pill);
++    background: var(--surface);
++    color: var(--text);
++    font: inherit;
++    font-size: var(--text-sm);
++    cursor: pointer;
++    white-space: nowrap;
++  }
++  .review-projects:hover {
++    border-color: var(--accent);
++  }
++  .review-projects-label {
++    max-width: 14rem;
++    overflow: hidden;
++    text-overflow: ellipsis;
++  }
++  .review-projects-menu {
++    gap: var(--space-1);
++  }
++  .review-projects-menu :global(.menu-item) {
++    display: flex;
++    align-items: center;
++    gap: var(--space-3);
++    width: 100%;
++    padding: var(--space-3) var(--space-4);
++    border: none;
++    border-radius: var(--radius-md);
++    background: none;
++    color: var(--text);
++    font: inherit;
++    font-size: var(--text-sm);
++    text-align: left;
++    cursor: pointer;
++  }
++  .review-projects-menu :global(.menu-item:hover),
++  .review-projects-menu :global(.menu-item[data-highlighted]) {
++    background: var(--surface2);
++  }
++  .review-projects-check {
++    display: inline-flex;
++    width: 14px;
++  }
++</style>
+diff --git a/dashboard/src/lib/reviews/ReviewList.svelte b/dashboard/src/lib/reviews/ReviewList.svelte
+index e0fcddb1..ea906dca 100644
+--- a/dashboard/src/lib/reviews/ReviewList.svelte
++++ b/dashboard/src/lib/reviews/ReviewList.svelte
+@@ -1,4 +1,5 @@
+ <script lang="ts">
++  import type { Snippet } from 'svelte';
+   import type { TaskLinks } from '../compmd';
+   import { formatAgoOrDate } from '../format';
+   import { readStored, writeStored } from '../prefs';
+@@ -33,6 +34,7 @@
+     taskHref,
+     taskLinks,
+     unreadable = [],
++    searchAside,
+   }: {
+     entries: ReviewEntry[];
+     query: Query;
+@@ -53,6 +55,8 @@
+     taskLinks?: TaskLinks;
+     /** The reviews atm can't read (ATM-617): rows of their own, with why, after the others and whatever the query */
+     unreadable?: UnreadableReview[];
++    /** Beside its search in the title bar (All reviews' project filter, ATM-757) */
++    searchAside?: Snippet;
+   } = $props();
+ 
+   function openTask(e: MouseEvent, key: string) {
+@@ -114,6 +118,9 @@
+         return query.q;
+       },
+       search: (q) => onquery({ ...query, q }),
++      get aside() {
++        return searchAside;
++      },
+     }),
+   );
+ 
+diff --git a/dashboard/src/lib/reviews/ReviewSearch.svelte b/dashboard/src/lib/reviews/ReviewSearch.svelte
+index 8ad86e2d..b701fc00 100644
+--- a/dashboard/src/lib/reviews/ReviewSearch.svelte
++++ b/dashboard/src/lib/reviews/ReviewSearch.svelte
+@@ -58,3 +58,5 @@
+     <kbd class="search-key" aria-hidden="true">/</kbd>
+   {/if}
+ </label>
++<!-- What the list puts beside its search: All reviews' project filter (ATM-757) -->
++{@render offered.aside?.()}
+diff --git a/dashboard/src/lib/reviews/search.svelte.ts b/dashboard/src/lib/reviews/search.svelte.ts
+index b8ef9c7f..da0bd07d 100644
+--- a/dashboard/src/lib/reviews/search.svelte.ts
++++ b/dashboard/src/lib/reviews/search.svelte.ts
+@@ -3,10 +3,14 @@
+ // its search while it is shown; the title bar (Header) shows the field while one is offered, and what is typed goes
+ // to the list's query.
+ 
+-/** A list's search: its query's text now, and what to do with a new one */
++import type { Snippet } from 'svelte';
++
++/** A list's search: its query's text now, and what to do with a new one; and what sits beside it (All reviews' project
++ * filter, ATM-757) */
+ export interface OfferedSearch {
+   readonly q: string;
+   search: (q: string) => void;
++  readonly aside?: Snippet;
+ }
+ 
+ let offered = $state.raw<OfferedSearch | null>(null);
+diff --git a/dashboard/tests/e2e/overview-reviews.spec.ts b/dashboard/tests/e2e/overview-reviews.spec.ts
+index 4fb697d9..6cfebdd6 100644
+--- a/dashboard/tests/e2e/overview-reviews.spec.ts
++++ b/dashboard/tests/e2e/overview-reviews.spec.ts
+@@ -23,7 +23,7 @@ const entry = (n: number, title: string, more: Record<string, unknown> = {}) =>
+ });
+ 
+ test.describe('Projects Overview: the Reviews tab', () => {
+-  test('every project’s reviews, each saying its project; the picker narrows to one; a row opens it in its project', async ({
++  test('every project’s reviews, each saying its project; the project filter narrows them, in the address (ATM-757); a row opens it in its project', async ({
+     page,
+     tasksServer,
+   }) => {
+@@ -38,10 +38,34 @@ test.describe('Projects Overview: the Reviews tab', () => {
+     // Both are CR-1, each in its own project
+     await expect(rows.locator('.review-project')).toHaveText(['fixture', 'Second Project']);
+     await expect(rows.nth(1).getByRole('link')).toHaveAttribute('href', /\/projects\/second\/reviews\/CR-1/);
+-    // The picker: one project's
+-    await page.locator('#overview-reviews-project').selectOption('second');
++    // The project filter (ATM-757), beside the search in the title bar: one project's
++    const filter = page.locator('.topbar #review-projects');
++    await expect(filter).toHaveText('All projects');
++    await filter.click();
++    await page.locator('#review-projects-menu [data-project="second"]').click();
++    await page.keyboard.press('Escape');
+     await expect(rows).toHaveCount(1);
+     await expect(rows.first()).toContainText('Theirs');
++    await expect(page).toHaveURL(/\/reviews\?projects=second$/);
++    // Kept over a reload: it is the address's
++    await page.reload();
++    await expect(rows).toHaveCount(1);
++    await expect(filter).toHaveText('Second Project');
++    // Both: every one of theirs; Back goes to the one before
++    await filter.click();
++    await page.locator(`#review-projects-menu [data-project="${tasksServer.projectId}"]`).click();
++    await page.keyboard.press('Escape');
++    await expect(rows).toHaveCount(2);
++    await expect(filter).toHaveText('2 projects');
++    await page.goBack();
++    await expect(rows).toHaveCount(1);
++    // All projects again
++    await filter.click();
++    await page.locator('#review-projects-menu [data-project=""]').click();
++    await expect(rows).toHaveCount(2);
++    await expect(page).toHaveURL(/\/reviews$/);
++    await page.goBack();
++    await expect(rows).toHaveCount(1);
+     await rows.first().getByRole('link').click();
+     await expect(page).toHaveURL(/\/projects\/second\/reviews\/CR-1/);
+   });
+diff --git a/dashboard/tests/unit/ReviewProjects.component.test.ts b/dashboard/tests/unit/ReviewProjects.component.test.ts
+new file mode 100644
+index 00000000..3b508ba8
+--- /dev/null
++++ b/dashboard/tests/unit/ReviewProjects.component.test.ts
+@@ -0,0 +1,63 @@
++import { fireEvent, render, screen } from '@testing-library/svelte';
++import { describe, expect, it, vi } from 'vitest';
++import ReviewProjects from '../../src/lib/overview/ReviewProjects.svelte';
++import { settled } from './components.helpers';
++
++// All reviews' project filter (lib/overview/ReviewProjects.svelte, ATM-757): All projects, or one or more of them;
++// the choice is given and each change reported (the page keeps it in its address)
++
++const projects = [
++  { id: 'atm', name: 'Agentic Task Manager' },
++  { id: 'compmd', name: 'CompMD' },
++  { id: 'blog', name: 'Blog' },
++];
++
++function show(chosen: string[] = []) {
++  const onchoose = vi.fn();
++  const result = render(ReviewProjects, { projects, chosen, onchoose });
++  return { ...result, onchoose, button: result.container.querySelector('#review-projects') as HTMLElement };
++}
++
++/** Open the menu as the keyboard does (jsdom's pointer events carry no pointer type, which Bits UI's trigger reads) */
++async function openMenu(button: HTMLElement) {
++  button.focus();
++  await fireEvent.keyDown(button, { key: 'Enter' });
++  await settled();
++}
++
++describe('ReviewProjects', () => {
++  it('says what is chosen: all projects, one by its name, or how many', () => {
++    expect(show().button.textContent).toContain('All projects');
++    expect(show(['compmd']).button.textContent).toContain('CompMD');
++    const { button } = show(['atm', 'blog']);
++    expect(button.textContent).toContain('2 projects');
++    expect(button.getAttribute('data-chosen')).toBe('atm,blog');
++  });
++
++  it('lists All projects, then each project, ticked when chosen', async () => {
++    const { button } = show(['compmd']);
++    await openMenu(button);
++    const items = [...document.querySelectorAll<HTMLElement>('#review-projects-menu [data-project]')];
++    expect(items.map((i) => i.dataset.project)).toEqual(['', 'atm', 'compmd', 'blog']);
++    expect(items.map((i) => i.getAttribute('aria-checked'))).toEqual([null, 'false', 'true', 'false']);
++  });
++
++  it('a project picked is added to the choice, in the projects’ order; picked again, taken out', async () => {
++    const one = show(['blog']);
++    await openMenu(one.button);
++    await fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Agentic Task Manager' }));
++    expect(one.onchoose).toHaveBeenLastCalledWith(['atm', 'blog']);
++    one.unmount();
++    const two = show(['atm', 'blog']);
++    await openMenu(two.button);
++    await fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Blog' }));
++    expect(two.onchoose).toHaveBeenLastCalledWith(['atm']);
++  });
++
++  it('All projects clears the choice', async () => {
++    const { button, onchoose } = show(['atm']);
++    await openMenu(button);
++    await fireEvent.click(screen.getByRole('menuitem', { name: 'All projects' }));
++    expect(onchoose).toHaveBeenLastCalledWith([]);
++  });
++});
+diff --git a/dashboard/tests/unit/address.test.ts b/dashboard/tests/unit/address.test.ts
+index 1ea30136..a1a6b877 100644
+--- a/dashboard/tests/unit/address.test.ts
++++ b/dashboard/tests/unit/address.test.ts
+@@ -16,11 +16,38 @@ import {
+   REVIEW_SECTIONS,
+   reviewListOf,
+   reviewOf,
++  reviewProjectsOf,
+   withReview,
+   withReviewList,
++  withReviewProjects,
+   withWorkspace,
+   workspaceOf,
+ } from '../../src/lib/address';
++
++// All reviews' project filter in its address (ATM-757, docs/sidebar-overhaul-design.md §2.5)
++describe('the All reviews project filter in the address', () => {
++  const known = ['atm', 'compmd', 'blog'];
++
++  it('reads the projects named, in the workspace’s order; unknown and empty ones are left out', () => {
++    expect(reviewProjectsOf('/reviews', known)).toEqual([]);
++    expect(reviewProjectsOf('/reviews?projects=', known)).toEqual([]);
++    expect(reviewProjectsOf('/reviews?projects=atm', known)).toEqual(['atm']);
++    expect(reviewProjectsOf('/reviews?projects=blog,atm', known)).toEqual(['atm', 'blog']);
++    expect(reviewProjectsOf('/reviews?projects=atm,gone,,%20compmd%20', known)).toEqual(['atm', 'compmd']);
++    // Only unknown ones: every project
++    expect(reviewProjectsOf('/reviews?projects=gone', known)).toEqual([]);
++    expect(reviewProjectsOf('/w/work/reviews?projects=compmd&q=x', known)).toEqual(['compmd']);
++  });
++
++  it('writes them as one parameter, none for every project, keeping the rest of the address', () => {
++    expect(withReviewProjects('/reviews', ['atm', 'compmd'])).toBe('/reviews?projects=atm,compmd');
++    expect(withReviewProjects('/reviews?projects=atm&task=T-1', [])).toBe('/reviews?task=T-1');
++    expect(withReviewProjects('/w/work/reviews', ['blog'])).toBe('/w/work/reviews?projects=blog');
++    // Read back as written
++    const written = withReviewProjects('/reviews', ['compmd', 'blog']);
++    expect(reviewProjectsOf(written, known)).toEqual(['compmd', 'blog']);
++  });
++});
+ import { VIEWS } from '../../src/lib/tabs';
+ import { OVERVIEW_PATHS, PROJECT_TABS, REVIEW_SECTION_PATHS } from '../../src/params';
+ 
+diff --git a/docs/multi-project-api.md b/docs/multi-project-api.md
+index b348f426..0f7babbe 100644
+--- a/docs/multi-project-api.md
++++ b/docs/multi-project-api.md
+@@ -306,7 +306,7 @@ text the page reads, never a file it looks up.
+ | Path | The page shows |
+ |---|---|
+ | `/` | the landing page: the overview with two or more projects, the project with one (whose address it then takes) |
+-| `/projects` | the overview's project cards; `/board`, `/progress`, `/agents` and `/reviews` (every project's reviews, with a project picker; ATM-575) its other tabs; `/list` every project's tasks as a list (the sidebar's Tasks item, ATM-751; its page is ATM-752's) |
++| `/projects` | the overview's project cards; `/board`, `/progress`, `/agents` and `/reviews` (every project's reviews, ATM-575, narrowed to some projects by `?projects=atm,compmd`, ATM-757) its other tabs; `/list` every project's tasks as a list (the sidebar's Tasks item, ATM-751; its page is ATM-752's) |
+ | `/projects/<id>` | a project on its Overview (the `project` tab; until ATM-751 its saved tab); `/projects/<id>/<tab>` on a tab (`kanban`, `list`, `graph`, `progress`, `agents`, `project`, `reviews`, and the sidebar's `inbox` and `documents`, ATM-751). The Reviews list's filter and search in the query (ATM-697): `?q=&status=waiting,live&author=&reviewer=&tasks=&branch=` |
+ | `/new` | the app's new tab: a chooser of scope and item (docs/sidebar-overhaul-design.md §3, ATM-755) |
+ | `/projects/<id>/reviews/<CR>` | a review's page (ATM-574; its reference letters, digits, `-` and `.`, at most 64) on its Overview, `…/<CR>/diffs` and `…/<CR>/comments` its other sub-tabs (ATM-697), with `?round=&against=&file=` the view and the file gone to and `?comment=c12` a comment in view (never a `#` anchor: the app's `atm://` links carry none), titled by the project's key, the reference and the title. A click opens it in place; ⌘ or Ctrl, or a middle click, in a new tab (ATM-698). In the browser it is a page of its own, without the dashboard's title bar and view tabs; in the app it is in a tab, under the window's title bar and its tabs (ATM-574) |

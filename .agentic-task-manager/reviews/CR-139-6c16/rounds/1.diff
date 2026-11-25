@@ -1,0 +1,525 @@
+diff --git a/dashboard/src/lib/reviews/ChainBox.svelte b/dashboard/src/lib/reviews/ChainBox.svelte
+index 2c18c4d2..a21c3a19 100644
+--- a/dashboard/src/lib/reviews/ChainBox.svelte
++++ b/dashboard/src/lib/reviews/ChainBox.svelte
+@@ -4,9 +4,11 @@
+   import Icon from '../ui/Icon.svelte';
+   import ComposerActions from './ComposerActions.svelte';
+   import { draftActions } from './drafts';
++  import { untrack } from 'svelte';
+   import { focusOnShow } from './focus';
+   import { commentEdits, documentLinks, taskLinks } from './links';
+   import type { Chain, ReviewComment } from './types';
++  import { forgetUnsent, keepsUnsent, unsent } from './unsent';
+ 
+   // A chain of comments (docs/code-review-design.md §3.4, §3.7, ATM-573, ATM-574), in place under its lines in the diff
+   // viewer: its lines (the diff shows the file and the text, so the chain doesn't repeat them), each comment with its
+@@ -42,11 +44,24 @@
+   /** What drafting does on this page (ATM-612); none where drafts can't be kept */
+   const drafts = draftActions();
+ 
+-  let replyingTo = $state<string | null>(null);
+-  let draft = $state('');
++  // A reply or an edit being written here comes back when this chain's box is made again (ATM-732: an update of the
++  // review that cuts the diff's rows again above it, a comment from an agent arriving): kept in `unsent`, by comment
++  const everyComment = (list: ReviewComment[]): ReviewComment[] => list.flatMap((c) => [c, ...everyComment(c.replies)]);
++  const keptFor = (prefix: string) =>
++    untrack(() =>
++      everyComment(chain.comments)
++        .map((c) => ({ c, kept: unsent(`${prefix}:${c.id}`) }))
++        .find((k) => k.kept),
++    );
++  const keptReply = keptFor('reply');
++  const keptEdit = keptFor('edit');
++
++  let replyingTo = $state<string | null>(keptReply?.c.id ?? null);
++  let draft = $state(keptReply?.kept?.text ?? '');
+   let refused = $state<string | null>(null);
+ 
+   function closeReply() {
++    if (replyingTo) forgetUnsent(`reply:${replyingTo}`);
+     replyingTo = null;
+     draft = '';
+     refused = null;
+@@ -74,9 +89,9 @@
+   const editable = (c: ReviewComment) => (c.draft ? !!drafts : !!edits && !!c.editable);
+ 
+   // A draft's text, or one's own comment's, changed in place (ATM-612, ATM-638)
+-  let editing = $state<string | null>(null);
+-  let editingDraft = false;
+-  let editText = $state('');
++  let editing = $state<string | null>(keptEdit?.c.id ?? null);
++  let editingDraft = !!keptEdit?.c.draft;
++  let editText = $state(keptEdit?.kept?.text ?? '');
+   let editRefused = $state<string | null>(null);
+   function startEdit(c: ReviewComment) {
+     editing = c.id;
+@@ -84,13 +99,17 @@
+     editText = c.body;
+     editRefused = null;
+   }
++  function stopEdit() {
++    if (editing) forgetUnsent(`edit:${editing}`);
++    editing = null;
++  }
+   async function saveEdit() {
+     const body = editText.trim();
+     if (!body || !editing) return;
+     const by = editingDraft ? drafts?.edit : edits?.edit;
+     if (!by) return;
+     editRefused = await by(editing, body);
+-    if (editRefused === null) editing = null;
++    if (editRefused === null) stopEdit();
+   }
+ 
+   const a = $derived(chain.anchor);
+@@ -183,14 +202,14 @@
+           aria-label={c.draft ? 'Edit your draft' : 'Edit your comment'}
+           bind:value={editText}
+           rows="3"
+-          {@attach focusOnShow}
++          {@attach keepsUnsent(`edit:${c.id}`, focusOnShow)}
+           onkeydown={(e) => {
+-            if (e.key === 'Escape') editing = null;
++            if (e.key === 'Escape') stopEdit();
+             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void saveEdit();
+           }}></textarea>
+         {#if editRefused}<p class="chain-problem" role="alert">Not saved: {editRefused}</p>{/if}
+         <div class="chain-actions">
+-          <button type="button" class="chain-button" onclick={() => (editing = null)}>Cancel</button>
++          <button type="button" class="chain-button" onclick={stopEdit}>Cancel</button>
+           <button type="submit" class="chain-button primary" disabled={!editText.trim()}>Save</button>
+         </div>
+       </form>
+@@ -213,7 +232,7 @@
+             bind:value={draft}
+             rows="3"
+             placeholder="Reply…"
+-            {@attach focusOnShow}
++            {@attach keepsUnsent(`reply:${c.id}`, focusOnShow)}
+             onkeydown={(e) => {
+               if (e.key === 'Escape') closeReply();
+               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitReply();
+diff --git a/dashboard/src/lib/reviews/DiffView.svelte b/dashboard/src/lib/reviews/DiffView.svelte
+index db23c4dd..3d876872 100644
+--- a/dashboard/src/lib/reviews/DiffView.svelte
++++ b/dashboard/src/lib/reviews/DiffView.svelte
+@@ -21,6 +21,7 @@
+     type UnifiedRow,
+   } from './diff';
+   import type { Chain, Picked, Side } from './types';
++  import { forgetUnsent, keepsUnsent } from './unsent';
+ 
+   /** How many rows of a file are drawn at a time (ATM-587): 300 made a frame of about 120 ms when scrolled into a
+    * long file, 100 about 30 */
+@@ -272,6 +273,7 @@
+     } else {
+       picked = { block, side: s, at: row, from: row, to: row };
+       draft = '';
++      forgetUnsent(`comment:${path}`);
+     }
+     dragging = true;
+   }
+@@ -319,6 +321,7 @@
+   const composing = $derived(shownView === 'rendered' ? renderedPick : dragging ? null : pickedLines);
+ 
+   function cancel() {
++    forgetUnsent(`comment:${path}`);
+     picked = null;
+     renderedPick = null;
+     draft = '';
+@@ -445,7 +448,7 @@
+       rows="3"
+       placeholder="Leave a comment…"
+       bind:value={draft}
+-      {@attach shownView === 'rendered' ? focusWhenPlaced : focusOnShow}
++      {@attach keepsUnsent(`comment:${path}`, shownView === 'rendered' ? focusWhenPlaced : focusOnShow)}
+       onkeydown={(e) => {
+         if (e.key === 'Escape') cancel();
+         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit();
+@@ -579,6 +582,7 @@
+               ? (p) => {
+                   renderedPick = p;
+                   draft = '';
++                  forgetUnsent(`comment:${path}`);
+                 }
+               : undefined}
+           />
+diff --git a/dashboard/src/lib/reviews/ReviewPage.svelte b/dashboard/src/lib/reviews/ReviewPage.svelte
+index 4135a1db..e2384063 100644
+--- a/dashboard/src/lib/reviews/ReviewPage.svelte
++++ b/dashboard/src/lib/reviews/ReviewPage.svelte
+@@ -15,6 +15,7 @@
+   import { setCommentEdits, setDocumentLinks, setTaskLinks } from './links';
+   import type { TaskLinks } from '../compmd';
+   import ReviewFile, { holdNearCards, whenIdle } from './ReviewFile.svelte';
++  import { forgetAllUnsent } from './unsent';
+   import {
+     chainsOf,
+     driftedOf,
+@@ -391,6 +392,8 @@
+ 
+   let writing: (() => void) | null = null;
+   onDestroy(() => writing?.());
++  // What was written and not sent is this review's (ATM-732): the next review's page starts with none
++  onDestroy(forgetAllUnsent);
+   /** A link in the summary or a comment to a document of the project (ATM-586): a file the round changed opens its diff
+    * here, the review being about it; anything else, or a document's heading or text, the document viewer */
+   function openLink(ref: DocumentRef) {
+diff --git a/dashboard/src/lib/reviews/unsent.ts b/dashboard/src/lib/reviews/unsent.ts
+new file mode 100644
+index 00000000..c4d45a99
+--- /dev/null
++++ b/dashboard/src/lib/reviews/unsent.ts
+@@ -0,0 +1,78 @@
++// What is being written and not sent yet, kept outside the box it is written in (ATM-732): a comment or reply box in
++// the diff view sits in a run of rows that an update of the review may cut again (a chain arriving above it), which
++// makes the box again. Its text, its cursor and whether it had the focus are kept here as they change, by what the box
++// is for (`comment:<file>`, `reply:<comment id>`), so the box made again comes back as it was. One review's page at a
++// time: the page forgets them all when it goes (`forgetAllUnsent`).
++
++export interface Unsent {
++  text: string;
++  start: number;
++  end: number;
++  focused: boolean;
++}
++
++const kept = new Map<string, Unsent>();
++
++/** What is kept for `key`, if anything */
++export function unsent(key: string): Unsent | undefined {
++  return kept.get(key);
++}
++
++/** The box for `key` was sent or closed: nothing kept for it */
++export function forgetUnsent(key: string) {
++  kept.delete(key);
++}
++
++/** Every key kept, for a component to find its own among (a chain's replies) */
++export function unsentKeys(): string[] {
++  return [...kept.keys()];
++}
++
++/** The review's page went: nothing written on it is kept for the next */
++export function forgetAllUnsent() {
++  kept.clear();
++}
++
++/**
++ * An attachment for a box written in (`{@attach keepsUnsent('reply:c9', focusOnShow)}`): what it holds, its cursor
++ * and its focus kept as they change. A box made again, with something kept for it, gets its cursor back, and the
++ * focus only if it had it (so a box remade under a reader writing elsewhere doesn't take it from them); a box just
++ * opened is focused by `focus` (its text is the component's, bound to the box, and comes back through `unsent`). A
++ * box removed while it had the focus keeps that: a blur only counts once the box is still on the page after it.
++ */
++export function keepsUnsent(key: string, focus?: (el: HTMLElement) => void | (() => void)) {
++  return (el: HTMLTextAreaElement) => {
++    const was = kept.get(key);
++    let unfocus: void | (() => void);
++    if (was && el.value === was.text) {
++      if (was.focused) el.focus({ preventScroll: true });
++      el.setSelectionRange(was.start, was.end);
++    } else unfocus = focus?.(el);
++    const save = () => {
++      if (!el.isConnected) return;
++      if (!el.value) {
++        kept.delete(key);
++        return;
++      }
++      kept.set(key, {
++        text: el.value,
++        start: el.selectionStart,
++        end: el.selectionEnd,
++        focused: document.activeElement === el,
++      });
++    };
++    const blur = () =>
++      queueMicrotask(() => {
++        const now = kept.get(key);
++        if (el.isConnected && now) now.focused = false;
++      });
++    const events = ['input', 'select', 'keyup', 'pointerup', 'focus'] as const;
++    for (const name of events) el.addEventListener(name, save);
++    el.addEventListener('blur', blur);
++    return () => {
++      unfocus?.();
++      for (const name of events) el.removeEventListener(name, save);
++      el.removeEventListener('blur', blur);
++    };
++  };
++}
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 2f836ed2..6b468426 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -2428,6 +2428,55 @@ test.describe('the diff viewer on a review’s page', () => {
+     await expect(mine.getByLabel('Edit your comment')).toHaveValue('Half written');
+   });
+ 
++  // ATM-732 (Hakan): an agent's comment arriving above a box being written in cut the diff's rows again, which made
++  // the box again: the reply's text was lost, and the comment's box lost its focus and its cursor
++  test('comments arriving while you write a comment and a reply in the diff keep both, the cursor and the focus', async ({
++    page,
++    tasksServer,
++  }) => {
++    await openReviews(page, tasksServer);
++    const page_ = reviewPage();
++    await page.goto(reviewPath(tasksServer, '/CR-2?file=src/a.rs'));
++    const view = diffOf(page, 'src/a.rs');
++    // A reply to the chain on line 3, half written, then a comment on line 31, being written, its cursor inside it
++    await view.locator('[data-chain="t1"]').getByRole('button', { name: 'Reply' }).click();
++    const reply = view.getByLabel('Reply to Ana');
++    await reply.fill('Half a reply');
++    await view.locator('.diff-new').getByRole('button', { name: 'Line 31', exact: true }).first().click();
++    const box = page.locator('.diff-composer textarea');
++    await box.fill('Half a comment');
++    await box.press('ArrowLeft');
++    await box.press('ArrowLeft');
++    await box.press('ArrowLeft');
++    const caret = 'Half a comment'.length - 3;
++    // An agent comments above each of them: on line 2, and on line 30
++    const agents = (id: string, line: number, cid: string) => ({
++      id,
++      anchor: { round: 3, path: 'src/a.rs', side: 'new', lines: [line, line], quote: `line ${line}` },
++      comments: [{ ...comment(cid, `Agent on line ${line}`), author: 'claude:b' }],
++      placed: [line, line],
++      drifted: null,
++    });
++    tasksServer.setReview('CR-2', {
++      ...page_,
++      chains: [...page_.chains, agents('t8', 2, 'c8'), agents('t9', 30, 'c9')],
++    });
++    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
++    await expect(view.locator('[data-chain="t8"]')).toBeVisible();
++    await expect(view.locator('[data-chain="t9"]')).toBeVisible();
++    await expect(view.getByLabel('Reply to Ana')).toHaveValue('Half a reply');
++    await expect(page.locator('.diff-composer textarea')).toHaveValue('Half a comment');
++    await expect(page.locator('.diff-composer textarea')).toBeFocused();
++    expect(
++      await page
++        .locator('.diff-composer textarea')
++        .evaluate((el: HTMLTextAreaElement) => [el.selectionStart, el.selectionEnd]),
++    ).toEqual([caret, caret]);
++    // Typing goes on where it was
++    await page.keyboard.type('XY');
++    await expect(page.locator('.diff-composer textarea')).toHaveValue('Half a commXYent');
++  });
++
+   // ATM-612: drafts, only the user's, sent together with their decision
+   test('drafts: one added from a diff’s lines; shown marked and counted; edited, removed, and sent with Comment', async ({
+     page,
+diff --git a/dashboard/tests/unit/ChainBox.component.test.ts b/dashboard/tests/unit/ChainBox.component.test.ts
+index 2df1314f..d54ff336 100644
+--- a/dashboard/tests/unit/ChainBox.component.test.ts
++++ b/dashboard/tests/unit/ChainBox.component.test.ts
+@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/svelte';
+ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+ import ChainBox from '../../src/lib/reviews/ChainBox.svelte';
+ import type { Chain, ReviewComment } from '../../src/lib/reviews/types';
++import { forgetAllUnsent } from '../../src/lib/reviews/unsent';
+ 
+ // A chain of comments (lib/reviews/ChainBox.svelte, ATM-573, ATM-574): where it is (its lines; `detailed`, its file
+ // too, and the text it was made on), where it stands (Resolve while open, a resolved check above the comment once
+@@ -62,6 +63,8 @@ afterEach(() => {
+   vi.restoreAllMocks();
+   page.drafts = undefined;
+   edits.current = undefined;
++  // A box left open by a test is the next test's otherwise (ATM-732)
++  forgetAllUnsent();
+ });
+ 
+ describe('ChainBox: editing your own comment (ATM-638)', () => {
+@@ -347,3 +350,69 @@ describe('ChainBox: replies', () => {
+     expect(onreply).toHaveBeenLastCalledWith('c1', 'Again.');
+   });
+ });
++
++// ATM-732: an update of the review can make a chain's box again (the diff's rows cut again above it); what was being
++// written in it comes back
++describe('ChainBox: made again while you write', () => {
++  it('a reply being written comes back, under its comment, with its text, its cursor and the focus', async () => {
++    const c = chain([comment('c1', { replies: [comment('r1', { resolved: null })] })]);
++    const first = show(c);
++    await fireEvent.click(
++      within(first.container.querySelector('[data-comment="r1"]') as HTMLElement).getByRole('button', {
++        name: 'Reply',
++      }),
++    );
++    const box = screen.getByRole('textbox', { name: 'Reply to Ana' }) as HTMLTextAreaElement;
++    await fireEvent.input(box, { target: { value: 'Half a reply' } });
++    box.setSelectionRange(4, 4);
++    await fireEvent.keyUp(box, { key: 'ArrowLeft' });
++    first.unmount();
++    const again = show(c);
++    const back = screen.getByRole('textbox', { name: 'Reply to Ana' }) as HTMLTextAreaElement;
++    expect(back.closest('[data-comment]')?.getAttribute('data-comment')).toBe('r1');
++    expect(back).toHaveValue('Half a reply');
++    expect(back).toHaveFocus();
++    expect([back.selectionStart, back.selectionEnd]).toEqual([4, 4]);
++    // Closed, it is forgotten: made again, no box
++    await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
++    again.unmount();
++    show(c);
++    expect(screen.queryByRole('textbox')).toBeNull();
++  });
++
++  it('one written without the focus comes back without taking it; one sent is forgotten', async () => {
++    const c = chain([comment('c1')]);
++    const first = show(c);
++    await fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
++    const reply = () => screen.queryByRole('textbox', { name: 'Reply to Ana' });
++    await fireEvent.input(reply()!, { target: { value: 'Later.' } });
++    // The reader went to write elsewhere
++    const other = document.body.appendChild(document.createElement('input'));
++    try {
++      other.focus();
++      await new Promise((r) => queueMicrotask(() => r(null)));
++      first.unmount();
++      const again = show(c);
++      expect(reply()).toHaveValue('Later.');
++      expect(other).toHaveFocus();
++      await fireEvent.submit(again.container.querySelector('form') as HTMLElement);
++      expect(again.onreply).toHaveBeenCalledWith('c1', 'Later.');
++      again.unmount();
++      show(c);
++      expect(reply()).toBeNull();
++    } finally {
++      other.remove();
++    }
++  });
++
++  it('an edit of your own comment comes back with its changed text', async () => {
++    editing();
++    const c = chain([comment('c1', { body: 'Old.', editable: true })]);
++    const first = show(c);
++    await fireEvent.click(screen.getByRole('button', { name: 'Edit comment' }));
++    await fireEvent.input(screen.getByRole('textbox'), { target: { value: 'New, half' } });
++    first.unmount();
++    show(c);
++    expect(screen.getByRole('textbox', { name: 'Edit your comment' })).toHaveValue('New, half');
++  });
++});
+diff --git a/dashboard/tests/unit/unsent.test.ts b/dashboard/tests/unit/unsent.test.ts
+new file mode 100644
+index 00000000..ec49d278
+--- /dev/null
++++ b/dashboard/tests/unit/unsent.test.ts
+@@ -0,0 +1,116 @@
++import { afterEach, describe, expect, it, vi } from 'vitest';
++import { forgetAllUnsent, forgetUnsent, keepsUnsent, unsent, unsentKeys } from '../../src/lib/reviews/unsent';
++
++// What is being written and not sent, kept outside its box (lib/reviews/unsent.ts, ATM-732)
++
++function box(value = '') {
++  const el = document.createElement('textarea');
++  el.value = value;
++  document.body.append(el);
++  return el;
++}
++const settle = () => new Promise((r) => queueMicrotask(() => r(null)));
++
++afterEach(() => {
++  forgetAllUnsent();
++  document.body.innerHTML = '';
++});
++
++describe('keepsUnsent', () => {
++  it('keeps the text, the cursor and the focus as they change', () => {
++    const el = box();
++    keepsUnsent('reply:c1')(el);
++    el.focus();
++    el.value = 'Half';
++    el.dispatchEvent(new Event('input'));
++    el.setSelectionRange(2, 3);
++    el.dispatchEvent(new Event('select'));
++    expect(unsent('reply:c1')).toEqual({ text: 'Half', start: 2, end: 3, focused: true });
++  });
++
++  it('nothing is kept for an empty box; emptied, what was kept goes', () => {
++    const el = box();
++    keepsUnsent('reply:c1')(el);
++    el.dispatchEvent(new Event('focus'));
++    expect(unsent('reply:c1')).toBeUndefined();
++    el.value = 'x';
++    el.dispatchEvent(new Event('input'));
++    expect(unsent('reply:c1')).toBeDefined();
++    el.value = '';
++    el.dispatchEvent(new Event('input'));
++    expect(unsent('reply:c1')).toBeUndefined();
++  });
++
++  it('a box made again with what was kept gets its cursor and, only if it had it, the focus; not focused anew', () => {
++    const focus = vi.fn();
++    keepsUnsent('reply:c1')(box());
++    const first = document.querySelector('textarea')!;
++    first.focus();
++    first.value = 'Half a reply';
++    first.setSelectionRange(4, 4);
++    first.dispatchEvent(new Event('input'));
++    // Removed while it had the focus: kept as focused
++    first.remove();
++    const again = box('Half a reply');
++    keepsUnsent('reply:c1', focus)(again);
++    expect(document.activeElement).toBe(again);
++    expect([again.selectionStart, again.selectionEnd]).toEqual([4, 4]);
++    expect(focus).not.toHaveBeenCalled();
++  });
++
++  it('a blur while the box stays on the page counts: made again, it doesn’t take the focus', async () => {
++    const el = box();
++    keepsUnsent('comment:a.rs')(el);
++    el.focus();
++    el.value = 'Later';
++    el.dispatchEvent(new Event('input'));
++    const other = box();
++    other.focus();
++    await settle();
++    expect(unsent('comment:a.rs')?.focused).toBe(false);
++    el.remove();
++    const again = box('Later');
++    keepsUnsent('comment:a.rs')(again);
++    expect(document.activeElement).toBe(other);
++  });
++
++  it('a box just opened (nothing kept, or another text) is focused by the focus given, its cleanup called', () => {
++    const undo = vi.fn();
++    const focus = vi.fn(() => undo);
++    const detach = keepsUnsent('reply:c1', focus)(box());
++    expect(focus).toHaveBeenCalledTimes(1);
++    detach();
++    expect(undo).toHaveBeenCalled();
++    // Something kept for another text: a box opened anew, not the one remade
++    const el = box('kept');
++    keepsUnsent('reply:c2')(el);
++    el.dispatchEvent(new Event('input'));
++    keepsUnsent('reply:c2', focus)(box('other'));
++    expect(focus).toHaveBeenCalledTimes(2);
++  });
++
++  it('detached, it no longer keeps anything', () => {
++    const el = box();
++    const detach = keepsUnsent('reply:c1')(el);
++    detach();
++    el.value = 'after';
++    el.dispatchEvent(new Event('input'));
++    expect(unsent('reply:c1')).toBeUndefined();
++  });
++});
++
++describe('forgetting', () => {
++  it('one key, or all of them (the review’s page gone)', () => {
++    for (const key of ['reply:c1', 'comment:a.rs']) {
++      const el = box();
++      keepsUnsent(key)(el);
++      el.value = key;
++      el.dispatchEvent(new Event('input'));
++    }
++    expect(unsentKeys().sort()).toEqual(['comment:a.rs', 'reply:c1']);
++    forgetUnsent('reply:c1');
++    expect(unsentKeys()).toEqual(['comment:a.rs']);
++    forgetAllUnsent();
++    expect(unsentKeys()).toEqual([]);
++  });
++});

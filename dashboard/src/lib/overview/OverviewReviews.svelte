@@ -2,8 +2,9 @@
   // Every project's reviews in one list (ATM-575, Hakan: a fourth tab on the overview): the reviews list of a project's
   // Reviews tab (search, filters, in groups when unfiltered, what waits for you first), over the projects shown, each
   // row saying its project; a project picker narrows it to one. A row opens its review's page, in its project.
+  import { page as router } from '$app/state';
   import { onDestroy, untrack } from 'svelte';
-  import { reviewPageOf } from '../address';
+  import { addressOf, reviewPageOf, reviewProjectsOf, withReviewProjects } from '../address';
   import { inApp } from '../api/http';
   import type { ProjectEntry } from '../load';
   import { currentAddress, navigate } from '../navigation';
@@ -12,6 +13,7 @@
   import { keepFilter, keptFilter } from '../review-filter';
   import { mergeProjectReviews } from '../reviews/page';
   import ReviewList from '../reviews/ReviewList.svelte';
+  import ReviewProjects from './ReviewProjects.svelte';
   import type { ListQuery, ReviewEntry } from '../reviews/types';
   import { tabActions } from '../tab-actions';
 
@@ -19,9 +21,17 @@
 
   /** The projects it can list: those there (a missing one has no reviews to read) */
   const present = $derived(projects.filter((p) => !p.missing));
-  /** The project picked, or every project ('') */
-  let picked = $state('');
-  const listed = $derived(picked ? present.filter((p) => p.id === picked) : present);
+  /** The projects chosen (ATM-757): the address's `?projects=`, so a reload, Back and a link keep them; none is every
+   * project, and one the workspace doesn't list is left out */
+  const chosen = $derived(
+    reviewProjectsOf(
+      addressOf(router.url),
+      present.map((p) => p.id),
+    ),
+  );
+  const listed = $derived(chosen.length ? present.filter((p) => chosen.includes(p.id)) : present);
+  /** Other projects chosen: a step in the tab's history, as another filter is */
+  const choose = (ids: string[]) => navigate(withReviewProjects(currentAddress(), ids));
 
   // The filter is kept as a project's is (ATM-604), under the overview's own name
   const KEPT = '__overview';
@@ -91,16 +101,12 @@
   }
 </script>
 
+<!-- The project filter, beside the search in the title bar (docs/sidebar-overhaul-design.md §2.5, §6) -->
+{#snippet projectsFilter()}
+  <ReviewProjects projects={present} {chosen} onchoose={choose} />
+{/snippet}
+
 <div class="overview-reviews" id="overview-reviews">
-  {#if present.length > 1}
-    <label class="overview-reviews-project">
-      <span>Project</span>
-      <select id="overview-reviews-project" aria-label="Project" bind:value={picked}>
-        <option value="">All projects</option>
-        {#each present as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
-      </select>
-    </label>
-  {/if}
   <!-- A project that couldn't answer is named here, above the others' reviews (ReviewList's own problem shows instead of
        its rows) -->
   {#if problem}<p class="overview-reviews-problem" role="alert">{problem}</p>{/if}
@@ -111,6 +117,7 @@
     href={(reference, entry) => pageOf(entry, reference)}
     onquery={chooseQuery}
     onopen={open}
+    searchAside={present.length > 1 ? projectsFilter : undefined}
   />
 </div>
 
@@ -119,25 +126,8 @@
     display: flex;
     flex-direction: column;
   }
-  .overview-reviews-project {
-    display: flex;
-    align-items: center;
-    gap: var(--space-4);
-    padding: var(--space-6) var(--space-6) 0;
-    color: var(--text-muted);
-    font-size: var(--text-sm);
-  }
   .overview-reviews-problem {
     margin: var(--space-6) var(--space-6) 0;
     color: var(--text-muted);
-  }
-  .overview-reviews-project select {
-    height: 28px;
-    padding: 0 var(--space-4);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface);
-    color: var(--text);
-    font: inherit;
   }
 </style>

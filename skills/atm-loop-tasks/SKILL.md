@@ -120,8 +120,8 @@ errors (the message says what).
 4. **Commit first, then finish.** Commit with `atm vcs commit <id> --file <path> ...` while the task is still in
    progress, naming every file you changed for the task: it commits exactly those plus `tasks.json`. Never
    `git add -A` or `git add .`: another agent's unfinished work may be in the same working tree. Only then finish with
-   `atm task state <id> done --note '<one-line outcome>'`, or `atm task state <id> in_review --note '...'` when its
-   review mode asks for one, or `atm task state <id> blocked --on user|agent --question '...'` when you can't go on
+   `atm task state <id> done --note '<one-line outcome>'`, or its code review (`atm review create --task <id> …`)
+   when its review mode asks for one, or `atm task state <id> blocked --on user|agent --question '...'` when you can't go on
    without a decision (steps 5 and 6 below). A task is never done with its work uncommitted.
 5. Back to to do is `atm task state <id> todo`, from wherever the task is: give up with `--reason '...'` (a failure
    note), stop early with `--note '<handoff>'`. Never change a status by editing `tasks.json`. Quote notes,
@@ -221,9 +221,9 @@ while true:
          For a `blocker` or `async` task atm refuses (unless an approved live review covers the change): open its
          code review, `atm review create --task $TASK_ID --title '<one line>' --range <base>..HEAD --summary-file
          <file>` (/atm-do-task Step 7b: the base, the summary, a document's `--file`), which puts it in review with
-         the review's link (CR-7); work with no change to review asks with `atm task state $TASK_ID in_review --note
-         '<what the reviewer should check>'` (with `--status` when one of several review statuses fits). The claim is
-         released and the tasks that depend on it keep waiting. Count it as waiting for review, not completed.
+         the review's link (CR-7); atm refuses an agent's `in_review` without a code review, so work with no change
+         to review (a decision, a check) is blocked on the user, the question saying what to decide or check. The
+         claim is released and the tasks that depend on it keep waiting. Count it as waiting for review, not completed.
          `async`: the loop goes on with other ready tasks. `blocker`: the review comes first: with the user
          watching, tell them CR-7 is open and wait with `atm review wait CR-7 --json` in the background; unattended,
          stop the loop and say what waits for the review.
